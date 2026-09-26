@@ -1,0 +1,5 @@
+# Data usaha (nama dapur, omzet, piutang) dan alat baca Excel tetap di laptop, tidak ikut repo publik.
+alat/
+node_modules/
+*.env
+rahasia/

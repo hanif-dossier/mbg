@@ -1,0 +1,1016 @@
+<!doctype html>
+<html lang="id">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="robots" content="noindex,nofollow">
+<meta name="theme-color" content="#07100d">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" href="ikon-any-192.png?v=1" type="image/png">
+<link rel="apple-touch-icon" href="ikon-180.png?v=1">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&family=Plus+Jakarta+Sans:wght@400;500;600;700&family=JetBrains+Mono:wght@500&display=swap">
+<title>MBG</title>
+<style>
+/* Aplikasi laporan usaha pribadi. Semua angka dan identitas usaha datang dari database setelah masuk dengan sandi;
+   kode ini sengaja tidak memuat nama usaha, alamat, rekening, atau nama pelanggan. */
+:root{
+  --bg:#07100d; --bg2:#0b1712; --panel:#0f1d17; --panel2:#132620; --garis:rgba(190,230,205,.09); --garis2:rgba(190,230,205,.16);
+  --teks:#edf3ef; --redup:#98aba1; --samar:#63766c;
+  --hijau:#5fd08f; --hijau2:#3fa76b; --hijau-bg:rgba(95,208,143,.12);
+  --kunyit:#e8b54a; --kunyit-bg:rgba(232,181,74,.13); --merah:#f0826f; --merah-bg:rgba(240,130,111,.13); --biru:#7fb4ea;
+  --serif:'Instrument Serif',Georgia,'Times New Roman',serif; --sans:'Plus Jakarta Sans',system-ui,-apple-system,'Segoe UI',sans-serif; --mono:'JetBrains Mono',ui-monospace,Consolas,monospace;
+  --r:22px; --r2:16px;
+}
+*{box-sizing:border-box}
+[hidden]{display:none!important}
+html{-webkit-text-size-adjust:100%}
+body{margin:0;background:var(--bg);color:var(--teks);font:15px/1.55 var(--sans);font-variant-numeric:tabular-nums;min-height:100vh;
+  background-image:radial-gradient(900px 480px at 50% -120px,rgba(95,208,143,.13),transparent 70%),radial-gradient(600px 400px at 100% 30%,rgba(232,181,74,.05),transparent 70%);background-attachment:fixed}
+a{color:inherit}
+button{font:inherit;color:inherit;cursor:pointer}
+:focus-visible{outline:2px solid var(--hijau);outline-offset:2px;border-radius:8px}
+.bungkus{max-width:1120px;margin:0 auto;padding:0 18px}
+.serif{font-family:var(--serif);font-weight:400;letter-spacing:-.01em}
+.miring{font-family:var(--serif);font-style:italic;font-weight:400}
+.mono{font-family:var(--mono);font-size:.86em}
+.redup{color:var(--redup)} .samar{color:var(--samar)} .hijau{color:var(--hijau)} .kunyit{color:var(--kunyit)} .merah{color:var(--merah)}
+.label{font-size:11.5px;letter-spacing:.14em;text-transform:uppercase;color:var(--redup);font-weight:600}
+
+/* kepala */
+.kepala{position:sticky;top:0;z-index:20;backdrop-filter:blur(14px);-webkit-backdrop-filter:blur(14px);background:rgba(7,16,13,.72);border-bottom:1px solid var(--garis)}
+.kepala .bungkus{display:flex;align-items:center;gap:14px;height:64px;padding-top:env(safe-area-inset-top)}
+.merek{display:flex;align-items:center;gap:10px;text-decoration:none;min-width:0}
+.merek img{width:34px;height:34px;border-radius:50%}
+.merek b{font-size:17px;letter-spacing:-.01em}
+.merek small{display:block;font-size:11px;color:var(--redup);margin-top:-3px;white-space:nowrap}
+.pil-hijau{text-decoration:none;display:inline-flex;align-items:center;gap:6px;font-size:11px;font-weight:600;color:var(--hijau);background:var(--hijau-bg);border:1px solid rgba(95,208,143,.25);padding:3px 10px;border-radius:99px;white-space:nowrap}
+.titik{width:7px;height:7px;border-radius:50%;background:var(--hijau);box-shadow:0 0 0 3px rgba(95,208,143,.2)}
+.menu-atas{display:flex;gap:4px;margin-left:auto}
+.menu-atas a{padding:8px 11px;border-radius:99px;text-decoration:none;color:var(--redup);font-size:13.5px;font-weight:500}
+.menu-atas a:hover{color:var(--teks)}
+.menu-atas a.aktif{color:var(--teks);background:rgba(255,255,255,.06)}
+.kanan-kepala{display:flex;align-items:center;gap:8px;margin-left:12px}
+.tombol-ikon{width:36px;height:36px;border-radius:50%;border:1px solid var(--garis2);background:transparent;display:grid;place-items:center;color:var(--redup)}
+.tombol-ikon:hover{color:var(--teks)}
+
+/* menu bawah (HP) */
+.menu-bawah{display:none}
+@media (max-width:1060px){ .kanan-kepala .pil-hijau{display:none} }
+@media (max-width:860px){
+  .menu-atas{display:none}
+  .kanan-kepala .pil-hijau{display:inline-flex}
+  .menu-bawah{display:flex;position:fixed;left:12px;right:12px;bottom:calc(10px + env(safe-area-inset-bottom));z-index:30;background:rgba(15,29,23,.92);backdrop-filter:blur(16px);-webkit-backdrop-filter:blur(16px);border:1px solid var(--garis2);border-radius:24px;padding:6px;justify-content:space-between;box-shadow:0 12px 40px rgba(0,0,0,.45)}
+  .menu-bawah a{flex:1;display:flex;flex-direction:column;align-items:center;gap:2px;padding:7px 2px;border-radius:18px;text-decoration:none;color:var(--samar);font-size:10.5px;font-weight:600}
+  .menu-bawah a.aktif{color:var(--hijau);background:var(--hijau-bg)}
+  main{padding-bottom:110px}
+  html{scroll-padding-bottom:110px}   /* tombol & kolom isian yang digulir otomatis berhenti di atas bilah menu */
+  .aksi-lekat{position:sticky;bottom:calc(84px + env(safe-area-inset-bottom));z-index:25;padding:8px;margin:14px -8px 0;border-radius:22px;background:rgba(7,16,13,.86);backdrop-filter:blur(12px);-webkit-backdrop-filter:blur(12px);flex-wrap:nowrap;overflow-x:auto;scrollbar-width:none}
+  .aksi-lekat::-webkit-scrollbar{display:none}
+  .aksi-lekat .tombol{flex:none;padding:10px 14px;font-size:13.5px}
+}
+
+/* umum */
+main{padding-top:26px;padding-bottom:60px}
+.bagian{margin-top:34px}
+.bagian > h2{font-family:var(--serif);font-weight:400;font-size:30px;line-height:1.1;margin:0 0 4px;letter-spacing:-.01em}
+.bagian > p.ket{margin:0 0 16px;color:var(--redup);max-width:62ch}
+.kartu{background:linear-gradient(180deg,var(--panel2),var(--panel));border:1px solid var(--garis);border-radius:var(--r);padding:20px}
+.grid{display:grid;gap:14px}
+.grid > *{min-width:0}   /* isi grid tidak boleh melebarkan kolom; tabel lebar menggulir di dalam kartunya */
+.g2{grid-template-columns:repeat(2,minmax(0,1fr))} .g3{grid-template-columns:repeat(3,minmax(0,1fr))} .g4{grid-template-columns:repeat(4,minmax(0,1fr))}
+@media (max-width:860px){ .g3,.g4{grid-template-columns:repeat(2,minmax(0,1fr))} }
+@media (max-width:560px){ .g2,.g3{grid-template-columns:1fr} .bagian > h2{font-size:26px} }
+.pil{display:inline-flex;align-items:center;gap:6px;font-size:12px;font-weight:600;padding:4px 11px;border-radius:99px;background:rgba(255,255,255,.06);color:var(--redup);white-space:nowrap}
+.pil.hijau{background:var(--hijau-bg);color:var(--hijau)} .pil.kunyit{background:var(--kunyit-bg);color:var(--kunyit)} .pil.merah{background:var(--merah-bg);color:var(--merah)}
+.pil-baris{display:flex;flex-wrap:wrap;gap:8px}
+.tab-baris{display:flex;gap:6px;overflow-x:auto;padding-bottom:4px;scrollbar-width:none}
+.tab-baris::-webkit-scrollbar{display:none}
+.tab{border:1px solid var(--garis2);background:transparent;border-radius:99px;padding:8px 15px;font-size:13.5px;font-weight:600;color:var(--redup);white-space:nowrap}
+.tab.aktif{background:var(--teks);color:#0a1511;border-color:var(--teks)}
+.tbl-bungkus{overflow-x:auto;margin:0 -4px}
+table{width:100%;border-collapse:collapse;font-size:14px}
+th{font-size:11px;letter-spacing:.1em;text-transform:uppercase;color:var(--samar);font-weight:600;text-align:left;padding:8px 8px;border-bottom:1px solid var(--garis2);white-space:nowrap}
+td{padding:10px 8px;border-bottom:1px solid var(--garis);vertical-align:top}
+tr:last-child td{border-bottom:0}
+.angka{text-align:right;white-space:nowrap}
+tfoot td{font-weight:700;border-top:1px solid var(--garis2)}
+.kosong{padding:26px;text-align:center;color:var(--redup)}
+
+/* pahlawan */
+.pahlawan{padding:30px 0 6px;text-align:center}
+.pahlawan .pil-hijau{font-size:12px;padding:5px 13px}
+.pahlawan h1{font-family:var(--sans);font-weight:700;font-size:clamp(40px,8vw,76px);line-height:1.02;letter-spacing:-.035em;margin:18px 0 6px}
+.pahlawan h1 .miring{font-weight:400;letter-spacing:-.01em}
+.pahlawan .sub{color:var(--redup);font-size:16px;max-width:560px;margin:0 auto}
+.pahlawan .aksi{display:flex;gap:10px;justify-content:center;flex-wrap:wrap;margin-top:22px}
+.tombol{display:inline-flex;align-items:center;gap:8px;border-radius:99px;padding:12px 20px;font-weight:600;font-size:14.5px;text-decoration:none;border:1px solid var(--garis2);background:rgba(255,255,255,.03)}
+.tombol.utama{background:var(--hijau);color:#06140d;border-color:var(--hijau);box-shadow:0 8px 30px rgba(95,208,143,.25)}
+.tombol:hover{filter:brightness(1.07)}
+.fitur{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px;margin-top:30px}
+.fitur > div{display:flex;gap:11px;align-items:flex-start;text-align:left;padding:12px 14px;border-radius:var(--r2);background:rgba(255,255,255,.025);border:1px solid var(--garis)}
+.fitur .ik{flex:none;width:34px;height:34px;border-radius:50%;display:grid;place-items:center;background:var(--hijau-bg);color:var(--hijau)}
+.fitur b{display:block;font-size:14.5px;line-height:1.25}
+.fitur small{color:var(--redup);font-size:12px}
+@media (max-width:860px){ .fitur{grid-template-columns:repeat(2,minmax(0,1fr))} }
+
+/* ubin angka */
+.ubin .nilai{font-family:var(--serif);font-size:34px;line-height:1.05;margin:6px 0 4px;letter-spacing:-.01em}
+.ubin .nilai.kecil{font-size:26px}
+.ubin small{color:var(--redup);font-size:12.5px}
+
+/* laporan laba rugi bertingkat */
+.lr{display:flex;flex-direction:column}
+.lr .b{display:flex;justify-content:space-between;align-items:baseline;gap:12px;padding:11px 0;border-bottom:1px dashed var(--garis2)}
+.lr .b:last-child{border-bottom:0}
+.lr .b.kurang span:first-child{padding-left:14px;color:var(--redup)}
+.lr .b.jumlah{border-bottom:1px solid var(--garis2)}
+.lr .b.jumlah span:first-child{font-weight:700}
+.lr .b.besar{padding:14px 0}
+.lr .b.besar span:last-child{font-family:var(--serif);font-size:30px;line-height:1}
+.lr small{color:var(--samar);font-size:12px;margin-left:6px}
+
+/* grafik */
+.grafik svg{width:100%;height:auto;display:block}
+.grafik text{fill:var(--samar);font:12px var(--sans)}
+.legenda{display:flex;gap:14px;flex-wrap:wrap;font-size:12.5px;color:var(--redup);margin-top:8px}
+.legenda i{display:inline-block;width:10px;height:10px;border-radius:3px;margin-right:6px;vertical-align:-1px}
+
+/* baris daftar */
+.daftar > div{display:flex;justify-content:space-between;gap:12px;padding:12px 0;border-bottom:1px solid var(--garis);align-items:center}
+.daftar > div:last-child{border-bottom:0}
+.daftar b{font-weight:600}
+.batang{height:6px;border-radius:99px;background:rgba(255,255,255,.06);overflow:hidden;margin-top:6px}
+.batang i{display:block;height:100%;border-radius:99px;background:linear-gradient(90deg,var(--hijau2),var(--hijau))}
+
+.catatan-ai{position:relative;padding:20px 22px;border-radius:var(--r);background:linear-gradient(135deg,rgba(95,208,143,.10),rgba(95,208,143,.02) 60%);border:1px solid rgba(95,208,143,.2)}
+.catatan-ai p{margin:8px 0 0;font-size:15.5px;line-height:1.65}
+
+/* masuk */
+.masuk{min-height:100vh;display:grid;place-items:center;padding:30px 18px}
+.masuk .kotak{width:100%;max-width:420px;text-align:center}
+.masuk img{width:64px;height:64px;border-radius:50%}
+.masuk h1{font-family:var(--sans);font-weight:700;font-size:40px;letter-spacing:-.03em;line-height:1.05;margin:18px 0 8px}
+.masuk p{color:var(--redup);margin:0 0 24px}
+.masuk form{display:flex;flex-direction:column;gap:10px;text-align:left}
+.masuk input{width:100%;padding:14px 18px;border-radius:99px;border:1px solid var(--garis2);background:rgba(255,255,255,.04);color:var(--teks);font:inherit;font-size:16px}
+.masuk input:focus{outline:none;border-color:var(--hijau)}
+.masuk .tombol{justify-content:center;width:100%;font-size:15.5px}
+.pesan-salah{color:var(--merah);font-size:13.5px;min-height:20px;text-align:center}
+.kaki{margin-top:46px;padding:18px 0;border-top:1px solid var(--garis);color:var(--samar);font-size:12.5px;display:flex;justify-content:space-between;gap:12px;flex-wrap:wrap}
+.memuat{padding:80px 0;text-align:center;color:var(--redup)}
+/* formulir */
+.isian{display:flex;flex-direction:column;gap:5px;font-size:12.5px;color:var(--redup);font-weight:600}
+.isian input,.isian select,.isian textarea,.sel input{width:100%;padding:10px 13px;border-radius:12px;border:1px solid var(--garis2);background:rgba(255,255,255,.04);color:var(--teks);font:inherit;font-size:14.5px;font-weight:500}
+.isian select option{background:#0f1d17}
+.isian input:focus,.isian select:focus,.sel input:focus{outline:none;border-color:var(--hijau)}
+.sel input{padding:8px 9px;border-radius:9px;font-size:14px}
+.sel input.angka{text-align:right}
+table.ed td{padding:5px 4px;border-bottom:1px solid var(--garis)} table.ed th{padding:6px 4px}
+.tombol.kecil{padding:8px 14px;font-size:13px}
+.tombol.bahaya{color:var(--merah);border-color:rgba(240,130,111,.35)}
+.baris-aksi{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
+.lembar{background:#fff;color:#111;border-radius:14px;padding:26px 28px;font:13px/1.45 'Plus Jakarta Sans',Arial,sans-serif;font-variant-numeric:tabular-nums;overflow-x:auto}
+.lembar .kop{display:flex;justify-content:space-between;gap:18px;flex-wrap:wrap;border-bottom:2px solid #111;padding-bottom:10px}
+.lembar .kop b{font-size:17px;letter-spacing:.01em}
+.lembar h3{font-size:15px;letter-spacing:.14em;margin:14px 0 8px;font-weight:700}
+.lembar table{width:100%;border-collapse:collapse;font-size:12.5px;min-width:520px}
+.lembar th,.lembar td{border:1px solid #333;padding:5px 7px;color:#111}
+.lembar th{background:#eef3ef;font-size:11px;letter-spacing:.06em;text-transform:uppercase}
+.lembar .kanan{text-align:right;white-space:nowrap}
+.lembar .ttd{display:flex;justify-content:space-between;margin-top:26px;text-align:center}
+.lembar .ttd div{min-width:180px}
+.lembar .ttd .garis-ttd{margin-top:54px;border-top:1px dotted #333;padding-top:4px}
+.lembar .kecil{font-size:11.5px;color:#444}
+/* lembar pemberitahuan fee mitra: sengaja berbeda dari nota dapur (pita kop gelap, kotak info, total di kotak kuning) */
+.lembar .mitra-kop{display:flex;justify-content:space-between;align-items:flex-start;gap:16px;flex-wrap:wrap;background:#0d2419;color:#f1e7cf;border-radius:12px;padding:16px 18px;-webkit-print-color-adjust:exact;print-color-adjust:exact}
+.lembar .mitra-kop .jenis{font-size:10.5px;letter-spacing:.18em;text-transform:uppercase;color:#8fd9ae;font-weight:700}
+.lembar .mitra-kop b{display:block;font-size:21px;color:#fff;margin-top:3px;font-family:'Instrument Serif',Georgia,serif;font-weight:400;letter-spacing:0}
+.lembar .mitra-kop .kanan-kop{text-align:right;font-size:12px;color:#cfe3d6}
+.lembar .mitra-kop .kanan-kop strong{display:block;font-size:14px;color:#fff;letter-spacing:.04em}
+.lembar .mitra-info{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px;margin:14px 0}
+.lembar .mitra-info div{border:1px solid #d9e2dc;border-radius:10px;padding:9px 11px}
+.lembar .mitra-info span{display:block;font-size:10px;letter-spacing:.12em;text-transform:uppercase;color:#6b7a71;margin-bottom:2px}
+.lembar .mitra table th{background:#f6efdc;-webkit-print-color-adjust:exact;print-color-adjust:exact}
+.lembar .mitra table td,.lembar .mitra table th{border-color:#cdd6d0}
+.lembar .mitra-total{display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap;margin-top:12px;background:#fbf3e0;border:1px solid #e8b54a;border-radius:12px;padding:12px 16px;-webkit-print-color-adjust:exact;print-color-adjust:exact}
+.lembar .mitra-total b{font-size:23px;white-space:nowrap}
+.lembar tr.hari-nota td{background:#f1f4f2;font-weight:700;-webkit-print-color-adjust:exact;print-color-adjust:exact}
+.lembar .mitra h4{font-size:11px;letter-spacing:.14em;text-transform:uppercase;color:#5a6b61;margin:16px 0 6px}
+.lembar .mitra tr.hari td{background:#eef5f0;font-weight:700;-webkit-print-color-adjust:exact;print-color-adjust:exact}
+.lembar .mitra tr.sub td{font-weight:700;border-top:1.5px solid #9fb3a7}
+.lembar .mitra tr,.lembar .mitra .mitra-total{break-inside:avoid;page-break-inside:avoid}
+.lembar .batang-hari{display:inline-block;height:8px;border-radius:99px;background:#5fd08f;vertical-align:middle;-webkit-print-color-adjust:exact;print-color-adjust:exact}
+.lembar .tanda-top{display:inline-block;margin-left:6px;font-size:10px;font-weight:700;letter-spacing:.06em;color:#8a6a1f;background:#fbf3e0;border:1px solid #e8b54a;border-radius:99px;padding:1px 7px;-webkit-print-color-adjust:exact;print-color-adjust:exact}
+.hari-daftar > div{display:grid;grid-template-columns:minmax(0,1.3fr) minmax(0,1fr) auto;gap:10px;align-items:center;padding:8px 0;border-bottom:1px solid var(--garis);font-size:13.5px}
+.hari-daftar > div:last-child{border-bottom:0}
+.lembar .mitra-catatan{font-size:11.5px;color:#555;margin-top:10px;border-left:3px solid #5fd08f;padding-left:10px}
+@media screen and (max-width:560px){ .lembar .mitra-info{grid-template-columns:1fr} .lembar .mitra-kop .kanan-kop{text-align:left} }
+/* Cetak: hanya lembar #cetak yang tampil, bagian lain dibuang dari tata letak (bukan disembunyikan) supaya
+   tidak ada halaman kosong. Lembar fee disimpan di luar layar, jadi tidak perlu dimunculkan-disembunyikan saat mencetak
+   (Chrome Android mencetak tidak menunggu, lembar yang disembunyikan lagi terlalu cepat bisa tercetak kosong). */
+@media screen{ .luar-layar{position:absolute!important;left:-10000px;top:0;width:820px} }
+@media print{
+  @page{size:A4;margin:12mm}
+  html,body{background:#fff!important;background-image:none!important}
+  .kepala,.menu-bawah,.kaki,#pesanSingkat{display:none!important}
+  main{padding:0!important;max-width:none!important}
+  #isi > :not(:has(#cetak)):not(#cetak){display:none!important}
+  #isi > :has(#cetak) > :not(#cetak){display:none!important}
+  #isi > :has(#cetak){margin:0!important;padding:0!important}
+  #cetak{display:block!important;position:static!important;margin:0!important;padding:0!important;border-radius:0;width:auto;overflow:visible!important}
+  #cetak table{min-width:0!important}
+  .lembar .mitra-info{grid-template-columns:repeat(3,minmax(0,1fr))!important}
+}
+@media (prefers-reduced-motion:no-preference){ .muncul{animation:muncul .45s ease both} @keyframes muncul{from{opacity:.001;transform:translateY(8px)}to{opacity:1;transform:none}} }
+</style>
+</head>
+<body>
+<div id="akar"><div class="memuat">Memuat…</div></div>
+<script>
+'use strict';
+const SB = 'https://hzxfheydtrjhizbwbddh.supabase.co', ANON = 'sb_publishable_3c_5VhfP4Z9g1dSU9c00HQ_0QkuiHTm';
+const $ = (s, el = document) => el.querySelector(s), $$ = (s, el = document) => [...el.querySelectorAll(s)];
+const akar = $('#akar');
+const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]);
+const rp = n => 'Rp ' + Math.round(n || 0).toLocaleString('id-ID');
+const rpS = n => { const a = Math.abs(n || 0), t = n < 0 ? '−' : '';
+  if (a >= 1e9) return t + 'Rp ' + (a / 1e9).toLocaleString('id-ID', { maximumFractionDigits: 2 }) + ' M';
+  if (a >= 1e6) return t + 'Rp ' + (a / 1e6).toLocaleString('id-ID', { maximumFractionDigits: a >= 1e8 ? 0 : 1 }) + ' jt';
+  if (a >= 1e3) return t + 'Rp ' + Math.round(a / 1e3).toLocaleString('id-ID') + ' rb';
+  return t + 'Rp ' + Math.round(a); };
+const pc = (a, b) => b ? (a / b * 100).toLocaleString('id-ID', { maximumFractionDigits: 1 }) + '%' : '-';
+const BLN = ['Januari','Februari','Maret','April','Mei','Juni','Juli','Agustus','September','Oktober','November','Desember'];
+const tglD = t => t ? new Date(t + 'T00:00:00') : null;
+const tgl = (t, thn) => { const d = tglD(t); return d ? `${d.getDate()} ${BLN[d.getMonth()]}${thn ? ' ' + d.getFullYear() : ''}` : '-'; };
+const tglP = t => { const d = tglD(t); return d ? `${d.getDate()} ${BLN[d.getMonth()].slice(0, 3)}` : '-'; };
+const hariNama = t => ['Minggu','Senin','Selasa','Rabu','Kamis','Jumat','Sabtu'][tglD(t).getDay()];
+const rentang = (a, b) => { if (!a) return '-'; const A = tglD(a), B = tglD(b || a);
+  return A.getMonth() === B.getMonth() ? `${A.getDate()}${+A !== +B ? '-' + B.getDate() : ''} ${BLN[A.getMonth()]}` : `${tglP(a)} - ${tglP(b)}`; };
+const kapan = iso => { if (!iso) return '-'; const d = new Date(iso);
+  return d.toLocaleString('id-ID', { weekday: 'long', day: 'numeric', month: 'long', hour: '2-digit', minute: '2-digit' }).replace('pukul ', '').replace(/\./g, ':').replace(/:(\d\d)$/, '.$1'); };
+const judulOutlet = o => String(o || '').replace(/^MBG\s+/i, '').toLowerCase().replace(/\b\w/g, c => c.toUpperCase()).replace(/\bTpi\b/, 'TPI').replace(/\bPnk\b/, 'PNK').replace(/\bSpo\b/, 'SPO');
+let OUTLET_FEE = [];   // dapur yang kena fee: dari data (profil.outletFee), diisi di siapkan()
+const daftarFee = () => { const n = OUTLET_FEE.map(judulOutlet); return n.length > 1 ? n.slice(0, -1).join(', ') + ', dan ' + n.at(-1) : (n[0] || '-'); };
+
+// ---------- ikon (garis, 24px)
+const IK = {
+  ringkas: '<path d="M4 13h6V4H4zM14 20h6v-9h-6zM4 20h6v-3H4zM14 7h6V4h-6z"/>',
+  minggu: '<rect x="3.5" y="5" width="17" height="15" rx="3"/><path d="M8 3v4M16 3v4M3.5 10h17M8 14h3M8 17h6"/>',
+  outlet: '<path d="M4 9l1.5-5h13L20 9"/><path d="M4 9h16v2a3 3 0 0 1-5.3 2 3 3 0 0 1-5.4 0A3 3 0 0 1 4 11z"/><path d="M5 13v7h14v-7"/>',
+  stok: '<path d="M3.5 7.5L12 3l8.5 4.5L12 12z"/><path d="M3.5 7.5V16L12 20.5 20.5 16V7.5M12 12v8.5"/>',
+  piutang: '<rect x="3" y="6" width="18" height="13" rx="3"/><path d="M3 10h18M7 15h4"/>',
+  neraca: '<path d="M12 4v16M6 20h12M5 8h14M5 8l-2.5 6a3 3 0 0 0 5 0zM19 8l-2.5 6a3 3 0 0 0 5 0z"/>',
+  kabar: '<path d="M5 5h14v10H9l-4 4z"/><path d="M9 9h6M9 12h4"/>',
+  keluar: '<path d="M15 4h3a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2h-3M10 16l4-4-4-4M14 12H4"/>',
+  laba: '<path d="M4 17l5-5 4 3 7-8"/><path d="M15 7h5v5"/>',
+  biaya: '<path d="M12 3v18M16.5 7.5c0-1.9-2-3-4.5-3S7.5 5.7 7.5 7.5 9.5 10 12 10.5s4.5 1.3 4.5 3.3-2 3.2-4.5 3.2-4.5-1.2-4.5-3"/>',
+  nota: '<path d="M6 3h12v18l-3-2-3 2-3-2-3 2z"/><path d="M9 8h6M9 12h6"/>',
+  fee: '<circle cx="12" cy="12" r="8.5"/><path d="M9 15l6-6M9.5 9.5h.01M14.5 14.5h.01"/>',
+  lain: '<circle cx="5" cy="12" r="1.3"/><circle cx="12" cy="12" r="1.3"/><circle cx="19" cy="12" r="1.3"/>',
+  cetak: '<path d="M7 9V3h10v6M7 17H4v-6a2 2 0 0 1 2-2h12a2 2 0 0 1 2 2v6h-3"/><path d="M7 14h10v7H7z"/>',
+  unduh: '<path d="M12 4v11M7 10l5 5 5-5M5 20h14"/>',
+  panah: '<path d="M5 12h14M13 6l6 6-6 6"/>',
+};
+const ik = (n, s = 18) => `<svg width="${s}" height="${s}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${IK[n]}</svg>`;
+
+// ---------- sesi & data
+const sesi = {
+  baca() { try { const s = JSON.parse(localStorage.getItem('mbg-sesi') || 'null'); return s && s.token ? s : null; } catch { return null; } },
+  simpan(s) { try { localStorage.setItem('mbg-sesi', JSON.stringify(s)); } catch {} },
+  hapus() { try { localStorage.removeItem('mbg-sesi'); } catch {} },
+};
+async function rpc(fn, args) {
+  const r = await fetch(`${SB}/rest/v1/rpc/${fn}`, { method: 'POST', headers: { apikey: ANON, Authorization: `Bearer ${ANON}`, 'Content-Type': 'application/json' }, body: JSON.stringify(args) });
+  if (!r.ok) throw new Error('Tidak tersambung ke server (' + r.status + '). Periksa internet lalu coba lagi.');
+  return r.json();
+}
+let D = null, CATATAN = null, PEMBARUAN = null, TARIF = {}, INVOICE = [];
+async function muat() {
+  const s = sesi.baca(); if (!s) return layarMasuk();
+  const ambil = k => rpc('mbg_ambil_nilai', { p_token: s.token, p_kunci: k });
+  const [a, b, c, t, inv] = await Promise.all([ambil('data'), ambil('catatan'), ambil('pembaruan'), ambil('tarif-fee'), rpc('mbg_invoice_daftar', { p_token: s.token })]);
+  if (!a.ok) { sesi.hapus(); return layarMasuk(a.pesan); }
+  D = a.nilai; CATATAN = b.ok ? b.nilai : null; PEMBARUAN = c.ok ? c.nilai : null;
+  TARIF = (t.ok && t.nilai) || {}; INVOICE = inv.ok ? inv.invoice : [];
+  if (!D) { akar.innerHTML = `<div class="masuk"><div class="kotak"><h1>Belum ada data</h1><p>Data dikirim dari laptop setiap kali berkas Excel MBG disimpan. Nyalakan laptop, lalu buka lagi.</p></div></div>`; return; }
+  siapkan(); tampil();
+}
+
+// ---------- olahan data
+let M = [], OUT = {}, BULAN = [];
+function siapkan() {
+  const pr = D.profil || {}; OUTLET_FEE = pr.outletFee || []; PENERBIT = { nama: pr.usaha || '', alamat: pr.alamat || '' };
+  M = D.mingguan || [];
+  // outlet: gabungan omzet harian (patokan, sejak Mei) dan laporan mingguan (laba)
+  OUT = {};
+  for (const x of D.omzetHarian || []) { const o = OUT[x.outlet] ||= { nama: x.outlet, harian: [], minggu: [] }; o.harian.push(x); }
+  for (const w of M) for (const o of w.outlet) { const q = OUT[o.outlet] ||= { nama: o.outlet, harian: [], minggu: [] }; q.minggu.push({ ...o, minggu: w.minggu, awal: w.awal, akhir: w.akhir }); }
+  for (const o of Object.values(OUT)) {
+    o.total = o.harian.reduce((a, x) => a + x.omzet, 0); o.terakhir = o.harian.map(x => x.tanggal).sort().pop() || (o.minggu.at(-1) || {}).akhir;
+    o.laba = o.minggu.reduce((a, x) => a + x.labaKotor, 0); o.omzetLap = o.minggu.reduce((a, x) => a + x.omzet, 0); o.fee = OUTLET_FEE.includes(o.nama);
+  }
+  // laba rugi per bulan (minggu dimasukkan ke bulan tanggal awalnya)
+  const per = {};
+  for (const w of M) { const k = (w.awal || '').slice(0, 7); if (!k) continue; const b = per[k] ||= { bulan: k, minggu: [], omzet: 0, modal: 0, fee: 0, pengeluaran: 0, labaKotor: 0, biayaOps: 0, nonOps: 0, labaBersih: 0 };
+    b.minggu.push(w.minggu); for (const f of ['omzet', 'modal', 'fee', 'pengeluaran', 'labaKotor', 'biayaOps', 'nonOps', 'labaBersih']) b[f] += w.total[f] || 0; }
+  BULAN = Object.values(per).sort((a, b) => a.bulan.localeCompare(b.bulan));
+}
+
+// ---------- rangka halaman
+const MENU = [['ringkasan', 'Ringkasan', 'ringkas'], ['mingguan', 'Laba rugi', 'minggu'], ['invoice', 'Invoice', 'nota'], ['outlet', 'Outlet', 'outlet'], ['stok', 'Stok', 'stok'], ['piutang', 'Piutang', 'piutang'], ['neraca', 'Neraca', 'neraca']];
+// Di HP bilah bawah hanya muat lima: empat yang paling sering dipakai + "Lainnya".
+const MENU_HP = [['ringkasan', 'Ringkasan', 'ringkas'], ['mingguan', 'Laba rugi', 'minggu'], ['invoice', 'Invoice', 'nota'], ['outlet', 'Outlet', 'outlet'], ['lainnya', 'Lainnya', 'lain']];
+function rute() { const [h, ...a] = (location.hash.slice(1) || 'ringkasan').split('/'); // #fee hanya untuk tarif fee (menu Fee dihapus 26 Sep 2026); alamat lama #fee dibawa ke Invoice.
+  if (h === 'fee' && a[0] !== 'tarif') return { h: 'invoice', a: [] };
+  return { h: MENU.some(m => m[0] === h) || ['kabar', 'lainnya', 'fee'].includes(h) ? h : 'ringkasan', a: a.map(decodeURIComponent) }; }
+function tampil() {
+  const { h, a } = rute();
+  const upd = PEMBARUAN && PEMBARUAN.waktu ? PEMBARUAN.waktu : D.diperbarui;
+  akar.innerHTML = `
+  <header class="kepala"><div class="bungkus">
+    <a class="merek" href="#ringkasan"><img src="ikon-any-192.png?v=1" alt=""><span><b>MBG</b><small>${esc((D.profil || {}).singkat || 'Laporan usaha')}</small></span></a>
+    <nav class="menu-atas" aria-label="Menu">${MENU.map(m => `<a href="#${m[0]}" class="${h === m[0] || (h === 'fee' && m[0] === 'invoice') ? 'aktif' : ''}">${m[1]}</a>`).join('')}</nav>
+    <div class="kanan-kepala">
+      <a class="pil-hijau" href="#kabar" title="Catatan pembaruan"><span class="titik"></span>${upd ? 'Diperbarui ' + esc(tglP(upd.slice(0, 10))) : 'Belum diperbarui'}</a>
+      <button class="tombol-ikon" id="bPasang" title="Pasang sebagai aplikasi" aria-label="Pasang sebagai aplikasi" ${TAWARAN_PASANG ? '' : 'hidden'}>${ik('unduh', 17)}</button>
+      <button class="tombol-ikon" id="bKeluar" title="Keluar" aria-label="Keluar">${ik('keluar', 17)}</button>
+    </div></div></header>
+  <main class="bungkus" id="isi"></main>
+  <nav class="menu-bawah" aria-label="Menu">${MENU_HP.map(m => `<a href="#${m[0]}" class="${h === m[0] || (m[0] === 'lainnya' && ['stok', 'piutang', 'neraca', 'kabar'].includes(h)) || (m[0] === 'invoice' && h === 'fee') ? 'aktif' : ''}">${ik(m[2], 20)}<span>${m[1]}</span></a>`).join('')}</nav>`;
+  $('#bPasang').onclick = pasangAplikasi;
+  $('#bKeluar').onclick = async () => { if (!confirm('Keluar dari aplikasi MBG di HP ini?')) return; const s = sesi.baca(); sesi.hapus(); try { await rpc('mbg_keluar', { p_token: s.token }); } catch {} layarMasuk(); };
+  const isi = $('#isi');
+  ({ ringkasan: vRingkasan, mingguan: vMingguan, invoice: vInvoice, fee: vFee, outlet: vOutlet, stok: vStok, piutang: vPiutang, neraca: vNeraca, kabar: vKabar, lainnya: vLainnya })[h](isi, a);
+  isi.insertAdjacentHTML('beforeend', `<footer class="kaki"><span>Angka dibaca otomatis dari laporan Excel di laptop setiap kali berkas disimpan.</span><span>Diperbarui ${esc(kapan(upd))}</span></footer>`);
+  isi.classList.add('muncul');
+  $$('.tab-baris .aktif', isi).forEach(t => t.scrollIntoView({ block: 'nearest', inline: 'center' }));
+}
+// Pasang sebagai aplikasi: Chrome memberi tawaran pasang (beforeinstallprompt); tombolnya muncul di kepala halaman.
+let TAWARAN_PASANG = null;
+const sudahTerpasang = () => matchMedia('(display-mode: standalone)').matches || navigator.standalone;
+addEventListener('beforeinstallprompt', e => { e.preventDefault(); TAWARAN_PASANG = e; const b = $('#bPasang'); if (b) b.hidden = false; });
+addEventListener('appinstalled', () => { TAWARAN_PASANG = null; const b = $('#bPasang'); if (b) b.hidden = true; pesan('Aplikasi terpasang di layar utama'); });
+async function pasangAplikasi() {
+  if (TAWARAN_PASANG) { TAWARAN_PASANG.prompt(); await TAWARAN_PASANG.userChoice.catch(() => {}); TAWARAN_PASANG = null; const b = $('#bPasang'); if (b) b.hidden = true; return; }
+  alert('Buka menu browser (titik tiga di pojok kanan atas), lalu pilih "Instal aplikasi" atau "Tambahkan ke layar utama". Di iPhone: tombol Bagikan, lalu "Tambah ke Layar Utama".');
+}
+addEventListener('hashchange', () => { if (D) { tampil(); scrollTo({ top: 0 }); } });
+
+// ---------- grafik batang sederhana (satu skala untuk batang, garis bantu, dan label)
+function grafikBatang(data, { tinggi = 210, seri = [{ k: 'v', warna: 'var(--hijau)' }], label = d => d.label, format = rpS } = {}) {
+  if (!data.length) return '<div class="kosong">Belum ada data.</div>';
+  const W = 640, kiri = 58, bawah = 26, atas = 12, H = tinggi;
+  const maks = Math.max(1, ...data.flatMap(d => seri.map(s => d[s.k] || 0)));
+  const langkah = (() => { const kasar = maks / 4, p = 10 ** Math.floor(Math.log10(kasar)), n = kasar / p; return (n <= 1 ? 1 : n <= 2 ? 2 : n <= 5 ? 5 : 10) * p; })();
+  const puncak = Math.ceil(maks / langkah) * langkah, y = v => atas + (H - atas - bawah) * (1 - v / puncak);
+  const lebarGrup = (W - kiri - 8) / data.length, lb = Math.min(26, (lebarGrup - 12) / seri.length);
+  let s = `<svg viewBox="0 0 ${W} ${H}" role="img">`;
+  for (let v = 0; v <= puncak + 1; v += langkah) s += `<line x1="${kiri}" x2="${W - 4}" y1="${y(v)}" y2="${y(v)}" stroke="rgba(190,230,205,.08)"/><text x="${kiri - 8}" y="${y(v) + 4}" text-anchor="end">${esc(format(v).replace('Rp ', ''))}</text>`;
+  data.forEach((d, i) => {
+    const x0 = kiri + i * lebarGrup + (lebarGrup - lb * seri.length - 4 * (seri.length - 1)) / 2;
+    seri.forEach((sr, j) => { const v = Math.max(0, d[sr.k] || 0), yy = y(v); s += `<rect x="${x0 + j * (lb + 4)}" y="${yy}" width="${lb}" height="${Math.max(0, H - bawah - yy)}" rx="5" fill="${sr.warna}"><title>${esc(label(d))}: ${esc(rp(d[sr.k]))}</title></rect>`; });
+    s += `${data.length <= 16 || i % 2 === 0 ? `<text x="${kiri + i * lebarGrup + lebarGrup / 2}" y="${H - 8}" text-anchor="middle">${esc(label(d))}</text>` : ''}`;
+  });
+  return `<div class="grafik" style="overflow-x:auto">${s}</svg></div>`;
+}
+
+// ---------- RINGKASAN
+function vRingkasan(el) {
+  const w = M.at(-1), t = w.total, lalu = M.at(-2);
+  const naik = lalu ? t.omzet - lalu.total.omzet : 0;
+  const H = D.omzetHarian || [], tAkhir = H.length ? H.at(-1).tanggal : null;
+  const piuU = D.piutang.filter(p => !p.lunas && p.usaha).reduce((a, p) => a + p.nominal, 0);
+  const habis = D.stok.barang.filter(b => b.status === 'HABIS'), tipis = D.stok.barang.filter(b => b.status === 'MENIPIS');
+  // omzet harian 21 hari terakhir yang ada datanya
+  const perHari = {}; for (const x of H) perHari[x.tanggal] = (perHari[x.tanggal] || 0) + x.omzet;
+  const hari = Object.keys(perHari).sort().slice(-14).map(k => ({ label: tglP(k).replace(' ', ' '), v: perHari[k], k }));
+  el.innerHTML = `
+  <section class="pahlawan">
+    <span class="pil-hijau"><span class="titik"></span>Laporan minggu ${w.minggu} · ${esc(rentang(w.awal, w.akhir))}</span>
+    <h1>${esc(rpS(t.omzet).replace('Rp ', 'Rp '))}<br><span class="miring">omzet ${lalu ? (naik >= 0 ? 'naik' : 'turun') : 'minggu ini'}</span>${lalu ? ` <span class="miring ${naik >= 0 ? 'hijau' : 'kunyit'}">${esc(pc(Math.abs(naik), lalu.total.omzet))}</span>` : ''}</h1>
+    <p class="sub">Laba bersih <b style="color:var(--teks)">${esc(rp(t.labaBersih))}</b> dari ${w.outlet.length} dapur, ${t.nota} nota. ${lalu ? `Minggu sebelumnya omzet ${esc(rpS(lalu.total.omzet))}.` : ''}</p>
+    <div class="aksi"><a class="tombol utama" href="#mingguan/${w.minggu}">Lihat laba rugi ${ik('panah', 16)}</a><a class="tombol" href="#outlet">Omzet per outlet</a></div>
+    <div class="fitur">
+      <div><span class="ik">${ik('laba')}</span><span><b>${esc(rpS(t.labaKotor))}</b><small>laba kotor · margin ${esc(pc(t.labaKotor, t.omzet))}</small></span></div>
+      <div><span class="ik">${ik('biaya')}</span><span><b>${esc(rpS(t.biayaOps))}</b><small>biaya operasional</small></span></div>
+      <div><span class="ik">${ik('piutang')}</span><span><b>${esc(rpS(piuU))}</b><small>piutang dapur belum dibayar</small></span></div>
+      <div><span class="ik">${ik('stok')}</span><span><b>${esc(rpS(D.stok.nilai))}</b><small>nilai stok di gudang</small></span></div>
+    </div>
+  </section>
+
+  ${CATATAN && CATATAN.teks ? `<section class="bagian"><div class="catatan-ai"><span class="label">Catatan pembukuan · ${esc(kapan(CATATAN.waktu))}</span><p>${esc(CATATAN.teks)}</p></div></section>` : ''}
+
+  <section class="bagian grid g2">
+    <div class="kartu"><span class="label">Omzet dan laba bersih per minggu</span>
+      <div style="margin-top:12px">${grafikBatang(M.map(x => ({ label: 'M' + x.minggu, o: x.total.omzet, l: x.total.labaBersih })), { seri: [{ k: 'o', warna: 'rgba(95,208,143,.35)' }, { k: 'l', warna: 'var(--hijau)' }] })}</div>
+      <div class="legenda"><span><i style="background:rgba(95,208,143,.35)"></i>Omzet</span><span><i style="background:var(--hijau)"></i>Laba bersih</span></div></div>
+    <div class="kartu"><span class="label">Omzet harian terakhir${tAkhir ? ' · sampai ' + esc(tgl(tAkhir)) : ''}</span>
+      <div style="margin-top:12px">${grafikBatang(hari, { seri: [{ k: 'v', warna: 'var(--kunyit)' }] })}</div>
+      <div class="legenda"><span><i style="background:var(--kunyit)"></i>Omzet semua dapur per hari</span></div></div>
+  </section>
+
+  <section class="bagian">
+    <h2>Yang perlu <span class="miring">dilihat</span></h2>
+    <p class="ket">Diambil dari laporan minggu terakhir, stok gudang, dan buku piutang.</p>
+    <div class="grid g3">
+      <a class="kartu" href="#stok" style="text-decoration:none"><span class="label">Stok</span>
+        <div class="ubin"><div class="nilai kecil">${habis.length} habis · ${tipis.length} menipis</div></div>
+        <div class="pil-baris" style="margin-top:8px">${[...habis.map(b => `<span class="pil merah">${esc(b.nama)}</span>`), ...tipis.map(b => `<span class="pil kunyit">${esc(b.nama)}</span>`)].slice(0, 6).join('') || '<span class="pil hijau">Semua aman</span>'}</div></a>
+      <a class="kartu" href="#mingguan/${w.minggu}" style="text-decoration:none"><span class="label">Modal & fee minggu ${w.minggu}</span>
+        <div class="ubin"><div class="nilai kecil">${w.cek.length} barang dicek</div></div>
+        <div class="redup" style="font-size:13.5px;margin-top:6px">${w.cek.length ? esc(w.cek.slice(0, 3).map(c => judulOutlet(c.outlet) + ' ' + c.barang).join(', ')) + (w.cek.length > 3 ? ', dan lainnya.' : '.') : 'Modal dan fee semua barang sudah terisi.'}</div></a>
+      <a class="kartu" href="#piutang" style="text-decoration:none"><span class="label">Piutang</span>
+        <div class="ubin"><div class="nilai kecil">${esc(rpS(D.piutang.filter(p => !p.lunas).reduce((a, p) => a + p.nominal, 0)))}</div></div>
+        <div class="redup" style="font-size:13.5px;margin-top:6px">${D.piutang.filter(p => !p.lunas).length} tagihan belum dibayar, ${esc(rpS(piuU))} dari dapur.</div></a>
+    </div>
+  </section>`;
+}
+
+// ---------- LABA RUGI MINGGUAN
+function vMingguan(el, [no]) {
+  const w = M.find(x => String(x.minggu) === no) || M.at(-1), t = w.total;
+  const kat = {}; for (const b of w.biaya.filter(b => b.operasional)) kat[b.kategori || 'Lainnya'] = (kat[b.kategori || 'Lainnya'] || 0) + b.jumlah;
+  const selisih = w.cekOmzet.filter(c => c.selisih);
+  el.innerHTML = `
+  <section class="bagian" style="margin-top:6px">
+    <div class="tab-baris" role="tablist">${M.map(x => `<a class="tab ${x === w ? 'aktif' : ''}" href="#mingguan/${x.minggu}" style="text-decoration:none">Minggu ${x.minggu}</a>`).join('')}</div>
+    <h2 style="margin-top:18px">Laba rugi <span class="miring">minggu ${w.minggu}</span></h2>
+    <p class="ket">${esc(rentang(w.awal, w.akhir))} ${esc((w.awal || '').slice(0, 4))} · ${w.outlet.length} dapur · ${t.nota} nota · ${t.baris} baris barang</p>
+    <div class="grid g2">
+      <div class="kartu"><div class="lr">
+        <div class="b besar"><span>Omzet penjualan</span><span>${esc(rp(t.omzet))}</span></div>
+        <div class="b kurang"><span>Modal barang (HPP)</span><span>− ${esc(rp(t.modal))}</span></div>
+        <div class="b kurang"><span>Fee dapur</span><span>− ${esc(rp(t.fee))}</span></div>
+        ${t.pengeluaran ? `<div class="b kurang"><span>Pengeluaran di nota</span><span>− ${esc(rp(t.pengeluaran))}</span></div>` : ''}
+        <div class="b jumlah"><span>Laba kotor<small>margin ${esc(pc(t.labaKotor, t.omzet))}</small></span><span>${esc(rp(t.labaKotor))}</span></div>
+        <div class="b kurang"><span>Biaya operasional</span><span>− ${esc(rp(t.biayaOps))}</span></div>
+        <div class="b besar"><span><b>Laba bersih</b><small>margin ${esc(pc(t.labaBersih, t.omzet))}</small></span><span class="${t.labaBersih >= 0 ? 'hijau' : 'merah'}">${esc(rp(t.labaBersih))}</span></div>
+      </div>
+      <p class="samar" style="font-size:12.5px;margin:12px 0 0">Laba kotor = omzet dikurangi modal barang dan fee. Laba bersih = laba kotor dikurangi biaya operasional (bensin, gaji, makan, parkir).${t.nonOps ? ` Pengeluaran pribadi ${esc(rp(t.nonOps))} tidak memotong laba.` : ''}</p></div>
+      <div class="kartu"><span class="label">Biaya operasional per jenis</span>
+        <div class="daftar" style="margin-top:6px">${Object.entries(kat).sort((a, b) => b[1] - a[1]).map(([k, v]) => `<div><div style="flex:1"><b>${esc(k)}</b><div class="batang"><i style="width:${Math.round(v / t.biayaOps * 100)}%"></i></div></div><span class="angka">${esc(rp(v))}</span></div>`).join('') || '<div class="kosong">Belum ada biaya minggu ini.</div>'}</div></div>
+    </div>
+  </section>
+
+  <section class="bagian">
+    <h2>Per <span class="miring">dapur</span></h2>
+    <p class="ket">Biaya operasional dibagi ke tiap dapur sebanding dengan porsi laba kotornya. Fee hanya untuk ${esc(daftarFee())}.</p>
+    <div class="kartu"><div class="tbl-bungkus"><table>
+      <thead><tr><th>Dapur</th><th class="angka">Omzet</th><th class="angka">Modal</th><th class="angka">Fee</th><th class="angka">Laba kotor</th><th class="angka">Biaya ops</th><th class="angka">Laba bersih</th><th class="angka">Margin</th></tr></thead>
+      <tbody>${w.outlet.map(o => `<tr><td><a href="#outlet/${encodeURIComponent(o.outlet)}"><b>${esc(judulOutlet(o.outlet))}</b></a><div class="samar" style="font-size:12px">${o.nota} nota · ${esc(rentang(o.tanggal[0], o.tanggal.at(-1)))}</div></td><td class="angka">${esc(rp(o.omzet))}</td><td class="angka redup">${esc(rp(o.modal))}</td><td class="angka redup">${o.fee ? esc(rp(o.fee)) : '-'}</td><td class="angka">${esc(rp(o.labaKotor))}</td><td class="angka redup">${esc(rp(o.biayaOps))}</td><td class="angka"><b class="${o.labaBersih >= 0 ? '' : 'merah'}">${esc(rp(o.labaBersih))}</b></td><td class="angka">${esc(pc(o.labaBersih, o.omzet))}</td></tr>`).join('')}</tbody>
+      <tfoot><tr><td>Total</td><td class="angka">${esc(rp(t.omzet))}</td><td class="angka">${esc(rp(t.modal))}</td><td class="angka">${esc(rp(t.fee))}</td><td class="angka">${esc(rp(t.labaKotor))}</td><td class="angka">${esc(rp(t.biayaOps))}</td><td class="angka">${esc(rp(t.labaBersih))}</td><td class="angka">${esc(pc(t.labaBersih, t.omzet))}</td></tr></tfoot>
+    </table></div></div>
+  </section>
+
+  <section class="bagian grid g2">
+    <div class="kartu"><span class="label">Barang dengan omzet terbesar</span>
+      <div class="daftar" style="margin-top:6px">${w.barangTop.slice(0, 10).map(b => `<div><div style="flex:1;min-width:0"><b>${esc(b.barang)}</b><div class="samar" style="font-size:12px">${esc((+b.qty).toLocaleString('id-ID', { maximumFractionDigits: 2 }))} ${esc(b.satuan)} · laba ${esc(rpS(b.laba))}</div><div class="batang"><i style="width:${Math.round(b.omzet / w.barangTop[0].omzet * 100)}%"></i></div></div><span class="angka">${esc(rpS(b.omzet))}</span></div>`).join('')}</div></div>
+    <div class="kartu"><span class="label">Perlu dicek</span>
+      <div class="daftar" style="margin-top:6px">${w.cek.map(c => `<div><div style="flex:1;min-width:0"><b>${esc(c.barang)}</b> <span class="samar" style="font-size:12px">${esc(judulOutlet(c.outlet))} · ${esc(c.nota)}</span><div class="redup" style="font-size:12.5px">${esc(c.catatan)}</div></div><span class="angka samar" style="font-size:12.5px">jual ${esc(rp(c.harga))}<br>modal ${c.modal ? esc(rp(c.modal)) : '-'}</span></div>`).join('') || '<div class="kosong">Tidak ada yang perlu dicek. Modal dan fee semua barang sudah terisi.</div>'}
+      ${(w.catatan || []).map(c => `<div><span class="redup" style="font-size:12.5px">${esc(c)}</span></div>`).join('')}</div>
+      ${selisih.length ? `<div style="margin-top:14px"><span class="label">Beda dengan omzet harian</span><div class="daftar">${selisih.map(c => `<div><span>${esc(tglP(c.tanggal))} · ${esc(judulOutlet(c.outlet))}</span><span class="angka ${c.selisih > 0 ? 'kunyit' : 'merah'}">${c.selisih > 0 ? '+' : '−'}${esc(rp(Math.abs(c.selisih)))}</span></div>`).join('')}</div></div>` : ''}
+    </div>
+  </section>
+
+  <section class="bagian">
+    <h2>Rincian <span class="miring">biaya</span></h2>
+    <div class="kartu"><div class="daftar">${w.biaya.map(b => `<div><div style="min-width:0"><b>${esc(b.ket)}</b>${b.operasional ? '' : ' <span class="pil">pribadi</span>'}<div class="samar" style="font-size:12px">${esc(b.tanggal ? hariNama(b.tanggal) + ', ' + tgl(b.tanggal) : '-')}${b.kategori ? ' · ' + esc(b.kategori) : ''}</div></div><span class="angka">${esc(rp(b.jumlah))}</span></div>`).join('') || '<div class="kosong">Belum ada biaya.</div>'}</div></div>
+  </section>`;
+}
+
+// ---------- OUTLET
+function vOutlet(el, [nama]) {
+  const semua = Object.values(OUT).sort((a, b) => (b.terakhir || '').localeCompare(a.terakhir || '') || b.total - a.total);
+  if (nama && OUT[nama]) return vOutletSatu(el, OUT[nama]);
+  const maks = Math.max(...semua.map(o => o.total));
+  const aktif = semua.filter(o => o.terakhir && o.terakhir >= (D.omzetHarian.at(-1) || {}).tanggal?.slice(0, 7) + '-01');
+  el.innerHTML = `
+  <section class="bagian" style="margin-top:6px">
+    <h2>Semua <span class="miring">dapur</span></h2>
+    <p class="ket">Omzet dari catatan omzet harian sejak ${esc(tgl((D.omzetHarian[0] || {}).tanggal, true))}. Laba kotor dari laporan mingguan. Ketuk nama dapur untuk rinciannya.</p>
+    <div class="pil-baris" style="margin-bottom:14px"><span class="pil hijau">${aktif.length} dapur mengambil barang bulan terakhir</span><span class="pil">${semua.length} dapur tercatat</span><span class="pil kunyit">Fee: ${esc(daftarFee())}</span></div>
+    <div class="kartu"><div class="daftar">${semua.map(o => `<div><a href="#outlet/${encodeURIComponent(o.nama)}" style="flex:1;min-width:0;text-decoration:none"><b>${esc(judulOutlet(o.nama))}</b>${o.fee ? ' <span class="pil kunyit" style="font-size:10.5px;padding:2px 8px">fee</span>' : ''}
+        <div class="samar" style="font-size:12px">terakhir ${esc(o.terakhir ? tgl(o.terakhir) : '-')} · ${o.harian.length} hari tercatat${o.laba ? ' · laba kotor ' + esc(rpS(o.laba)) : ''}</div>
+        <div class="batang"><i style="width:${maks ? Math.max(1, Math.round(o.total / maks * 100)) : 0}%"></i></div></a><span class="angka">${esc(rpS(o.total || o.omzetLap))}</span></div>`).join('')}</div></div>
+  </section>`;
+}
+function vOutletSatu(el, o) {
+  // omzet per minggu kalender (Senin) dari catatan omzet harian
+  const perM = {};
+  for (const x of o.harian) { const d = tglD(x.tanggal); d.setDate(d.getDate() - ((d.getDay() + 6) % 7)); const k = d.toISOString().slice(0, 10); perM[k] = (perM[k] || 0) + x.omzet; }
+  const seri = Object.entries(perM).sort().slice(-16).map(([k, v]) => ({ label: tglP(k).replace(' ', ' '), v }));
+  const nota = {}; for (const w of M) for (const r of w.rincian.filter(r => r.o === o.nama)) { const k = w.minggu + '|' + r.n + '|' + r.t; (nota[k] ||= { minggu: w.minggu, nota: r.n, tanggal: r.t, baris: [] }).baris.push(r); }
+  const daftarNota = Object.values(nota).sort((a, b) => (b.tanggal || '').localeCompare(a.tanggal || '')).slice(0, 12);
+  el.innerHTML = `
+  <section class="bagian" style="margin-top:6px">
+    <a href="#outlet" class="pil" style="text-decoration:none">← Semua dapur</a>
+    <h2 style="margin-top:14px">${esc(judulOutlet(o.nama))} <span class="miring">${o.fee ? 'dengan fee' : 'tanpa fee'}</span></h2>
+    <p class="ket">Terakhir mengambil barang ${esc(o.terakhir ? hariNama(o.terakhir) + ', ' + tgl(o.terakhir, true) : '-')}.</p>
+    <div class="grid g4">
+      <div class="kartu ubin"><span class="label">Omzet tercatat</span><div class="nilai">${esc(rpS(o.total || o.omzetLap))}</div><small>${o.harian.length} hari</small></div>
+      <div class="kartu ubin"><span class="label">Laba kotor</span><div class="nilai">${esc(rpS(o.laba))}</div><small>${o.minggu.length} minggu laporan · margin ${esc(pc(o.laba, o.omzetLap))}</small></div>
+      <div class="kartu ubin"><span class="label">Rata-rata per hari</span><div class="nilai">${esc(rpS(o.harian.length ? o.total / o.harian.length : 0))}</div><small>hari yang ada pesanan</small></div>
+      <div class="kartu ubin"><span class="label">Piutang</span><div class="nilai">${esc(rpS(D.piutang.filter(p => !p.lunas && p.outlet === o.nama).reduce((a, p) => a + p.nominal, 0)))}</div><small>belum dibayar</small></div>
+    </div>
+  </section>
+  <section class="bagian kartu"><span class="label">Omzet per minggu (Senin sampai Minggu)</span><div style="margin-top:12px">${grafikBatang(seri)}</div></section>
+  ${o.minggu.length ? `<section class="bagian"><h2>Di laporan <span class="miring">mingguan</span></h2><div class="kartu"><div class="tbl-bungkus"><table><thead><tr><th>Minggu</th><th class="angka">Omzet</th><th class="angka">Laba kotor</th><th class="angka">Laba bersih</th><th class="angka">Margin</th></tr></thead>
+    <tbody>${o.minggu.map(x => `<tr><td><a href="#mingguan/${x.minggu}">Minggu ${x.minggu}</a><div class="samar" style="font-size:12px">${esc(rentang(x.tanggal[0], x.tanggal.at(-1)))}</div></td><td class="angka">${esc(rp(x.omzet))}</td><td class="angka">${esc(rp(x.labaKotor))}</td><td class="angka">${esc(rp(x.labaBersih))}</td><td class="angka">${esc(pc(x.labaBersih, x.omzet))}</td></tr>`).join('')}</tbody></table></div></div></section>` : ''}
+  ${daftarNota.length ? `<section class="bagian"><h2>Nota <span class="miring">terakhir</span></h2><div class="grid g2">${daftarNota.map(n => { const tot = n.baris.reduce((a, r) => a + r.q * r.h, 0), lb = n.baris.reduce((a, r) => a + r.l, 0);
+      return `<div class="kartu"><div style="display:flex;justify-content:space-between;gap:10px;align-items:baseline;flex-wrap:wrap"><b>${esc(n.nota || 'Nota')}</b><span class="redup" style="font-size:13px">${esc(n.tanggal ? hariNama(n.tanggal) + ', ' + tgl(n.tanggal) : '')}</span></div>
+      <div class="daftar" style="margin-top:4px">${n.baris.map(r => `<div style="padding:7px 0"><span>${esc(r.b)} <span class="samar" style="font-size:12px">${esc((+r.q).toLocaleString('id-ID', { maximumFractionDigits: 2 }))} ${esc(r.s)} × ${esc(rp(r.h))}</span></span><span class="angka">${esc(rp(r.q * r.h))}</span></div>`).join('')}</div>
+      <div style="display:flex;justify-content:space-between;margin-top:8px;padding-top:8px;border-top:1px solid var(--garis2)"><b>${esc(rp(tot))}</b><span class="hijau" style="font-size:13px">laba kotor ${esc(rp(lb))}</span></div></div>`; }).join('')}</div></section>` : ''}`;
+}
+
+// ---------- STOK
+function vStok(el) {
+  const S = D.stok, urut = { HABIS: 0, MENIPIS: 1, AMAN: 2 };
+  const kat = {}; for (const b of S.barang) (kat[b.kategori] ||= []).push(b);
+  el.innerHTML = `
+  <section class="bagian" style="margin-top:6px">
+    <h2>Stok <span class="miring">gudang</span></h2>
+    <p class="ket">Stok sekarang = stok awal + barang masuk dan pembelian − barang keluar. Nilai memakai harga modal per satuan.</p>
+    <div class="grid g4">
+      <div class="kartu ubin"><span class="label">Nilai stok</span><div class="nilai">${esc(rpS(S.nilai))}</div><small>${S.barang.length} jenis barang</small></div>
+      <div class="kartu ubin"><span class="label">Habis</span><div class="nilai merah">${S.habis}</div><small>perlu segera dibeli</small></div>
+      <div class="kartu ubin"><span class="label">Menipis</span><div class="nilai kunyit">${S.menipis}</div><small>di bawah stok minimum</small></div>
+      <div class="kartu ubin"><span class="label">Aman</span><div class="nilai hijau">${S.barang.length - S.habis - S.menipis}</div><small>di atas stok minimum</small></div>
+    </div>
+  </section>
+  ${Object.entries(kat).map(([k, arr]) => `<section class="bagian"><h2 style="font-size:24px">${esc(k)}</h2><div class="kartu"><div class="tbl-bungkus"><table>
+    <thead><tr><th>Barang</th><th class="angka">Stok</th><th class="angka">Minimum</th><th>Status</th><th class="angka">Harga modal</th><th class="angka">Nilai</th></tr></thead>
+    <tbody>${arr.sort((a, b) => urut[a.status] - urut[b.status] || b.nilai - a.nilai).map(b => `<tr><td><b>${esc(b.nama)}</b></td><td class="angka">${esc((+b.stok).toLocaleString('id-ID', { maximumFractionDigits: 2 }))} <span class="samar">${esc(b.satuan)}</span></td><td class="angka redup">${esc((+b.minimum).toLocaleString('id-ID'))}</td><td><span class="pil ${b.status === 'HABIS' ? 'merah' : b.status === 'MENIPIS' ? 'kunyit' : 'hijau'}">${b.status === 'HABIS' ? 'Habis' : b.status === 'MENIPIS' ? 'Menipis' : 'Aman'}</span></td><td class="angka redup">${esc(rp(b.harga))}</td><td class="angka">${esc(rp(b.nilai))}</td></tr>`).join('')}</tbody></table></div></div></section>`).join('')}
+  ${S.pembelian.length ? `<section class="bagian"><h2>Pembelian <span class="miring">terakhir</span></h2><div class="kartu"><div class="daftar">${S.pembelian.slice().reverse().map(p => `<div><div><b>${esc(p.barang)}</b><div class="samar" style="font-size:12px">${esc(tgl(p.tanggal))} · ${esc((+p.jumlah).toLocaleString('id-ID'))} × ${esc(rp(p.harga))}${p.ket ? ' · ' + esc(p.ket) : ''}</div></div><span class="angka">${esc(rp(p.total))}</span></div>`).join('')}</div></div></section>` : ''}`;
+}
+
+// ---------- PIUTANG
+function vPiutang(el) {
+  const P = D.piutang, hariIni = new Date(); hariIni.setHours(0, 0, 0, 0);
+  const umur = p => p.tanggal ? Math.round((hariIni - tglD(p.tanggal)) / 864e5) : null;
+  const blm = P.filter(p => !p.lunas), usaha = blm.filter(p => p.usaha), lain = blm.filter(p => !p.usaha);
+  const baris = arr => arr.sort((a, b) => b.nominal - a.nominal).map(p => { const u = umur(p);
+    return `<div><div style="flex:1;min-width:0"><b>${esc(p.usaha ? judulOutlet(p.outlet) : p.pihak)}</b><div class="samar" style="font-size:12px">${p.tanggal ? 'faktur ' + esc(tgl(p.tanggal, true)) : 'tanpa tanggal faktur'}${p.jatuhTempo ? ' · jatuh tempo ' + esc(tgl(p.jatuhTempo, true)) : ''}${p.catatan ? ' · ' + esc(p.catatan) : ''}</div></div>
+      <span class="angka">${esc(rp(p.nominal))}${u != null ? `<br><span class="pil ${u > 30 ? 'merah' : u > 14 ? 'kunyit' : ''}" style="margin-top:4px">${u} hari</span>` : ''}</span></div>`; }).join('');
+  el.innerHTML = `
+  <section class="bagian" style="margin-top:6px">
+    <h2>Piutang <span class="miring">belum dibayar</span></h2>
+    <p class="ket">Dari buku piutang. Tagihan ke dapur dipisah dari piutang ke keluarga atau kenalan, karena yang kedua bukan hasil jualan.</p>
+    <div class="grid g3">
+      <div class="kartu ubin"><span class="label">Total belum dibayar</span><div class="nilai">${esc(rpS(blm.reduce((a, p) => a + p.nominal, 0)))}</div><small>${blm.length} tagihan</small></div>
+      <div class="kartu ubin"><span class="label">Dapur</span><div class="nilai">${esc(rpS(usaha.reduce((a, p) => a + p.nominal, 0)))}</div><small>piutang usaha</small></div>
+      <div class="kartu ubin"><span class="label">Lain-lain</span><div class="nilai">${esc(rpS(lain.reduce((a, p) => a + p.nominal, 0)))}</div><small>pinjaman ke pihak terkait</small></div>
+    </div>
+  </section>
+  <section class="bagian grid g2">
+    <div class="kartu"><span class="label">Dapur</span><div class="daftar" style="margin-top:6px">${baris(usaha) || '<div class="kosong">Semua sudah dibayar.</div>'}</div></div>
+    <div class="kartu"><span class="label">Lain-lain</span><div class="daftar" style="margin-top:6px">${baris(lain) || '<div class="kosong">Tidak ada.</div>'}</div></div>
+  </section>
+  ${P.filter(p => p.lunas).length ? `<section class="bagian kartu"><span class="label">Sudah dibayar</span><div class="daftar">${P.filter(p => p.lunas).map(p => `<div><span>${esc(p.pihak)} <span class="samar">${esc(p.diterima ? tgl(p.diterima) : '')}</span></span><span class="angka hijau">${esc(rp(p.nominal))}</span></div>`).join('')}</div></section>` : ''}`;
+}
+
+// ---------- NERACA
+function vNeraca(el, [bln]) {
+  const N = D.neraca || [];
+  const b = BULAN.find(x => x.bulan === bln) || BULAN.at(-1), n = N.find(x => b && x.bulan === b.bulan);
+  const namaBln = k => k ? BLN[+k.slice(5, 7) - 1] + ' ' + k.slice(0, 4) : '-';
+  let neraca = '';
+  if (n) {
+    const I = n.isian, v = k => I[k] && I[k].nilai != null ? I[k].nilai : 0;
+    const piuU = D.piutang.filter(p => !p.lunas && p.usaha).reduce((a, p) => a + p.nominal, 0), piuL = D.piutang.filter(p => !p.lunas && !p.usaha).reduce((a, p) => a + p.nominal, 0);
+    const lb = b ? b.labaBersih : 0;
+    const lancar = [['Kas di tangan', v('A1')], ['Saldo bank', v('A2')], ['Saldo e-wallet', v('A3')], ['Piutang dapur', piuU], ['Piutang lain-lain', piuL], ['Persediaan barang', v('A6')], ['Uang muka ke supplier', v('A7')], ['Biaya dibayar dimuka', v('A8')]];
+    const tetap = [['Kendaraan', v('B1') - v('B2')], ['Peralatan', v('B3') - v('B4')], ['Renovasi gudang', v('B5') - v('B6')]];
+    const wajib = [['Utang ke supplier', v('C1')], ['Utang barang titipan', v('C2')], ['Gaji terutang', v('C3')], ['Pinjaman jangka pendek', v('C4')], ['Utang lain-lain', v('C5')], ['Pinjaman jangka panjang', v('D1')]];
+    const ekuitas = [['Modal awal', v('E1')], ['Tambahan setoran', v('E2')], ['Laba bersih ' + namaBln(n.bulan).split(' ')[0], lb], ['Prive (pengambilan pribadi)', -v('E4')]];
+    const S = arr => arr.reduce((a, x) => a + x[1], 0);
+    const TA = S(lancar) + S(tetap), TW = S(wajib), TE = S(ekuitas), seimbang = Math.round(TA - TW - TE);
+    const belum = [['A1', 'kas di tangan'], ['A2', 'saldo bank'], ['E1', 'modal awal']].filter(([k]) => !v(k)).map(x => x[1]);
+    const blok = (judul, arr, total) => `<div class="lr"><div class="b jumlah"><span>${judul}</span><span>${esc(rp(total))}</span></div>${arr.filter(x => x[1]).map(x => `<div class="b kurang"><span>${esc(x[0])}</span><span>${x[1] < 0 ? '− ' + esc(rp(-x[1])) : esc(rp(x[1]))}</span></div>`).join('') || '<div class="b kurang"><span>belum diisi</span><span>-</span></div>'}</div>`;
+    neraca = `
+    <section class="bagian">
+      <h2>Neraca <span class="miring">akhir ${esc(namaBln(n.bulan))}</span></h2>
+      <p class="ket">Neraca itu foto posisi harta pada satu tanggal: aset di satu sisi, utang dan modal di sisi lain, jumlahnya harus sama. Berbeda dengan laba rugi yang menghitung untung selama sebulan.</p>
+      ${belum.length ? `<div class="catatan-ai" style="border-color:rgba(232,181,74,.3);background:linear-gradient(135deg,rgba(232,181,74,.10),rgba(232,181,74,.02) 60%);margin-bottom:14px"><span class="label" style="color:var(--kunyit)">Belum lengkap</span><p>Isian ${esc(belum.join(', '))} masih kosong di berkas neraca, jadi neraca belum seimbang. Selisihnya sekarang ${esc(rp(Math.abs(seimbang)))}: kalau kas dan bank sudah diisi, sisa selisih itulah modal awalmu.</p></div>` : ''}
+      <div class="grid g2">
+        <div class="kartu">${blok('Aset lancar', lancar, S(lancar))}${S(tetap) ? blok('Aset tetap (setelah penyusutan)', tetap, S(tetap)) : ''}<div class="lr"><div class="b besar"><span><b>Total aset</b></span><span>${esc(rp(TA))}</span></div></div></div>
+        <div class="kartu">${blok('Kewajiban', wajib, TW)}${blok('Ekuitas (modal pemilik)', ekuitas, TE)}<div class="lr"><div class="b besar"><span><b>Kewajiban + ekuitas</b></span><span>${esc(rp(TW + TE))}</span></div>
+          <div class="b"><span class="redup">Selisih</span><span class="${seimbang ? 'kunyit' : 'hijau'}">${seimbang ? esc(rp(seimbang)) : 'seimbang'}</span></div></div></div>
+      </div>
+    </section>`;
+  }
+  el.innerHTML = `
+  <section class="bagian" style="margin-top:6px">
+    <div class="tab-baris">${BULAN.map(x => `<a class="tab ${b && x.bulan === b.bulan ? 'aktif' : ''}" href="#neraca/${x.bulan}" style="text-decoration:none">${esc(namaBln(x.bulan))}</a>`).join('')}</div>
+    <h2 style="margin-top:18px">Laba rugi <span class="miring">${esc(namaBln(b && b.bulan))}</span></h2>
+    <p class="ket">Jumlah laporan minggu ${esc((b ? b.minggu : []).join(', '))}. Minggu masuk ke bulan tanggal mulainya.</p>
+    ${b ? `<div class="grid g2"><div class="kartu"><div class="lr">
+      <div class="b besar"><span>Omzet penjualan</span><span>${esc(rp(b.omzet))}</span></div>
+      <div class="b kurang"><span>Modal barang dan fee</span><span>− ${esc(rp(b.modal + b.fee + b.pengeluaran))}</span></div>
+      <div class="b jumlah"><span>Laba kotor<small>margin ${esc(pc(b.labaKotor, b.omzet))}</small></span><span>${esc(rp(b.labaKotor))}</span></div>
+      <div class="b kurang"><span>Biaya operasional</span><span>− ${esc(rp(b.biayaOps))}</span></div>
+      <div class="b besar"><span><b>Laba bersih</b><small>margin ${esc(pc(b.labaBersih, b.omzet))}</small></span><span class="hijau">${esc(rp(b.labaBersih))}</span></div></div></div>
+      <div class="kartu"><span class="label">Per minggu</span><div style="margin-top:12px">${grafikBatang(M.filter(w => b.minggu.includes(w.minggu)).map(w => ({ label: 'M' + w.minggu, k: w.total.labaKotor, l: w.total.labaBersih })), { seri: [{ k: 'k', warna: 'rgba(95,208,143,.35)' }, { k: 'l', warna: 'var(--hijau)' }] })}</div>
+        <div class="legenda"><span><i style="background:rgba(95,208,143,.35)"></i>Laba kotor</span><span><i style="background:var(--hijau)"></i>Laba bersih</span></div></div></div>` : '<div class="kosong">Belum ada laporan.</div>'}
+  </section>
+  ${n && b && n.bulan === b.bulan ? neraca : ''}`;
+}
+
+// ---------- bantu: dapur, harga terakhir, terbilang, pesan singkat
+let PENERBIT = { nama: '', alamat: '' };   // kop nota: dari data (profil), diisi di siapkan()
+const kunciB = s => String(s || '').trim().toLowerCase().replace(/\s+/g, ' ');
+const angkaID = n => (+n || 0).toLocaleString('id-ID', { maximumFractionDigits: 2 });
+const nomorNota = n => String(Math.max(0, +n || 0)).padStart(3, '0');
+function pesan(t, salah) {
+  let e = $('#pesanSingkat'); if (!e) { e = document.createElement('div'); e.id = 'pesanSingkat'; document.body.appendChild(e); }
+  e.textContent = t; e.style.cssText = `position:fixed;left:50%;bottom:${innerWidth <= 860 ? 96 : 24}px;transform:translateX(-50%);z-index:60;padding:11px 18px;border-radius:99px;font-weight:600;font-size:14px;max-width:90vw;text-align:center;box-shadow:0 10px 30px rgba(0,0,0,.4);background:${salah ? 'var(--merah)' : 'var(--hijau)'};color:#07140d`;
+  clearTimeout(pesan.t); pesan.t = setTimeout(() => e.remove(), 3200);
+}
+function terbilang(n) {
+  const s = ['', 'satu', 'dua', 'tiga', 'empat', 'lima', 'enam', 'tujuh', 'delapan', 'sembilan', 'sepuluh', 'sebelas'];
+  const f = x => x < 12 ? s[x] : x < 20 ? f(x - 10) + ' belas' : x < 100 ? f(Math.floor(x / 10)) + ' puluh ' + f(x % 10) : x < 200 ? 'seratus ' + f(x - 100)
+    : x < 1000 ? f(Math.floor(x / 100)) + ' ratus ' + f(x % 100) : x < 2000 ? 'seribu ' + f(x - 1000) : x < 1e6 ? f(Math.floor(x / 1000)) + ' ribu ' + f(x % 1000)
+    : x < 1e9 ? f(Math.floor(x / 1e6)) + ' juta ' + f(x % 1e6) : f(Math.floor(x / 1e9)) + ' miliar ' + f(x % 1e9);
+  const t = (f(Math.floor(Math.abs(n || 0))).replace(/\s+/g, ' ').trim() || 'nol') + ' rupiah';
+  return t.charAt(0).toUpperCase() + t.slice(1);
+}
+// Dapur untuk invoice: kop dari berkas nota, nomor terakhir dari berkas nota, laporan mingguan, dan invoice aplikasi.
+function daftarDapur() {
+  const peta = {};
+  for (const d of D.dapur || []) peta[d.outlet] = { ...d };
+  for (const w of M) for (const r of w.rincian) {
+    const n = +((String(r.n || '').match(/(\d+)/) || [])[1] || 0); if (!n || n > 99999) continue;
+    const d = peta[r.o] ||= { outlet: r.o, toko: r.o, alamat: '', notaTerakhir: 0, tanggalTerakhir: r.t, aktif: true };
+    if (n > d.notaTerakhir) d.notaTerakhir = n; if (r.t && (!d.tanggalTerakhir || r.t > d.tanggalTerakhir)) d.tanggalTerakhir = r.t;
+  }
+  for (const v of INVOICE) { const d = peta[v.outlet]; if (d && +v.nomor > d.notaTerakhir) d.notaTerakhir = +v.nomor; }
+  return Object.values(peta).sort((a, b) => (b.aktif !== false) - (a.aktif !== false) || (b.tanggalTerakhir || '').localeCompare(a.tanggalTerakhir || ''));
+}
+// Harga, satuan, modal, dan fee terakhir sebuah barang untuk dapur tertentu.
+function infoBarang(outlet, barang) {
+  const k = kunciB(barang); if (!k) return null;
+  const kat = (D.katalog || []).filter(x => kunciB(x.barang) === k).sort((a, b) => (b.tanggal || '').localeCompare(a.tanggal || ''));
+  const diDapur = kat.find(x => x.outlet === outlet), umum = kat[0];
+  let modal = 0, fee = null, lap = null;
+  for (const w of M) for (const r of w.rincian) if (kunciB(r.b) === k) { if (r.m) modal = r.m; if (r.o === outlet) { fee = r.f; lap = r; } }
+  const tarif = (TARIF[outlet] || {})[k];
+  const dariLap = lap && (!diDapur || (lap.t || '') >= (diDapur.tanggal || ''));
+  return { satuan: (dariLap ? lap.s : (diDapur || umum || {}).satuan) || (umum || {}).satuan || '', harga: dariLap ? lap.h : (diDapur || umum || {}).harga || 0,
+    modal, fee: OUTLET_FEE.includes(outlet) ? (tarif ?? fee ?? 0) : 0 };
+}
+function namaBarang(outlet) {
+  const lihat = new Map();
+  const tambah = n => { const k = kunciB(n); if (k && !lihat.has(k)) lihat.set(k, String(n).trim()); };
+  (D.katalog || []).filter(x => x.outlet === outlet).forEach(x => tambah(x.barang));
+  for (const w of M.slice().reverse()) w.rincian.filter(r => r.o === outlet).forEach(r => tambah(r.b));
+  (D.katalog || []).forEach(x => tambah(x.barang)); for (const w of M) w.rincian.forEach(r => tambah(r.b));
+  return [...lihat.values()].slice(0, 500);
+}
+const barisKosong = (t = '') => ({ tgl: t, barang: '', qty: '', satuan: '', harga: '', fee: '', modal: '' });
+const tglBaris = (v, x) => v.tanggal;   // satu invoice = satu hari pengantaran
+const tanggalInv = v => [...new Set(hitungInv(v).b.map(x => tglBaris(v, x)))].sort();
+const hitungInv = v => { const b = v.baris.filter(x => x.barang && +x.qty);
+  const sub = b.reduce((a, x) => a + +x.qty * (+x.harga || 0), 0), disk = Math.round(sub * (+v.diskon || 0) / 100);
+  const fee = b.reduce((a, x) => a + +x.qty * (+x.fee || 0), 0), modal = b.reduce((a, x) => a + +x.qty * (+x.modal || 0), 0);
+  return { b, sub, disk, total: sub - disk, fee, modal, laba: sub - disk - modal - fee }; };
+const rekeningInv = v => (D.rekening || [])[+v.rek] || null;
+
+// ---------- lembar nota (tampil di layar dan dicetak)
+function lembarInvoice(v) {
+  const h = hitungInv(v), rk = rekeningInv(v), T = tanggalInv(v), banyak = T.length > 1;
+  const urut = banyak ? h.b.slice().sort((a, b) => tglBaris(v, a).localeCompare(tglBaris(v, b))) : h.b;
+  let no = 0, tAkhir = null;
+  const isiTabel = urut.map(x => { const t = tglBaris(v, x), judul = banyak && t !== tAkhir ? `<tr class="hari-nota"><td colspan="6">${esc(labelHari(t))}</td></tr>` : ''; tAkhir = t; no++;
+    return judul + `<tr><td>${no}</td><td>${esc(x.barang)}</td><td class="kanan">${esc(angkaID(x.qty))}</td><td>${esc(x.satuan)}</td><td class="kanan">${esc(rp(x.harga))}</td><td class="kanan">${esc(rp(+x.qty * (+x.harga || 0)))}</td></tr>`; }).join('');
+  return `<div class="kop"><div><b>${esc(PENERBIT.nama)}</b><div class="kecil">${esc(PENERBIT.alamat)}</div>${rk ? `<div class="kecil">No. rek ${esc(rk.bank)} ${esc(rk.rekening)} a.n. ${esc(rk.atasNama)}</div>` : ''}</div>
+    <div style="text-align:right"><div>Tanggal: <b>${esc(banyak ? `${tgl(T[0], true)} s.d. ${tgl(T.at(-1), true)}` : tgl(T[0] || v.tanggal, true))}</b></div><div>Kepada: <b>${esc(v.toko || judulOutlet(v.outlet))}</b></div>${v.alamat ? `<div class="kecil">${esc(v.alamat)}</div>` : ''}</div></div>
+  <h3>NOTA · NOMOR ${esc(nomorNota(v.nomor))}</h3>
+  <table><thead><tr><th style="width:34px">No</th><th>Nama barang</th><th class="kanan">Banyaknya</th><th>Satuan</th><th class="kanan">Harga satuan</th><th class="kanan">Jumlah</th></tr></thead>
+  <tbody>${isiTabel || '<tr><td colspan="6" style="text-align:center;color:#777">Belum ada barang</td></tr>'}</tbody>
+  <tfoot><tr><td colspan="5" class="kanan"><b>Total</b></td><td class="kanan"><b>${esc(rp(h.sub))}</b></td></tr>
+  ${h.disk ? `<tr><td colspan="5" class="kanan">Diskon ${esc(angkaID(v.diskon))}%</td><td class="kanan">− ${esc(rp(h.disk))}</td></tr><tr><td colspan="5" class="kanan"><b>Jumlah dibayar</b></td><td class="kanan"><b>${esc(rp(h.total))}</b></td></tr>` : ''}</tfoot></table>
+  <div class="kecil" style="margin-top:8px">Terbilang: <i>${esc(terbilang(h.total))}</i></div>
+  <div class="ttd"><div>Tanda terima,<br><span class="kecil">&nbsp;</span><div class="garis-ttd">( ................................ )</div></div><div>Hormat kami,<br><span class="kecil">${esc(PENERBIT.nama.toUpperCase())}</span><div class="garis-ttd">( ${esc(rk ? rk.atasNama : 'Abdullah Hanif')} )</div></div></div>`;
+}
+
+// Pemberitahuan fee untuk mitra. p = { noDok, mitra, outlet, toko, dasar:[[label, isi]], rows:[{barang,qty,satuan,fee}], catatan }
+function lembarMitra(p) {
+  const rows = p.rows.filter(x => +x.fee && +x.qty), total = rows.reduce((a, x) => a + +x.qty * +x.fee, 0);
+  return `<div class="mitra"><div class="mitra-kop"><div><span class="jenis">Pemberitahuan fee mitra</span><b>${esc(PENERBIT.nama)}</b><div style="font-size:11.5px;color:#cfe3d6">${esc(PENERBIT.alamat)}</div></div>
+    <div class="kanan-kop">Nomor<strong>${esc(p.noDok)}</strong></div></div>
+  <div class="mitra-info"><div><span>Kepada mitra</span><b>${esc(p.mitra || '..............................')}</b></div><div><span>Dapur</span><b>${esc(p.toko || judulOutlet(p.outlet))}</b></div>
+    ${p.dasar.map(([l, x]) => `<div><span>${esc(l)}</span><b>${esc(x)}</b></div>`).join('')}</div>
+  <table><thead><tr><th style="width:34px">No</th><th>Barang</th><th class="kanan">Banyaknya</th><th>Satuan</th><th class="kanan">Fee per satuan</th><th class="kanan">Jumlah fee</th></tr></thead>
+  <tbody>${rows.map((x, i) => `<tr><td>${i + 1}</td><td>${esc(x.barang)}</td><td class="kanan">${esc(angkaID(x.qty))}</td><td>${esc(x.satuan)}</td><td class="kanan">${esc(rp(x.fee))}</td><td class="kanan">${esc(rp(+x.qty * +x.fee))}</td></tr>`).join('') || '<tr><td colspan="6" style="text-align:center;color:#777">Belum ada barang dengan fee</td></tr>'}</tbody></table>
+  <div class="mitra-total"><div><div style="font-size:10.5px;letter-spacing:.12em;text-transform:uppercase;color:#8a6a1f;font-weight:700">Total fee untuk mitra</div><i style="font-size:12px;color:#555">${esc(terbilang(total))}</i></div><b>${esc(rp(total))}</b></div>
+  <div class="mitra-catatan">${esc(p.catatan || 'Rincian ini khusus untuk mitra dan tidak dilampirkan pada nota ke dapur.')}</div>
+  <div class="ttd"><div>Mitra penerima,<br><span class="kecil">&nbsp;</span><div class="garis-ttd">( ${esc(p.mitra || '................................')} )</div></div><div>Hormat kami,<br><span class="kecil">${esc(PENERBIT.nama.toUpperCase())}</span><div class="garis-ttd">( Abdullah Hanif )</div></div></div></div>`;
+}
+const mitraTerakhir = outlet => (INVOICE.find(x => x.outlet === outlet && x.mitra) || {}).mitra || '';
+const noDokFee = v => `FEE-${nomorNota(v.nomor)}/${judulOutlet(v.outlet).toUpperCase().replace(/\s+/g, '')}`;
+// Fee mitra dari satu invoice, dirinci per tanggal baris (bisa seminggu pengantaran).
+const seninDari = t => { const d = tglD(t); d.setDate(d.getDate() - ((d.getDay() + 6) % 7)); return d.toLocaleDateString('sv-SE'); };
+const tambahHari = (t, n) => { const d = tglD(t); d.setDate(d.getDate() + n); return d.toLocaleDateString('sv-SE'); };
+// cakupan 'minggu': invoice dapur yang sama bertanggal Senin-Minggu minggu itu (yang sedang dibuka memakai isian terkini).
+function rekapInvoice(v, cakupan = 'minggu') {
+  const senin = seninDari(v.tanggal), minggu = tambahHari(senin, 6);
+  const sumber = cakupan === 'minggu'
+    ? [v, ...INVOICE.filter(x => x.outlet === v.outlet && x.id !== v.id && x.tanggal >= senin && x.tanggal <= minggu)] : [v];
+  const rows = sumber.flatMap(u => hitungInv(u).b.filter(x => +x.fee && +x.qty).map(x => ({ outlet: u.outlet, tanggal: u.tanggal, nota: 'NOTA ' + nomorNota(u.nomor), barang: x.barang, qty: +x.qty, satuan: x.satuan, fee: +x.fee })));
+  const o = rekapFee(rows)[0] || { outlet: v.outlet, total: 0, nota: new Set(), barang: {}, hari: {} }; o.mitra = v.mitra;
+  return cakupan === 'minggu' ? { o, dari: senin, sampai: minggu, noDok: `FEE-${judulOutlet(v.outlet).toUpperCase().replace(/\s+/g, '')}/${senin.replace(/-/g, '')}` }
+    : { o, dari: v.tanggal, sampai: v.tanggal, noDok: noDokFee(v) };
+}
+const lembarMitraInvoice = v => { const r = rekapInvoice(v, v._cakupan || 'minggu'); return lembarFee(r.o, r.dari, r.sampai, { noDok: r.noDok, toko: v.toko }); };
+
+// ---------- INVOICE
+let INV = null;
+function invoiceBaru() {
+  const dp = daftarDapur().filter(d => d.aktif !== false), d = dp[0] || { outlet: '', toko: '', alamat: '', notaTerakhir: 0 };
+  const rek = (D.rekening || []).findIndex(r => r.usaha === (D.profil || {}).rekeningBawaan);
+  return { id: '', nomor: (d.notaTerakhir || 0) + 1, tanggal: new Date().toLocaleDateString('sv-SE'), outlet: d.outlet, toko: d.toko, alamat: d.alamat || '', mitra: mitraTerakhir(d.outlet), rek: rek < 0 ? 0 : rek, diskon: 0, baris: [barisKosong(), barisKosong(), barisKosong()] };
+}
+function vInvoice(el, [id]) {
+  if (!id) return daftarInvoice(el);
+  if (id === 'baru') { if (!INV || INV.id || INV._dari !== 'baru') { INV = invoiceBaru(); INV._dari = 'baru'; } }
+  else { const v = INVOICE.find(x => x.id === id); if (!v) { location.hash = 'invoice'; return; } if (!INV || INV.id !== id) INV = JSON.parse(JSON.stringify(v)); }
+  editorInvoice(el);
+}
+function daftarInvoice(el) {
+  const akhir = M.at(-1);
+  el.innerHTML = `
+  <section class="bagian" style="margin-top:6px">
+    <h2>Invoice <span class="miring">ke dapur</span></h2>
+    <p class="ket">Nota pengajuan tagihan ke dapur dengan kop ${esc(PENERBIT.nama)}. Nomor melanjutkan nota terakhir tiap dapur dan harga terisi dari nota sebelumnya. Buat satu invoice untuk tiap hari pengantaran. Kalau fee diisi (${esc(daftarFee())}), keluar juga lembar terpisah untuk mitra yang mengumpulkan fee seminggu, dirinci per hari. Invoice di sini tidak mengubah berkas Excel; unduh Excel-nya kalau mau disimpan ke folder dapur.</p>
+    <div class="baris-aksi" style="margin-bottom:16px"><a class="tombol utama" href="#invoice/baru" id="bBaru">+ Buat invoice baru</a><a class="tombol" href="#fee/tarif">Tarif fee</a></div>
+    ${INVOICE.length ? `<div class="grid g2">${INVOICE.map(v => { const h = hitungInv(v);
+      return `<a class="kartu" href="#invoice/${encodeURIComponent(v.id)}" style="text-decoration:none"><div style="display:flex;justify-content:space-between;gap:10px;align-items:baseline;flex-wrap:wrap"><b>${esc(judulOutlet(v.outlet))} · nota ${esc(nomorNota(v.nomor))}</b><span class="redup" style="font-size:13px">${esc((T => T.length > 1 ? `${tglP(T[0])} - ${tgl(T.at(-1), true)} · ${T.length} hari` : tgl(T[0] || v.tanggal, true))(tanggalInv(v)))}</span></div>
+        <div class="ubin"><div class="nilai kecil">${esc(rp(h.total))}</div></div><div class="pil-baris"><span class="pil">${h.b.length} barang</span>${h.fee ? `<span class="pil kunyit">fee ${esc(rp(h.fee))}${v.mitra ? ' · ' + esc(v.mitra) : ''}</span>` : ''}${h.modal ? `<span class="pil hijau">laba kotor ${esc(rpS(h.laba))}</span>` : ''}</div></a>`; }).join('')}</div>`
+      : `<div class="kartu kosong">Belum ada invoice yang dibuat di aplikasi.${akhir ? ` Nota terakhir di laporan: minggu ${akhir.minggu}, ${esc(rentang(akhir.awal, akhir.akhir))}.` : ''}</div>`}
+  </section>`;
+  $('#bBaru', el).onclick = () => { INV = null; };
+}
+function editorInvoice(el) {
+  const v = INV, dp = daftarDapur(), adaFee = OUTLET_FEE.includes(v.outlet);
+  el.innerHTML = `
+  <section class="bagian" style="margin-top:6px">
+    <a href="#invoice" class="pil" style="text-decoration:none">← Semua invoice</a>
+    <h2 style="margin-top:14px">${v.id ? 'Ubah' : 'Buat'} <span class="miring">invoice</span></h2>
+    <div class="kartu">
+      <div class="grid g3">
+        <label class="isian">Dapur<select id="iDapur">${dp.map(d => `<option value="${esc(d.outlet)}" ${d.outlet === v.outlet ? 'selected' : ''}>${esc(judulOutlet(d.outlet))}${d.aktif === false ? ' (tidak aktif)' : ''}</option>`).join('')}</select></label>
+        <label class="isian">Tanggal<input type="date" id="iTgl" value="${esc(v.tanggal)}"></label>
+        <label class="isian">Nomor nota<input type="number" id="iNomor" min="1" value="${esc(v.nomor)}" inputmode="numeric"></label>
+        <label class="isian">Nama dapur di nota<input id="iToko" value="${esc(v.toko)}"></label>
+        <label class="isian">Alamat dapur<input id="iAlamat" value="${esc(v.alamat)}"></label>
+        ${adaFee ? `<label class="isian">Mitra penerima fee<input id="iMitra" value="${esc(v.mitra || '')}" placeholder="nama mitra di dapur ini"></label>` : ''}
+        <label class="isian">Rekening di nota<select id="iRek">${(D.rekening || []).map((r, i) => `<option value="${i}" ${+v.rek === i ? 'selected' : ''}>${esc(r.usaha)} · ${esc(r.bank)} a.n. ${esc(r.atasNama)}</option>`).join('') || '<option value="0">-</option>'}</select></label>
+      </div>
+      <div class="tbl-bungkus" style="margin-top:16px"><table class="ed"><thead><tr><th>No</th><th style="min-width:170px">Barang</th><th class="angka">Banyaknya</th><th>Satuan</th><th class="angka">Harga</th><th class="angka">Jumlah</th>${adaFee ? '<th class="angka">Fee/sat</th>' : ''}<th class="angka" title="Tidak dicetak">Modal/sat</th><th></th></tr></thead>
+        <tbody id="tBaris">${v.baris.map((x, i) => barisEditor(x, i, adaFee)).join('')}</tbody></table></div>
+      <datalist id="dlBarang">${namaBarang(v.outlet).map(n => `<option value="${esc(n)}">`).join('')}</datalist>
+      <div class="baris-aksi" style="margin-top:12px;justify-content:space-between">
+        <span class="baris-aksi"><button class="tombol kecil" id="bTambah">+ Tambah barang</button>${adaFee ? '<button class="tombol kecil" id="bTarif" title="Isi kolom fee yang masih kosong dengan tarif terakhir">Pakai tarif fee</button>' : ''}</span>
+        <label class="isian" style="flex-direction:row;align-items:center;gap:8px">Diskon %<input type="number" id="iDiskon" min="0" max="100" step="0.5" value="${esc(v.diskon || 0)}" style="width:90px"></label>
+      </div>
+      <div class="pil-baris" id="ringkasInv" style="margin-top:14px"></div>
+      <p class="samar" style="font-size:12.5px;margin:10px 0 0">${adaFee ? 'Nota ke dapur tidak memuat fee. Kalau kolom fee diisi, keluar lembar terpisah untuk mitra yang dirinci per hari seminggu (dari invoice-invoice dapur ini minggu itu); kalau dikosongkan, lembar mitra tidak dibuat. Angka samar di kolom fee adalah tarif terakhir. ' : ''}Kolom modal hanya untuk hitungan laba di aplikasi. Harga terisi dari nota terakhir dapur ini; tarif fee bisa diubah lewat tombol Tarif fee di halaman Invoice.</p>
+    </div>
+    <div class="baris-aksi aksi-lekat" style="margin-top:14px">
+      <button class="tombol utama" id="bSimpan">Simpan</button>
+      <button class="tombol" id="bCetak">${ik('cetak', 16)} Cetak nota</button>
+      <button class="tombol" id="bCetakFee" hidden>${ik('cetak', 16)} Cetak fee mitra</button>
+      <button class="tombol" id="bExcel">${ik('unduh', 16)} Excel nota</button>
+      <button class="tombol" id="bExcelFee" hidden>${ik('unduh', 16)} Excel fee mitra</button>
+      ${v.id ? '<button class="tombol bahaya" id="bHapus">Hapus</button>' : ''}
+    </div>
+  </section>
+  <section class="bagian"><div id="tabLembar"></div><div class="lembar" id="cetak" style="margin-top:10px"></div></section>`;
+  const segar = () => {
+    const h = hitungInv(v);
+    // Lembar fee mitra hanya ada kalau fee diisi (pemilik: kalau fee tidak dicantumkan, fee mitra tidak dibuat).
+    const adaIsiFee = adaFee && h.fee > 0; if (!adaIsiFee) v._tampil = 'nota';
+    $('#tabLembar').innerHTML = adaIsiFee ? `<div class="tab-baris" role="tablist"><button class="tab ${v._tampil !== 'fee' ? 'aktif' : ''}" data-tampil="nota">Nota untuk dapur</button><button class="tab ${v._tampil === 'fee' ? 'aktif' : ''}" data-tampil="fee">Fee untuk mitra</button></div>
+      ${v._tampil === 'fee' ? (() => { const r = rekapInvoice(v, 'minggu'), n = Object.keys(r.o.hari).length;
+        return `<div class="pil-baris" style="margin-top:10px"><button class="tab ${(v._cakupan || 'minggu') === 'minggu' ? 'aktif' : ''}" data-cakupan="minggu">Seminggu · ${esc(tglP(r.dari))} - ${esc(tglP(r.sampai))} (${n} hari)</button><button class="tab ${v._cakupan === 'nota' ? 'aktif' : ''}" data-cakupan="nota">Nota ini saja</button></div>
+        <p class="samar" style="font-size:12.5px;margin:8px 0 0">Seminggu mengumpulkan fee dari semua invoice ${esc(judulOutlet(v.outlet))} yang tersimpan pada Senin sampai Minggu itu, termasuk invoice ini.</p>`; })() : ''}` : '<span class="label">Pratinjau nota</span>';
+    $$('[data-tampil]', el).forEach(b => b.onclick = () => { v._tampil = b.dataset.tampil; segar(); });
+    $$('[data-cakupan]', el).forEach(b => b.onclick = () => { v._cakupan = b.dataset.cakupan; segar(); });
+    $('#bCetakFee').hidden = !adaIsiFee; $('#bExcelFee').hidden = !adaIsiFee;
+    $('#cetak').innerHTML = adaIsiFee && v._tampil === 'fee' ? lembarMitraInvoice(v) : lembarInvoice(v);
+    $('#ringkasInv').innerHTML = `<span class="pil hijau">Total ${esc(rp(h.total))}</span>${adaFee ? `<span class="pil kunyit">Fee dapur ${esc(rp(h.fee))}</span>` : '<span class="pil">Dapur ini tanpa fee</span>'}${h.modal ? `<span class="pil">Modal ${esc(rp(h.modal))}</span><span class="pil ${h.laba >= 0 ? 'hijau' : 'merah'}">Laba kotor ${esc(rp(h.laba))} · ${esc(pc(h.laba, h.total))}</span>` : '<span class="pil">Isi modal untuk melihat laba</span>'}`;
+    $$('#tBaris tr').forEach((tr, i) => { const x = v.baris[i]; const j = tr.querySelector('[data-jumlah]'); if (j) j.textContent = x && +x.qty && +x.harga ? rp(+x.qty * +x.harga) : '-'; });
+  };
+  const ulang = () => editorInvoice(el);
+  $('#iDapur').onchange = e => { const d = dp.find(x => x.outlet === e.target.value);
+    const mitraLama = mitraTerakhir(v.outlet);
+    v.outlet = d.outlet; v.toko = d.toko; v.alamat = d.alamat || ''; if (!v.id) v.nomor = (d.notaTerakhir || 0) + 1;
+    if (!v.mitra || v.mitra === mitraLama) v.mitra = mitraTerakhir(d.outlet);
+    if (!OUTLET_FEE.includes(d.outlet)) v._tampil = 'nota';
+    // harga dan fee barang yang sudah diketik disesuaikan dengan dapur baru
+    v.baris.forEach(x => { const inf = infoBarang(v.outlet, x.barang); if (inf) x.harga = inf.harga || x.harga; if (!OUTLET_FEE.includes(v.outlet)) x.fee = ''; });
+    ulang(); };
+  $('#iTgl').oninput = e => { v.tanggal = e.target.value; v.baris.forEach(x => { delete x.tgl; }); segar(); };
+  if ($('#iMitra')) $('#iMitra').oninput = e => { v.mitra = e.target.value; segar(); };
+  if ($('#bTarif')) $('#bTarif').onclick = () => { let n = 0;
+    v.baris.forEach((x, i) => { if (!x.barang || (x.fee !== '' && x.fee != null)) return; const inf = infoBarang(v.outlet, x.barang); if (inf && inf.fee) { x.fee = inf.fee; n++; const inp = $(`#tBaris [data-i="${i}"][data-k="fee"]`); if (inp) inp.value = inf.fee; } });
+    pesan(n ? `${n} kolom fee diisi dari tarif` : 'Tidak ada kolom fee kosong yang punya tarif'); segar(); };
+  $('#iNomor').oninput = e => { v.nomor = +e.target.value || 0; segar(); };
+  $('#iToko').oninput = e => { v.toko = e.target.value; segar(); };
+  $('#iAlamat').oninput = e => { v.alamat = e.target.value; segar(); };
+  $('#iRek').onchange = e => { v.rek = +e.target.value; segar(); };
+  $('#iDiskon').oninput = e => { v.diskon = +e.target.value || 0; segar(); };
+  $('#bTambah').onclick = () => { v.baris.push(barisKosong()); ulang(); setTimeout(() => { const i = $$('#tBaris input[data-k="barang"]').pop(); if (i) i.focus(); }, 30); };
+  const tb = $('#tBaris');
+  tb.addEventListener('input', e => { const t = e.target, i = +t.dataset.i, k = t.dataset.k; if (k == null || !v.baris[i]) return; v.baris[i][k] = k === 'barang' || k === 'satuan' ? t.value : t.value; segar(); });
+  tb.addEventListener('change', e => { const t = e.target, i = +t.dataset.i; if (t.dataset.k !== 'barang') return;
+    const x = v.baris[i], inf = infoBarang(v.outlet, x.barang); if (!inf) return;
+    // hanya kotak yang masih kosong yang diisi, supaya ketikan pemilik tidak tertimpa
+    if (!x.satuan) x.satuan = inf.satuan; if (!+x.harga) x.harga = inf.harga || ''; if (!+x.modal) x.modal = inf.modal || '';
+    const tr = t.closest('tr'); const fp = tr.querySelector('[data-k="fee"]'); if (fp) fp.placeholder = inf.fee ? String(inf.fee) : ''; for (const k of ['satuan', 'harga', 'modal']) { const inp = tr.querySelector(`[data-k="${k}"]`); if (inp) inp.value = x[k] ?? ''; }
+    segar(); });
+  tb.addEventListener('click', e => { const b = e.target.closest('[data-hapus]'); if (!b) return; v.baris.splice(+b.dataset.hapus, 1); if (!v.baris.length) v.baris.push(barisKosong()); ulang(); });
+  $('#bSimpan').onclick = async () => {
+    const h = hitungInv(v); if (!h.b.length) return pesan('Isi minimal satu barang dengan banyaknya.', true);
+    const data = { ...v, baris: h.b.map(({ tgl, ...x }) => x), total: h.total, fee: h.fee, dibuat: v.dibuat || new Date().toISOString() }; delete data._dari; delete data._tampil; delete data._cakupan;
+    if (!OUTLET_FEE.includes(v.outlet)) delete data.mitra;
+    try { const r = await rpc('mbg_invoice_simpan', { p_token: sesi.baca().token, p_data: data }); if (!r.ok) return pesan(r.pesan || 'Gagal menyimpan.', true);
+      data.id = r.id; INVOICE = [data, ...INVOICE.filter(x => x.id !== r.id)].sort((a, b) => (b.tanggal || '').localeCompare(a.tanggal || ''));
+      INV = JSON.parse(JSON.stringify(data)); pesan('Invoice tersimpan'); if (location.hash !== '#invoice/' + r.id) location.hash = 'invoice/' + encodeURIComponent(r.id); else ulang();
+    } catch (er) { pesan(er.message, true); } };
+  // Cetak: lembar yang tampil di pratinjau diganti dulu ke dokumen yang diminta, lalu dicetak.
+  const cetak = jenis => { const h = hitungInv(v); if (!h.b.length) return pesan('Belum ada barang untuk dicetak.', true);
+    if (jenis === 'fee' && !h.fee) return pesan('Fee belum diisi, jadi lembar fee mitra tidak dibuat.', true);
+    v._tampil = jenis; segar();
+    document.title = jenis === 'fee' ? `Fee mitra ${rekapInvoice(v, v._cakupan || 'minggu').noDok}` : `Nota ${nomorNota(v.nomor)} ${judulOutlet(v.outlet)}`;
+    addEventListener('afterprint', () => { document.title = 'MBG'; }, { once: true }); window.print(); };
+  $('#bCetak').onclick = () => cetak('nota');
+  if ($('#bCetakFee')) $('#bCetakFee').onclick = () => cetak('fee');
+  $('#bExcel').onclick = () => unduhExcelInvoice(v).catch(er => pesan(er.message, true));
+  if ($('#bExcelFee')) $('#bExcelFee').onclick = () => unduhExcelFeeMitra(v).catch(er => pesan(er.message, true));
+  if ($('#bHapus')) $('#bHapus').onclick = async () => { if (!confirm(`Hapus invoice nota ${nomorNota(v.nomor)} untuk ${judulOutlet(v.outlet)}?`)) return;
+    const r = await rpc('mbg_invoice_hapus', { p_token: sesi.baca().token, p_id: v.id }); if (!r.ok) return pesan(r.pesan || 'Gagal menghapus.', true);
+    INVOICE = INVOICE.filter(x => x.id !== v.id); INV = null; pesan('Invoice dihapus'); location.hash = 'invoice'; };
+  segar();
+}
+function barisEditor(x, i, adaFee) {
+  const tarifHint = x => { if (!INV || !x.barang) return ''; const inf = infoBarang(INV.outlet, x.barang); return inf && inf.fee ? String(inf.fee) : ''; };
+  const inp = (k, lebar, jenis = 'text', kanan = false, extra = '') => `<td class="sel"><input data-i="${i}" data-k="${k}" type="${jenis}" value="${esc(x[k] ?? '')}" style="min-width:${lebar}px" ${kanan ? 'class="angka"' : ''} ${jenis === 'number' ? 'step="any" inputmode="decimal"' : ''} ${extra}></td>`;
+  return `<tr><td class="samar">${i + 1}</td>${inp('barang', 170, 'text', false, 'list="dlBarang" autocomplete="off"')}${inp('qty', 76, 'number', true)}${inp('satuan', 70)}${inp('harga', 96, 'number', true)}
+    <td class="angka" data-jumlah style="padding-top:12px">-</td>${adaFee ? inp('fee', 78, 'number', true, `placeholder="${esc(tarifHint(x))}"`) : ''}${inp('modal', 90, 'number', true)}
+    <td><button class="tombol-ikon" data-hapus="${i}" title="Hapus baris" aria-label="Hapus baris" style="width:32px;height:32px">×</button></td></tr>`;
+}
+async function muatXLSX() {
+  if (window.XLSX) return;
+  await new Promise((ok, gagal) => { const s = document.createElement('script'); s.src = 'https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js'; s.onload = ok; s.onerror = () => gagal(new Error('Pembuat Excel gagal dimuat. Periksa internet lalu coba lagi.')); document.head.appendChild(s); });
+}
+// Excel berformat sama dengan lembar NOTA di berkas mingguan dapur (kop, Tanggal/Toko, NOMOR NOTA, tabel, TOTAL, Disc%, JUMLAH).
+async function unduhExcelInvoice(v) {
+  const h = hitungInv(v); if (!h.b.length) throw new Error('Belum ada barang.');
+  await muatXLSX(); const rk = rekeningInv(v);
+  const aoa = [[PENERBIT.nama, '', '', '', 'Tanggal :', new Date((tanggalInv(v)[0] || v.tanggal) + 'T00:00:00')], [PENERBIT.alamat, '', '', '', 'Toko :', v.toko || judulOutlet(v.outlet)],
+    [rk ? `No.rek ${rk.bank} : ${rk.rekening} ${rk.atasNama}` : '', '', '', '', '', v.alamat || ''], [], ['NOMOR NOTA : ' + nomorNota(v.nomor)],
+    ['NO', 'Nama Barang', 'Banyaknya', 'Satuan', 'Harga Satuan', 'JUMLAH'], [1, 2, 3, '', 4, 5],
+    ...(() => { const T = tanggalInv(v), banyak = T.length > 1, out = []; let no = 0, tAkhir = null;
+      for (const x of (banyak ? h.b.slice().sort((a, b) => tglBaris(v, a).localeCompare(tglBaris(v, b))) : h.b)) {
+        const t = tglBaris(v, x); if (banyak && t !== tAkhir) out.push(['', labelHari(t)]); tAkhir = t; no++;
+        out.push([no, x.barang, +x.qty, x.satuan, +x.harga, +x.qty * +x.harga]); }
+      return out; })(),
+    ['', '', '', '', 'TOTAL', h.sub], ['', '', '', '', 'Disc%', +v.diskon || ''], ['', '', '', '', 'JUMLAH', h.total], [], ['', 'Terbilang: ' + terbilang(h.total)], [],
+    ['', 'TANDA TERIMA,', '', '', 'HORMAT KAMI,'], ['', '', '', '', PENERBIT.nama.toUpperCase()], [], [], ['', '( ................................ )', '', '', `( ${rk ? rk.atasNama : 'Abdullah Hanif'} )`]];
+  const ws = XLSX.utils.aoa_to_sheet(aoa, { cellDates: true }); if (ws.F1) ws.F1.z = 'd mmmm yyyy'; ws['!cols'] = [{ wch: 6 }, { wch: 30 }, { wch: 11 }, { wch: 10 }, { wch: 14 }, { wch: 16 }];
+  const wb = XLSX.utils.book_new(); XLSX.utils.book_append_sheet(wb, ws, 'NOTA ' + (+v.nomor || 1));
+  XLSX.writeFile(wb, `${judulOutlet(v.outlet).toUpperCase()} NOTA ${nomorNota(v.nomor)}.xlsx`);
+}
+
+async function unduhExcelFeeMitra(v) {
+  const c = v._cakupan || 'minggu', r = rekapInvoice(v, c); if (!hitungInv(v).fee) throw new Error('Fee belum diisi di invoice ini.');
+  await unduhExcelFeePeriode(r.o, r.dari, r.sampai, { noDok: r.noDok, toko: v.toko, berkas: c === 'minggu' ? `FEE MITRA ${judulOutlet(v.outlet).toUpperCase()} MINGGU ${r.dari}.xlsx` : `FEE MITRA ${judulOutlet(v.outlet).toUpperCase()} NOTA ${nomorNota(v.nomor)}.xlsx` });
+}
+
+// ---------- FEE
+function rekapFee(rows) {
+  const per = {};
+  for (const r of rows) { const o = per[r.outlet] ||= { outlet: r.outlet, total: 0, nota: new Set(), barang: {}, hari: {}, mitra: mitraTerakhir(r.outlet) };
+    const hr = o.hari[r.tanggal] ||= { tanggal: r.tanggal, nota: new Set(), fee: 0, barang: {} };
+    const kh = kunciB(r.barang) + '|' + r.fee + '|' + kunciB(r.satuan); const bh = hr.barang[kh] ||= { barang: r.barang, satuan: r.satuan, fee: r.fee, qty: 0 };
+    bh.qty += r.qty; hr.fee += r.qty * r.fee; hr.nota.add(String(r.nota || '').replace(/^NOTA\s*/i, ''));
+    const k = kunciB(r.barang) + '|' + r.fee + '|' + kunciB(r.satuan); const b = o.barang[k] ||= { barang: r.barang, satuan: r.satuan, fee: r.fee, qty: 0 };
+    b.qty += r.qty; o.total += r.qty * r.fee; o.nota.add(r.nota); }
+  return OUTLET_FEE.map(o => per[o]).filter(Boolean);
+}
+// Hari-hari pengantaran satu dapur, urut tanggal, dengan penanda hari yang fee-nya paling besar.
+const hariFee = o => { const H = Object.values(o.hari).sort((a, b) => a.tanggal.localeCompare(b.tanggal)); const maks = Math.max(0, ...H.map(h => h.fee));
+  return H.map(h => ({ ...h, top: maks > 0 && h.fee === maks && H.length > 1, lebar: maks ? Math.max(4, Math.round(h.fee / maks * 100)) : 0 })); };
+const labelHari = t => `${hariNama(t)}, ${tgl(t, true)}`;
+function lembarFee(o, dari, sampai, ext = {}) {
+  const H = hariFee(o);
+  const noDok = ext.noDok || `FEE-${judulOutlet(o.outlet).toUpperCase().replace(/\s+/g, '')}/${dari.replace(/-/g, '')}`;
+  const toko = ext.toko || ((D.dapur || []).find(d => d.outlet === o.outlet) || {}).toko || judulOutlet(o.outlet);
+  return `<div class="mitra"><div class="mitra-kop"><div><span class="jenis">Pemberitahuan fee mitra</span><b>${esc(PENERBIT.nama)}</b><div style="font-size:11.5px;color:#cfe3d6">${esc(PENERBIT.alamat)}</div></div>
+    <div class="kanan-kop">Nomor<strong>${esc(noDok)}</strong></div></div>
+  <div class="mitra-info"><div><span>Kepada mitra</span><b>${esc(o.mitra || '..............................')}</b></div><div><span>Dapur</span><b>${esc(toko)}</b></div>
+    <div><span>${dari === sampai ? 'Tanggal' : 'Periode'}</span><b>${esc(dari === sampai ? labelHari(dari) : `${tgl(dari, true)} s.d. ${tgl(sampai, true)}`)}</b><small class="kecil" style="display:block;margin-top:2px">${H.length} hari pengantaran · ${o.nota.size} nota</small></div></div>
+  <h4>Ringkasan per hari</h4>
+  <table><thead><tr><th style="width:34px">No</th><th>Hari</th><th>Tanggal</th><th>Nota</th><th style="width:30%"></th><th class="kanan">Fee hari itu</th></tr></thead>
+  <tbody>${H.map((h, i) => `<tr><td>${i + 1}</td><td><b>${esc(hariNama(h.tanggal))}</b>${h.top ? '<span class="tanda-top">terbanyak</span>' : ''}</td><td>${esc(tgl(h.tanggal, true))}</td><td>${esc([...h.nota].filter(Boolean).join(', '))}</td><td><span class="batang-hari" style="width:${h.lebar}%"></span></td><td class="kanan">${esc(rp(h.fee))}</td></tr>`).join('')}</tbody>
+  <tfoot><tr class="sub"><td colspan="5" class="kanan">Total ${H.length} hari</td><td class="kanan">${esc(rp(o.total))}</td></tr></tfoot></table>
+  <h4>Rincian barang per hari</h4>
+  <table><thead><tr><th>Barang</th><th class="kanan">Banyaknya</th><th>Satuan</th><th class="kanan">Fee per satuan</th><th class="kanan">Jumlah fee</th></tr></thead>
+  <tbody>${H.map(h => { const B = Object.values(h.barang).sort((a, b) => b.qty * b.fee - a.qty * a.fee);
+    return `<tr class="hari"><td colspan="5">${esc(labelHari(h.tanggal))}${[...h.nota].filter(Boolean).length ? ' · nota ' + esc([...h.nota].filter(Boolean).join(', ')) : ''}</td></tr>
+      ${B.map(b => `<tr><td>${esc(b.barang)}</td><td class="kanan">${esc(angkaID(b.qty))}</td><td>${esc(b.satuan)}</td><td class="kanan">${esc(rp(b.fee))}</td><td class="kanan">${esc(rp(b.qty * b.fee))}</td></tr>`).join('')}
+      <tr class="sub"><td colspan="4" class="kanan">Subtotal ${esc(hariNama(h.tanggal))}</td><td class="kanan">${esc(rp(h.fee))}</td></tr>`; }).join('')}</tbody></table>
+  <div class="mitra-total"><div><div style="font-size:10.5px;letter-spacing:.12em;text-transform:uppercase;color:#8a6a1f;font-weight:700">Total fee untuk mitra · ${H.length} hari</div><i style="font-size:12px;color:#555">${esc(terbilang(o.total))}</i></div><b>${esc(rp(o.total))}</b></div>
+  <div class="mitra-catatan">Rincian ini khusus untuk mitra dan tidak dilampirkan pada nota ke dapur.</div>
+  <div class="ttd"><div>Mitra penerima,<br><span class="kecil">&nbsp;</span><div class="garis-ttd">( ${esc(o.mitra || '................................')} )</div></div><div>Hormat kami,<br><span class="kecil">${esc(PENERBIT.nama.toUpperCase())}</span><div class="garis-ttd">( Abdullah Hanif )</div></div></div></div>`;
+}
+async function unduhExcelFeePeriode(o, dari, sampai, ext = {}) {
+  await muatXLSX(); const H = hariFee(o);
+  const aoa = [['PEMBERITAHUAN FEE MITRA'], [PENERBIT.nama], [PENERBIT.alamat], [], ['Nomor', ext.noDok || ''], ['Kepada mitra', o.mitra || ''], ['Dapur', ext.toko || ((D.dapur || []).find(d => d.outlet === o.outlet) || {}).toko || judulOutlet(o.outlet)],
+    ['Periode', `${tgl(dari, true)} s.d. ${tgl(sampai, true)}`, `${H.length} hari pengantaran`], [], ['RINGKASAN PER HARI'], ['NO', 'Hari', 'Tanggal', 'Nota', '', 'Fee hari itu'],
+    ...H.map((h, i) => [i + 1, hariNama(h.tanggal) + (h.top ? ' (terbanyak)' : ''), tgl(h.tanggal, true), [...h.nota].filter(Boolean).join(', '), '', h.fee]), ['', '', '', '', 'TOTAL', o.total], [],
+    ['RINCIAN BARANG PER HARI'], ['Barang', 'Banyaknya', 'Satuan', 'Fee per satuan', 'Jumlah fee']];
+  for (const h of H) { aoa.push([labelHari(h.tanggal)]); for (const b of Object.values(h.barang)) aoa.push([b.barang, b.qty, b.satuan, b.fee, b.qty * b.fee]); aoa.push(['', '', '', 'Subtotal', h.fee]); }
+  aoa.push([], ['', '', '', 'TOTAL FEE', o.total], ['Terbilang: ' + terbilang(o.total)]);
+  const ws = XLSX.utils.aoa_to_sheet(aoa); ws['!cols'] = [{ wch: 30 }, { wch: 22 }, { wch: 20 }, { wch: 16 }, { wch: 14 }, { wch: 16 }];
+  const wb = XLSX.utils.book_new(); XLSX.utils.book_append_sheet(wb, ws, 'FEE MITRA');
+  XLSX.writeFile(wb, ext.berkas || `FEE MITRA ${judulOutlet(o.outlet).toUpperCase()} ${dari} sd ${sampai}.xlsx`);
+}
+function vFee(el) { return vTarifFee(el); }
+// Tarif fee: fee per satuan tiap barang per dapur. Awalnya dari laporan terakhir; yang diubah di sini dipakai invoice berikutnya.
+function vTarifFee(el) {
+  const riwayat = {};
+  for (const w of M) for (const r of w.rincian) if (OUTLET_FEE.includes(r.o)) { const k = kunciB(r.b); (riwayat[r.o] ||= {})[k] = { barang: r.b, satuan: r.s, fee: r.f, tanggal: r.t }; }
+  const ubah = JSON.parse(JSON.stringify(TARIF || {}));
+  el.innerHTML = `
+  <section class="bagian" style="margin-top:6px">
+    <a href="#invoice" class="pil" style="text-decoration:none">← Invoice</a>
+    <h2 style="margin-top:14px">Tarif <span class="miring">fee</span></h2>
+    <p class="ket">Fee per satuan tiap barang untuk ${esc(daftarFee())}. Di invoice, tarif ini tampil sebagai petunjuk di kolom fee dan bisa diisikan sekaligus lewat tombol Pakai tarif fee. Angka awal diambil dari laporan mingguan terakhir. Laporan mingguan di Excel tetap memakai ketikanmu sendiri.</p>
+    <div class="grid g2">${OUTLET_FEE.map(o => { const R = Object.entries(riwayat[o] || {}).sort((a, b) => a[1].barang.localeCompare(b[1].barang));
+      return `<div class="kartu"><b style="font-size:17px">${esc(judulOutlet(o))}</b><div class="samar" style="font-size:12px">${R.length} barang pernah dikirim</div>
+        <div class="tbl-bungkus" style="margin-top:8px;max-height:460px;overflow-y:auto"><table class="ed"><thead><tr><th>Barang</th><th>Satuan</th><th class="angka">Fee/sat</th></tr></thead>
+        <tbody>${R.map(([k, x]) => { const t = (ubah[o] || {})[k]; return `<tr><td>${esc(x.barang)}</td><td class="redup">${esc(x.satuan)}</td><td class="sel"><input type="number" class="angka" step="any" inputmode="decimal" data-o="${esc(o)}" data-k="${esc(k)}" value="${esc(t ?? x.fee ?? 0)}" style="width:100px"></td></tr>`; }).join('') || '<tr><td colspan="3" class="kosong">Belum ada riwayat.</td></tr>'}</tbody></table></div></div>`; }).join('')}</div>
+    <div class="baris-aksi aksi-lekat" style="margin-top:14px"><button class="tombol utama" id="bSimpanTarif">Simpan tarif</button></div>
+  </section>`;
+  $$('input[data-o]', el).forEach(i => i.oninput = () => { (ubah[i.dataset.o] ||= {})[i.dataset.k] = +i.value || 0; });
+  $('#bSimpanTarif', el).onclick = async () => { try { const r = await rpc('mbg_simpan_nilai', { p_token: sesi.baca().token, p_kunci: 'tarif-fee', p_nilai: ubah });
+    if (!r.ok) return pesan(r.pesan || 'Gagal menyimpan.', true); TARIF = ubah; pesan('Tarif fee tersimpan'); } catch (er) { pesan(er.message, true); } };
+}
+
+// ---------- LAINNYA (HP)
+function vLainnya(el) {
+  const L = [['fee/tarif', 'Tarif fee', 'fee', 'Fee per satuan tiap barang untuk empat dapur fee'], ['stok', 'Stok', 'stok', 'Barang habis, menipis, dan nilai gudang'], ['piutang', 'Piutang', 'piutang', 'Tagihan dapur yang belum dibayar'], ['neraca', 'Neraca', 'neraca', 'Laba rugi bulanan dan posisi harta'], ['kabar', 'Catatan pembaruan', 'kabar', 'Kapan terakhir diperbarui dari laptop']];
+  el.innerHTML = `<section class="bagian" style="margin-top:6px"><h2>Lainnya</h2><div class="grid g2">${sudahTerpasang() ? '' : `<button class="kartu" id="kPasang" style="text-align:left;display:flex;gap:14px;align-items:center;font:inherit;color:inherit;cursor:pointer"><span class="ik" style="flex:none;width:42px;height:42px;border-radius:50%;display:grid;place-items:center;background:var(--hijau-bg);color:var(--hijau)">${ik('unduh', 20)}</span><span><b>Pasang di HP</b><div class="redup" style="font-size:13px">Jadikan aplikasi dengan ikon sendiri di layar utama</div></span></button>`}${L.map(x => `<a class="kartu" href="#${x[0]}" style="text-decoration:none;display:flex;gap:14px;align-items:center"><span class="ik" style="flex:none;width:42px;height:42px;border-radius:50%;display:grid;place-items:center;background:var(--hijau-bg);color:var(--hijau)">${ik(x[2], 20)}</span><span><b>${esc(x[1])}</b><div class="redup" style="font-size:13px">${esc(x[3])}</div></span></a>`).join('')}</div></section>`;
+  if ($('#kPasang', el)) $('#kPasang', el).onclick = pasangAplikasi;
+}
+
+// ---------- KABAR (catatan pembaruan)
+function vKabar(el) {
+  const R = PEMBARUAN && PEMBARUAN.ringkasan;
+  el.innerHTML = `
+  <section class="bagian" style="margin-top:6px">
+    <h2>Catatan <span class="miring">pembaruan</span></h2>
+    <p class="ket">Laptop membaca laporan Excel MBG setiap kali berkas disimpan, lalu mengirim angkanya ke sini.</p>
+    ${CATATAN && CATATAN.teks ? `<div class="catatan-ai"><span class="label">Catatan pembukuan · ${esc(kapan(CATATAN.waktu))}</span><p>${esc(CATATAN.teks)}</p></div>` : ''}
+    <div class="kartu" style="margin-top:14px"><div class="daftar">
+      <div><span class="redup">Pembaruan terakhir</span><b>${esc(kapan(PEMBARUAN && PEMBARUAN.waktu))}</b></div>
+      ${PEMBARUAN && PEMBARUAN.galat ? `<div><span class="redup">Masalah</span><span class="merah">Pembaruan terakhir gagal. Laptop akan mencoba lagi dalam 10 menit.</span></div>` : ''}
+      <div><span class="redup">Laporan yang ikut berubah</span><span style="text-align:right">${esc(((PEMBARUAN && PEMBARUAN.berkasBerubah) || []).map(b => b.split('/').pop().replace(/\.xlsx$/i, '').toLowerCase().replace(/\b\w/g, c => c.toUpperCase())).join(', ') || '-')}</span></div>
+      ${R && R.perluDicek && R.perluDicek.selisihOmzetHarian.length ? `<div><span class="redup">Beda dengan omzet harian</span><span>${R.perluDicek.selisihOmzetHarian.length} baris</span></div>` : ''}
+    </div></div>
+  </section>`;
+}
+
+// ---------- MASUK
+function layarMasuk(pesan) {
+  // Sengaja tanpa nama usaha atau keterangan: siapa pun yang membuka alamat ini hanya melihat kotak sandi.
+  document.title = 'MBG';
+  akar.innerHTML = `<div class="masuk"><div class="kotak muncul">
+    <img src="ikon-any-192.png?v=1" alt="">
+    <h1>Masuk</h1>
+    <p>Aplikasi pribadi.</p>
+    <form id="fMasuk"><input id="iSandi" type="password" autocomplete="current-password" placeholder="Sandi" aria-label="Sandi" required>
+      <button class="tombol utama" type="submit">Masuk ${ik('panah', 16)}</button>
+      <div class="pesan-salah" id="pSalah">${esc(pesan || '')}</div></form>
+  </div></div>`;
+  $('#fMasuk').onsubmit = async e => {
+    e.preventDefault(); const b = e.target.querySelector('button'); b.disabled = true; $('#pSalah').textContent = '';
+    try { const r = await rpc('mbg_masuk', { p_sandi: $('#iSandi').value });
+      if (!r.ok) { $('#pSalah').textContent = r.pesan || 'Sandi salah.'; b.disabled = false; return; }
+      sesi.simpan({ token: r.token, masuk: new Date().toISOString() }); akar.innerHTML = '<div class="memuat">Memuat…</div>'; await muat();
+    } catch (er) { $('#pSalah').textContent = er.message; b.disabled = false; }
+  };
+  setTimeout(() => { const i = $('#iSandi'); if (i) i.focus(); }, 60);
+}
+
+muat().catch(e => { akar.innerHTML = `<div class="masuk"><div class="kotak"><h1>Belum tersambung</h1><p>${esc(e.message)}</p><button class="tombol utama" onclick="location.reload()">Coba lagi</button></div></div>`; });
+if ('serviceWorker' in navigator) addEventListener('load', () => navigator.serviceWorker.register('sw.js').catch(() => {}));
+</script>
+</body>
+</html>
