@@ -518,7 +518,7 @@ function opAbsensi(el, senin, hariIni) {
   const hari = [0, 1, 2, 3, 4, 5, 6].map(i => tambahHari(senin, i));
   const orang = KRY.orang.filter(o => o.aktif !== false || hari.some(t => (KRY.absen[t] || {})[o.id]));
   const lapGaji = biayaLaporan(senin).filter(b => b.jenis === 'gaji');
-  // nama dari laporan Excel ("Gaji Eja", "Upah Mak Upi") sebagai usulan karyawan
+  // nama dari laporan Excel ("Gaji <nama>", "Upah <nama>") sebagai usulan karyawan
   const usul = {}; for (const w of M) for (const b of w.biaya || []) { const m = String(b.ket || '').match(/^(?:gaji|upah)\s+(.+)$/i); if (m && /^[a-z]/i.test(m[1].trim()) && !/^(antar|upah|gaji)\b/i.test(m[1].trim())) usul[m[1].trim()] = b.jumlah; }
   const belumAda = Object.keys(usul).filter(n => !KRY.orang.some(o => kunciB(o.nama) === kunciB(n)));
   const tombolBayar = (o, g) => g.bayar
