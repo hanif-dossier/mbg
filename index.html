@@ -267,7 +267,7 @@ const rentang = (a, b) => { if (!a) return '-'; const A = tglD(a), B = tglD(b ||
 const kapan = iso => { if (!iso) return '-'; const d = new Date(iso);
   return d.toLocaleString('id-ID', { weekday: 'long', day: 'numeric', month: 'long', hour: '2-digit', minute: '2-digit' }).replace('pukul ', '').replace(/\./g, ':').replace(/:(\d\d)$/, '.$1'); };
 const judulOutlet = o => String(o || '').replace(/^MBG\s+/i, '').toLowerCase().replace(/\b\w/g, c => c.toUpperCase()).replace(/\bTpi\b/, 'TPI').replace(/\bPnk\b/, 'PNK').replace(/\bSpo\b/, 'SPO');
-let OUTLET_FEE = [];   // dapur yang kena fee: dari data (profil.outletFee), diisi di siapkan()
+let OUTLET_FEE = [], DAPUR_T = [];   // DAPUR_T: dapur yang ditambah dari aplikasi (belum ada di berkas Excel)   // dapur yang kena fee: dari data (profil.outletFee), diisi di siapkan()
 const daftarFee = () => { const n = OUTLET_FEE.map(judulOutlet); return n.length > 1 ? n.slice(0, -1).join(', ') + ', dan ' + n.at(-1) : (n[0] || '-'); };
 
 // ---------- ikon (garis, 24px)
@@ -308,11 +308,11 @@ let D = null, CATATAN = null, PEMBARUAN = null, TARIF = {}, INVOICE = [];
 async function muat() {
   const s = sesi.baca(); if (!s) return layarMasuk();
   const ambil = k => rpc('mbg_ambil_nilai', { p_token: s.token, p_kunci: k });
-  const [a, b, c, t, inv, kr, kl, pu] = await Promise.all([ambil('data'), ambil('catatan'), ambil('pembaruan'), ambil('tarif-fee'), rpc('mbg_invoice_daftar', { p_token: s.token }), ambil('karyawan'), ambil('pengeluaran'), ambil('piutang')]);
+  const [a, b, c, t, inv, kr, kl, pu, dt] = await Promise.all([ambil('data'), ambil('catatan'), ambil('pembaruan'), ambil('tarif-fee'), rpc('mbg_invoice_daftar', { p_token: s.token }), ambil('karyawan'), ambil('pengeluaran'), ambil('piutang'), ambil('dapur')]);
   if (!a.ok) { sesi.hapus(); return layarMasuk(a.pesan); }
   D = a.nilai; CATATAN = b.ok ? b.nilai : null; PEMBARUAN = c.ok ? c.nilai : null;
   TARIF = (t.ok && t.nilai) || {}; INVOICE = inv.ok ? inv.invoice : [];
-  KRY = { orang: [], absen: {}, bayar: {}, ...((kr.ok && kr.nilai) || {}) }; KELUAR = { daftar: [], ...((kl.ok && kl.nilai) || {}) }; PIU = { baru: [], bayar: [], ...((pu.ok && pu.nilai) || {}) };
+  KRY = { orang: [], absen: {}, bayar: {}, ...((kr.ok && kr.nilai) || {}) }; KELUAR = { daftar: [], ...((kl.ok && kl.nilai) || {}) }; PIU = { baru: [], bayar: [], ...((pu.ok && pu.nilai) || {}) }; DAPUR_T = ((dt.ok && dt.nilai) || {}).tambahan || [];
   if (!D) { akar.innerHTML = `<div class="masuk"><div class="kotak"><h1>Belum ada data</h1><p>Data dikirim dari laptop setiap kali berkas Excel MBG disimpan. Nyalakan laptop, lalu buka lagi.</p></div></div>`; return; }
   siapkan(); tampil();
 }
@@ -320,7 +320,7 @@ async function muat() {
 // ---------- olahan data
 let M = [], OUT = {}, BULAN = [];
 function siapkan() {
-  const pr = D.profil || {}; OUTLET_FEE = pr.outletFee || []; PENERBIT = { nama: pr.usaha || '', alamat: pr.alamat || '' };
+  const pr = D.profil || {}; OUTLET_FEE = [...new Set([...(pr.outletFee || []), ...DAPUR_T.filter(d => d.fee).map(d => d.outlet)])]; PENERBIT = { nama: pr.usaha || '', alamat: pr.alamat || '' };
   M = D.mingguan || [];
   // outlet: gabungan omzet harian (patokan, sejak Mei) dan laporan mingguan (laba)
   OUT = {};
@@ -791,7 +791,16 @@ let PIU = { baru: [], bayar: [] };
 // tidak lagi menempel, supaya tidak terhitung dua kali.
 const refPiutang = p => 'x:' + [p.pihak, p.tanggal || '', p.nominal].join('|');
 function semuaPiutang() {
-  const ex = (D.piutang || []).map(p => ({ ...p, ref: refPiutang(p), sumber: 'laporan' }));
+  // Baris Excel yang kembar dengan invoice aplikasi dibuang: dapur sama, jumlah sama (selisih < Rp 1),
+  // tanggal sama sampai 7 hari atau kosong. Satu invoice hanya boleh menutup satu baris.
+  const dipakai = new Set(), selisihHari = (a, b) => Math.abs((tglD(a) - tglD(b)) / 864e5);
+  const kembar = [];
+  const ex = (D.piutang || []).filter(p => {
+    if (!p.usaha) return true;
+    const v = INVOICE.find(v => !dipakai.has(v.id) && v.outlet === p.outlet && Math.abs(totalInv(v) - p.nominal) < 1 && (!p.tanggal || !v.tanggal || selisihHari(p.tanggal, v.tanggal) <= 7));
+    if (!v) return true; dipakai.add(v.id); kembar.push({ excel: p, invoice: v }); return false;
+  }).map(p => ({ ...p, ref: refPiutang(p), sumber: 'laporan' }));
+  semuaPiutang.kembar = kembar;
   const ap = PIU.baru.map(p => ({ ...p, ref: 'a:' + p.id, sumber: 'app', lunas: false }));
   // invoice aplikasi yang belum lunas = tagihan ke dapur; yang sudah lunas tidak ikut sama sekali
   const iv = INVOICE.filter(v => !v.lunas && totalInv(v) > 0).map(v => ({ ref: 'i:' + v.id, sumber: 'invoice', invId: v.id, usaha: true, outlet: v.outlet, pihak: judulOutlet(v.outlet),
@@ -839,6 +848,7 @@ function vPiutang(el) {
   <section class="bagian" style="margin-top:6px">
     <h2>Piutang <span class="miring">belum dibayar</span></h2>
     <p class="ket">Dari buku piutang Excel, invoice yang belum lunas, dan yang kamu catat di sini. Pembayaran boleh sebagian; sisanya tetap tercatat sampai lunas. Tagihan ke dapur dipisah dari piutang ke keluarga atau kenalan, karena yang kedua bukan hasil jualan.</p>
+    ${(semuaPiutang.kembar || []).length ? `<p class="samar" style="font-size:12.5px;margin:-4px 0 12px">${semuaPiutang.kembar.length} baris di buku piutang Excel sama dengan invoice aplikasi (${esc(semuaPiutang.kembar.map(k => judulOutlet(k.excel.outlet) + ' ' + rpS(k.excel.nominal)).join(', '))}), jadi hanya dihitung sekali lewat invoicenya.</p>` : ''}
     <div class="grid g3">
       <div class="kartu ubin"><span class="label">Total belum dibayar</span><div class="nilai">${esc(rpS(blm.reduce((a, p) => a + p.nominal, 0)))}</div><small>${blm.length} tagihan</small></div>
       <div class="kartu ubin"><span class="label">Dapur</span><div class="nilai">${esc(rpS(usaha.reduce((a, p) => a + p.nominal, 0)))}</div><small>piutang usaha</small></div>
@@ -963,6 +973,7 @@ function terbilang(n) {
 function daftarDapur() {
   const peta = {};
   for (const d of D.dapur || []) peta[d.outlet] = { ...d };
+  for (const d of DAPUR_T) peta[d.outlet] ||= { outlet: d.outlet, toko: d.toko, alamat: d.alamat || '', notaTerakhir: 0, tanggalTerakhir: d.dibuat, aktif: true, tambahan: true };
   for (const w of M) for (const r of w.rincian) {
     const n = +((String(r.n || '').match(/(\d+)/) || [])[1] || 0); if (!n || n > 99999) continue;
     const d = peta[r.o] ||= { outlet: r.o, toko: r.o, alamat: '', notaTerakhir: 0, tanggalTerakhir: r.t, aktif: true };
@@ -1068,12 +1079,18 @@ function daftarInvoice(el) {
     <h2>Invoice <span class="miring">ke dapur</span></h2>
     <p class="ket">Nota pengajuan tagihan ke dapur dengan kop ${esc(PENERBIT.nama)}. Nomor melanjutkan nota terakhir tiap dapur dan harga terisi dari nota sebelumnya. Buat satu invoice untuk tiap hari pengantaran. Kalau fee diisi (${esc(daftarFee())}), keluar juga lembar terpisah untuk mitra yang mengumpulkan fee seminggu, dirinci per hari. Invoice di sini tidak mengubah berkas Excel; unduh Excel-nya kalau mau disimpan ke folder dapur.</p>
     <div class="baris-aksi" style="margin-bottom:16px"><a class="tombol utama" href="#invoice/baru" id="bBaru">+ Buat invoice baru</a><a class="tombol" href="#fee/tarif">Tarif fee</a></div>
+    ${DAPUR_T.length ? `<div class="kartu" style="margin-bottom:16px"><span class="label">Dapur yang ditambah di aplikasi</span><div class="daftar" style="margin-top:4px">${DAPUR_T.map(d => { const n = INVOICE.filter(v => v.outlet === d.outlet).length;
+      return `<div><div><b>${esc(judulOutlet(d.outlet))}</b>${d.fee ? ' <span class="pil kunyit" style="font-size:10.5px;padding:2px 8px">fee</span>' : ''}<div class="samar" style="font-size:12px">${esc(d.toko)}${d.alamat ? ' · ' + esc(d.alamat) : ''} · ${n} invoice</div></div>${n ? '' : `<button class="tombol kecil bahaya" data-hapusdapur="${esc(d.outlet)}" style="padding:4px 11px;font-size:12px">hapus</button>`}</div>`; }).join('')}</div>
+      <p class="samar" style="font-size:12px;margin:8px 0 0">Dapur yang sudah punya invoice tidak bisa dihapus.</p></div>` : ''}
     ${INVOICE.length ? `<div class="grid g2">${INVOICE.map(v => { const h = hitungInv(v);
       return `<a class="kartu" href="#invoice/${encodeURIComponent(v.id)}" style="text-decoration:none"><div style="display:flex;justify-content:space-between;gap:10px;align-items:baseline;flex-wrap:wrap"><b>${esc(judulOutlet(v.outlet))} · nota ${esc(nomorNota(v.nomor))}</b><span class="redup" style="font-size:13px">${esc((T => T.length > 1 ? `${tglP(T[0])} - ${tgl(T.at(-1), true)} · ${T.length} hari` : tgl(T[0] || v.tanggal, true))(tanggalInv(v)))}</span></div>
         <div class="ubin"><div class="nilai kecil">${esc(rp(h.total))}</div></div><div class="pil-baris">${v.lunas ? `<span class="pil hijau">Lunas${v.tglLunas ? ' ' + esc(tglP(v.tglLunas)) : ''}</span>` : `<span class="pil merah">Belum lunas${sisaInv(v) < totalInv(v) ? ' · sisa ' + esc(rpS(sisaInv(v))) : ''}</span>`}<span class="pil">${h.b.length} barang</span>${h.fee ? `<span class="pil kunyit">fee ${esc(rp(h.fee))}${v.mitra ? ' · ' + esc(v.mitra) : ''}</span>` : ''}${h.modal ? `<span class="pil hijau">laba kotor ${esc(rpS(h.laba))}</span>` : ''}</div></a>`; }).join('')}</div>`
       : `<div class="kartu kosong">Belum ada invoice yang dibuat di aplikasi.${akhir ? ` Nota terakhir di laporan: minggu ${akhir.minggu}, ${esc(rentang(akhir.awal, akhir.akhir))}.` : ''}</div>`}
   </section>`;
   $('#bBaru', el).onclick = () => { INV = null; };
+  $$('[data-hapusdapur]', el).forEach(b => b.onclick = async () => { if (!confirm('Hapus dapur ' + judulOutlet(b.dataset.hapusdapur) + ' dari daftar?')) return;
+    const baru = DAPUR_T.filter(d => d.outlet !== b.dataset.hapusdapur);
+    try { await simpanNilai('dapur', { tambahan: baru }); DAPUR_T = baru; OUTLET_FEE = OUTLET_FEE.filter(o => o !== b.dataset.hapusdapur || ((D.profil || {}).outletFee || []).includes(o)); pesan('Dapur dihapus'); daftarInvoice(el); } catch (er) { pesan(er.message, true); } });
 }
 function editorInvoice(el) {
   const v = INV, dp = daftarDapur(), adaFee = OUTLET_FEE.includes(v.outlet);
@@ -1087,13 +1104,23 @@ function editorInvoice(el) {
       : `<p class="ket">Setelah disimpan, invoice ini berstatus Belum lunas dan masuk ke Piutang sampai kamu tandai lunas.</p>`}
     <div class="kartu">
       <div class="grid g3">
-        <label class="isian">Dapur<select id="iDapur">${dp.map(d => `<option value="${esc(d.outlet)}" ${d.outlet === v.outlet ? 'selected' : ''}>${esc(judulOutlet(d.outlet))}${d.aktif === false ? ' (tidak aktif)' : ''}</option>`).join('')}</select></label>
+        <label class="isian">Dapur<select id="iDapur">${dp.map(d => `<option value="${esc(d.outlet)}" ${d.outlet === v.outlet ? 'selected' : ''}>${esc(judulOutlet(d.outlet))}${d.aktif === false ? ' (tidak aktif)' : ''}</option>`).join('')}<option value="__baru">+ Tambah dapur baru</option></select></label>
         <label class="isian">Tanggal<input type="date" id="iTgl" value="${esc(v.tanggal)}"></label>
         <label class="isian">Nomor nota<input type="number" id="iNomor" min="1" value="${esc(v.nomor)}" inputmode="numeric"></label>
         <label class="isian">Nama dapur di nota<input id="iToko" value="${esc(v.toko)}"></label>
         <label class="isian">Alamat dapur<input id="iAlamat" value="${esc(v.alamat)}"></label>
         ${adaFee ? `<label class="isian">Mitra penerima fee<input id="iMitra" value="${esc(v.mitra || '')}" placeholder="nama mitra di dapur ini"></label>` : ''}
         <label class="isian">Rekening di nota<select id="iRek">${(D.rekening || []).map((r, i) => `<option value="${i}" ${+v.rek === i ? 'selected' : ''}>${esc(r.usaha)} · ${esc(r.bank)} a.n. ${esc(r.atasNama)}</option>`).join('') || '<option value="0">-</option>'}</select></label>
+      </div>
+      <div id="dapurBaru" hidden style="margin-top:14px;padding:14px;border:1px dashed var(--garis2);border-radius:14px">
+        <span class="label">Dapur baru</span>
+        <div class="grid g3" style="margin-top:10px">
+          <label class="isian">Nama dapur<input id="dbNama" placeholder="misalnya Rengas 1"></label>
+          <label class="isian">Nama dapur di nota<input id="dbToko" placeholder="misalnya MBG SPPG SUNGAI RENGAS 1"></label>
+          <label class="isian">Alamat<input id="dbAlamat" placeholder="boleh kosong"></label>
+        </div>
+        <label style="display:flex;gap:8px;align-items:center;margin-top:10px;font-size:13.5px"><input type="checkbox" id="dbFee"> Dapur ini memakai fee mitra</label>
+        <div class="baris-aksi" style="margin-top:12px"><button class="tombol utama kecil" id="dbSimpan">Simpan dapur</button><button class="tombol kecil" id="dbBatal">Batal</button></div>
       </div>
       <div class="tbl-bungkus" style="margin-top:16px"><table class="ed"><thead><tr><th>No</th><th style="min-width:170px">Barang</th><th class="angka">Banyaknya</th><th>Satuan</th><th class="angka">Harga</th><th class="angka">Jumlah</th>${adaFee ? '<th class="angka">Fee/sat</th>' : ''}<th class="angka" title="Tidak dicetak">Modal/sat</th><th></th></tr></thead>
         <tbody id="tBaris">${v.baris.map((x, i) => barisEditor(x, i, adaFee)).join('')}</tbody></table></div>
@@ -1131,7 +1158,21 @@ function editorInvoice(el) {
     $$('#tBaris tr').forEach((tr, i) => { const x = v.baris[i]; const j = tr.querySelector('[data-jumlah]'); if (j) j.textContent = x && +x.qty && +x.harga ? rp(+x.qty * +x.harga) : '-'; });
   };
   const ulang = () => editorInvoice(el);
-  $('#iDapur').onchange = e => { const d = dp.find(x => x.outlet === e.target.value);
+  $('#dbBatal').onclick = () => { $('#dapurBaru').hidden = true; };
+  $('#dbNama').oninput = e => { if (!$('#dbToko').dataset.diubah) $('#dbToko').value = e.target.value.trim() ? 'MBG SPPG ' + e.target.value.trim().toUpperCase() : ''; };
+  $('#dbToko').oninput = e => { e.target.dataset.diubah = '1'; };
+  $('#dbSimpan').onclick = async () => {
+    const nama = $('#dbNama').value.trim().replace(/^mbg\s+/i, ''); if (!nama) return pesan('Nama dapur belum diisi.', true);
+    const outlet = 'MBG ' + nama.toUpperCase().replace(/\s+/g, ' ');
+    if (dp.some(d => d.outlet === outlet)) return pesan(judulOutlet(outlet) + ' sudah ada di daftar dapur.', true);
+    const d = { outlet, toko: $('#dbToko').value.trim() || outlet, alamat: $('#dbAlamat').value.trim(), fee: $('#dbFee').checked, dibuat: new Date().toLocaleDateString('sv-SE') };
+    try { const baru = [...DAPUR_T, d]; await simpanNilai('dapur', { tambahan: baru }); DAPUR_T = baru;
+      if (d.fee && !OUTLET_FEE.includes(outlet)) OUTLET_FEE.push(outlet);
+      v.outlet = outlet; v.toko = d.toko; v.alamat = d.alamat; if (!v.id) v.nomor = 1; v.mitra = '';
+      if (!d.fee) { v._tampil = 'nota'; v.baris.forEach(x => { x.fee = ''; }); }
+      pesan('Dapur ' + judulOutlet(outlet) + ' ditambahkan'); ulang(); } catch (er) { pesan(er.message, true); } };
+  $('#iDapur').onchange = e => { if (e.target.value === '__baru') { e.target.value = v.outlet; $('#dapurBaru').hidden = false; $('#dbNama').focus(); return; }
+    const d = dp.find(x => x.outlet === e.target.value);
     const mitraLama = mitraTerakhir(v.outlet);
     v.outlet = d.outlet; v.toko = d.toko; v.alamat = d.alamat || ''; if (!v.id) v.nomor = (d.notaTerakhir || 0) + 1;
     if (!v.mitra || v.mitra === mitraLama) v.mitra = mitraTerakhir(d.outlet);

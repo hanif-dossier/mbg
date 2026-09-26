@@ -144,7 +144,7 @@ create or replace function public.mbg_simpan_nilai(p_token text, p_kunci text, p
 set search_path = public, extensions as $f$
 begin
   if not mbg__sah(p_token) then return jsonb_build_object('ok', false, 'pesan', 'Sesi habis. Masuk lagi.'); end if;
-  if p_kunci not in ('tarif-fee', 'karyawan', 'pengeluaran', 'piutang') then return jsonb_build_object('ok', false, 'pesan', 'kunci tidak diizinkan'); end if;
+  if p_kunci not in ('tarif-fee', 'karyawan', 'pengeluaran', 'piutang', 'dapur') then return jsonb_build_object('ok', false, 'pesan', 'kunci tidak diizinkan'); end if;
   insert into mbg_nilai(kunci, nilai) values (p_kunci, p_nilai) on conflict (kunci) do update set nilai = excluded.nilai, diubah = now();
   return jsonb_build_object('ok', true);
 end $f$;
@@ -152,4 +152,18 @@ end $f$;
 revoke all on function public.mbg__sah(text) from public, anon, authenticated;
 grant execute on function public.mbg_invoice_daftar(text), public.mbg_invoice_simpan(text,jsonb), public.mbg_invoice_hapus(text,text),
   public.mbg_simpan_nilai(text,text,jsonb) to anon, authenticated;
+notify pgrst, 'reload schema';
+
+-- =====================================================================================================
+-- SINKRON INVOICE ke laptop: laptop (n8n, dengan kunci sinkron) mengambil semua invoice untuk disalin sebagai
+-- berkas Excel di D:\MBG\INVOICE APLIKASI. Hanya membaca.
+create or replace function public.mbg_invoice_sinkron(p_rahasia text) returns jsonb language plpgsql stable security definer
+set search_path = public, extensions as $f$
+begin
+  if coalesce(length(p_rahasia), 0) < 32 or not exists (select 1 from mbg_pemilik where id = 1 and sinkron_hash = mbg__h(p_rahasia)) then
+    return jsonb_build_object('ok', false, 'pesan', 'ditolak'); end if;
+  return jsonb_build_object('ok', true, 'invoice', coalesce((select jsonb_agg(data order by data->>'tanggal', dibuat) from mbg_invoice), '[]'::jsonb),
+    'dapur', (select nilai from mbg_nilai where kunci = 'dapur'), 'bayar', (select nilai->'bayar' from mbg_nilai where kunci = 'piutang'));
+end $f$;
+grant execute on function public.mbg_invoice_sinkron(text) to anon, authenticated;
 notify pgrst, 'reload schema';
