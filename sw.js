@@ -1,6 +1,6 @@
 // Service worker aplikasi MBG: halaman diambil dari jaringan dulu (supaya versi baru langsung terpakai),
 // salinan terakhir dipakai kalau sedang tidak ada sinyal. Data laporan tidak disimpan di sini (selalu dari server).
-const CACHE = 'mbg-v9';
+const CACHE = 'mbg-v10';
 const ASET = ['./', 'index.html', 'manifest.webmanifest', 'ikon-any-192.png?v=1', 'ikon-180.png?v=1'];
 self.addEventListener('install', e => { e.waitUntil(caches.open(CACHE).then(c => c.addAll(ASET)).then(() => self.skipWaiting())); });
 self.addEventListener('activate', e => { e.waitUntil(caches.keys().then(k => Promise.all(k.filter(x => x !== CACHE).map(x => caches.delete(x)))).then(() => self.clients.claim())); });
