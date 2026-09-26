@@ -199,6 +199,7 @@ table.absen .hp-baris{display:none}
 .lembar .ttd div{min-width:180px}
 .lembar .ttd .garis-ttd{margin-top:54px;border-top:1px dotted #333;padding-top:4px}
 .lembar .kecil{font-size:11.5px;color:#444}
+.lembar.lembar-pdf{border-radius:0;padding:0;overflow:visible;width:760px} .lembar.lembar-pdf table{min-width:0}
 /* lembar pemberitahuan fee mitra: sengaja berbeda dari nota dapur (pita kop gelap, kotak info, total di kotak kuning) */
 .lembar .mitra-kop{display:flex;justify-content:space-between;align-items:flex-start;gap:16px;flex-wrap:wrap;background:#0d2419;color:#f1e7cf;border-radius:12px;padding:16px 18px;-webkit-print-color-adjust:exact;print-color-adjust:exact}
 .lembar .mitra-kop .jenis{font-size:10.5px;letter-spacing:.18em;text-transform:uppercase;color:#8fd9ae;font-weight:700}
@@ -289,6 +290,7 @@ const IK = {
   lain: '<circle cx="5" cy="12" r="1.3"/><circle cx="12" cy="12" r="1.3"/><circle cx="19" cy="12" r="1.3"/>',
   cetak: '<path d="M7 9V3h10v6M7 17H4v-6a2 2 0 0 1 2-2h12a2 2 0 0 1 2 2v6h-3"/><path d="M7 14h10v7H7z"/>',
   unduh: '<path d="M12 4v11M7 10l5 5 5-5M5 20h14"/>',
+  kirim: '<path d="M21 3L10 14M21 3l-6.5 18-4.5-7-7-4.5z"/>',
   panah: '<path d="M5 12h14M13 6l6 6-6 6"/>',
 };
 const ik = (n, s = 18) => `<svg width="${s}" height="${s}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${IK[n]}</svg>`;
@@ -318,13 +320,20 @@ async function muat() {
 }
 
 // ---------- olahan data
-let M = [], OUT = {}, BULAN = [];
+let M = [], OUT = {}, BULAN = [], HARIAN = [];   // HARIAN = omzet harian Excel + invoice aplikasi
 function siapkan() {
   const pr = D.profil || {}; OUTLET_FEE = [...new Set([...(pr.outletFee || []), ...DAPUR_T.filter(d => d.fee).map(d => d.outlet)])]; PENERBIT = { nama: pr.usaha || '', alamat: pr.alamat || '' };
   M = D.mingguan || [];
   // outlet: gabungan omzet harian (patokan, sejak Mei) dan laporan mingguan (laba)
   OUT = {};
   for (const x of D.omzetHarian || []) { const o = OUT[x.outlet] ||= { nama: x.outlet, harian: [], minggu: [] }; o.harian.push(x); }
+  // Invoice aplikasi ikut jadi omzet dapur. Kalau dapur itu pada tanggal itu sudah ada di catatan omzet harian Excel,
+  // invoice tidak ditambahkan lagi (supaya tidak dobel kalau omzetnya juga diketik di Excel).
+  const sudah = new Set((D.omzetHarian || []).map(x => x.outlet + '|' + x.tanggal));
+  HARIAN = [...(D.omzetHarian || [])];
+  for (const v of INVOICE) { const t = totalInv(v); if (!v.tanggal || !t || sudah.has(v.outlet + '|' + v.tanggal)) continue;
+    const x = { tanggal: v.tanggal, outlet: v.outlet, omzet: t, invoice: v.id }; HARIAN.push(x); (OUT[v.outlet] ||= { nama: v.outlet, harian: [], minggu: [] }).harian.push(x); }
+  HARIAN.sort((a, b) => a.tanggal.localeCompare(b.tanggal));
   for (const w of M) for (const o of w.outlet) { const q = OUT[o.outlet] ||= { nama: o.outlet, harian: [], minggu: [] }; q.minggu.push({ ...o, minggu: w.minggu, awal: w.awal, akhir: w.akhir }); }
   for (const o of Object.values(OUT)) {
     o.total = o.harian.reduce((a, x) => a + x.omzet, 0); o.terakhir = o.harian.map(x => x.tanggal).sort().pop() || (o.minggu.at(-1) || {}).akhir;
@@ -345,6 +354,7 @@ function rute() { const [h, ...a] = (location.hash.slice(1) || 'beranda').split(
   if (h === 'fee' && a[0] !== 'tarif') return { h: 'invoice', a: [] };
   return { h: MENU.some(m => m[0] === h) || ['kabar', 'lainnya', 'fee'].includes(h) ? h : 'beranda', a: a.map(decodeURIComponent) }; }
 function tampil() {
+  siapkan();   // hitung ulang supaya invoice yang baru disimpan langsung ikut di Outlet dan Beranda
   const { h, a } = rute();
   const upd = PEMBARUAN && PEMBARUAN.waktu ? PEMBARUAN.waktu : D.diperbarui;
   akar.innerHTML = `
@@ -397,7 +407,7 @@ function grafikBatang(data, { tinggi = 210, seri = [{ k: 'v', warna: 'var(--hija
 
 // ---------- BERANDA: gambaran umum usaha dari awal tercatat sampai sekarang
 function vBeranda(el) {
-  const H = D.omzetHarian || [], jam = new Date().getHours();
+  const H = HARIAN, jam = new Date().getHours();
   const salam = jam < 11 ? 'Selamat pagi' : jam < 15 ? 'Selamat siang' : jam < 18 ? 'Selamat sore' : 'Selamat malam';
   const hariIni = new Date().toLocaleDateString('sv-SE');
   const total = H.reduce((a, x) => a + x.omzet, 0), tanggal = [...new Set(H.map(x => x.tanggal))].sort();
@@ -725,11 +735,11 @@ function vOutlet(el, [nama]) {
   const semua = Object.values(OUT).sort((a, b) => (b.terakhir || '').localeCompare(a.terakhir || '') || b.total - a.total);
   if (nama && OUT[nama]) return vOutletSatu(el, OUT[nama]);
   const maks = Math.max(...semua.map(o => o.total));
-  const aktif = semua.filter(o => o.terakhir && o.terakhir >= (D.omzetHarian.at(-1) || {}).tanggal?.slice(0, 7) + '-01');
+  const aktif = semua.filter(o => o.terakhir && o.terakhir >= (HARIAN.at(-1) || {}).tanggal?.slice(0, 7) + '-01');
   el.innerHTML = `
   <section class="bagian" style="margin-top:6px">
     <h2>Semua <span class="miring">dapur</span></h2>
-    <p class="ket">Omzet dari catatan omzet harian sejak ${esc(tgl((D.omzetHarian[0] || {}).tanggal, true))}. Laba kotor dari laporan mingguan. Ketuk nama dapur untuk rinciannya.</p>
+    <p class="ket">Omzet dari catatan omzet harian sejak ${esc(tgl((D.omzetHarian[0] || {}).tanggal, true))}, ditambah invoice yang dibuat di aplikasi. Laba kotor dari laporan mingguan. Ketuk nama dapur untuk rinciannya.</p>
     <div class="pil-baris" style="margin-bottom:14px"><span class="pil hijau">${aktif.length} dapur mengambil barang bulan terakhir</span><span class="pil">${semua.length} dapur tercatat</span><span class="pil kunyit">Fee: ${esc(daftarFee())}</span></div>
     <div class="kartu"><div class="daftar">${semua.map(o => `<div><a href="#outlet/${encodeURIComponent(o.nama)}" style="flex:1;min-width:0;text-decoration:none"><b>${esc(judulOutlet(o.nama))}</b>${o.fee ? ' <span class="pil kunyit" style="font-size:10.5px;padding:2px 8px">fee</span>' : ''}
         <div class="samar" style="font-size:12px">terakhir ${esc(o.terakhir ? tgl(o.terakhir) : '-')} · ${o.harian.length} hari tercatat${o.laba ? ' · laba kotor ' + esc(rpS(o.laba)) : ''}</div>
@@ -742,6 +752,8 @@ function vOutletSatu(el, o) {
   for (const x of o.harian) { const d = tglD(x.tanggal); d.setDate(d.getDate() - ((d.getDay() + 6) % 7)); const k = d.toISOString().slice(0, 10); perM[k] = (perM[k] || 0) + x.omzet; }
   const seri = Object.entries(perM).sort().slice(-16).map(([k, v]) => ({ label: tglP(k).replace(' ', ' '), v }));
   const nota = {}; for (const w of M) for (const r of w.rincian.filter(r => r.o === o.nama)) { const k = w.minggu + '|' + r.n + '|' + r.t; (nota[k] ||= { minggu: w.minggu, nota: r.n, tanggal: r.t, baris: [] }).baris.push(r); }
+  for (const v of INVOICE.filter(v => v.outlet === o.nama)) nota['inv|' + v.id] = { nota: 'Nota ' + nomorNota(v.nomor), tanggal: v.tanggal, inv: v.id, lunas: v.lunas,
+    baris: hitungInv(v).b.map(x => ({ b: x.barang, q: +x.qty, s: x.satuan, h: +x.harga, l: +x.modal ? +x.qty * (+x.harga - +x.modal - (+x.fee || 0)) : 0 })) };
   const daftarNota = Object.values(nota).sort((a, b) => (b.tanggal || '').localeCompare(a.tanggal || '')).slice(0, 12);
   el.innerHTML = `
   <section class="bagian" style="margin-top:6px">
@@ -759,7 +771,7 @@ function vOutletSatu(el, o) {
   ${o.minggu.length ? `<section class="bagian"><h2>Di laporan <span class="miring">mingguan</span></h2><div class="kartu"><div class="tbl-bungkus"><table><thead><tr><th>Minggu</th><th class="angka">Omzet</th><th class="angka">Laba kotor</th><th class="angka">Laba bersih</th><th class="angka">Margin</th></tr></thead>
     <tbody>${o.minggu.map(x => `<tr><td><a href="#mingguan/${x.minggu}">Minggu ${x.minggu}</a><div class="samar" style="font-size:12px">${esc(rentang(x.tanggal[0], x.tanggal.at(-1)))}</div></td><td class="angka">${esc(rp(x.omzet))}</td><td class="angka">${esc(rp(x.labaKotor))}</td><td class="angka">${esc(rp(x.labaBersih))}</td><td class="angka">${esc(pc(x.labaBersih, x.omzet))}</td></tr>`).join('')}</tbody></table></div></div></section>` : ''}
   ${daftarNota.length ? `<section class="bagian"><h2>Nota <span class="miring">terakhir</span></h2><div class="grid g2">${daftarNota.map(n => { const tot = n.baris.reduce((a, r) => a + r.q * r.h, 0), lb = n.baris.reduce((a, r) => a + r.l, 0);
-      return `<div class="kartu"><div style="display:flex;justify-content:space-between;gap:10px;align-items:baseline;flex-wrap:wrap"><b>${esc(n.nota || 'Nota')}</b><span class="redup" style="font-size:13px">${esc(n.tanggal ? hariNama(n.tanggal) + ', ' + tgl(n.tanggal) : '')}</span></div>
+      return `<div class="kartu"><div style="display:flex;justify-content:space-between;gap:10px;align-items:baseline;flex-wrap:wrap">${n.inv ? `<span><a href="#invoice/${encodeURIComponent(n.inv)}"><b>${esc(n.nota)}</b></a> <span class="pil ${n.lunas ? 'hijau' : 'merah'}" style="font-size:10.5px;padding:2px 8px">${n.lunas ? 'lunas' : 'belum lunas'}</span></span>` : `<b>${esc(n.nota || 'Nota')}</b>`}<span class="redup" style="font-size:13px">${esc(n.tanggal ? hariNama(n.tanggal) + ', ' + tgl(n.tanggal) : '')}</span></div>
       <div class="daftar" style="margin-top:4px">${n.baris.map(r => `<div style="padding:7px 0"><span>${esc(r.b)} <span class="samar" style="font-size:12px">${esc((+r.q).toLocaleString('id-ID', { maximumFractionDigits: 2 }))} ${esc(r.s)} × ${esc(rp(r.h))}</span></span><span class="angka">${esc(rp(r.q * r.h))}</span></div>`).join('')}</div>
       <div style="display:flex;justify-content:space-between;margin-top:8px;padding-top:8px;border-top:1px solid var(--garis2)"><b>${esc(rp(tot))}</b><span class="hijau" style="font-size:13px">laba kotor ${esc(rp(lb))}</span></div></div>`; }).join('')}</div></section>` : ''}`;
 }
@@ -953,6 +965,7 @@ function vNeraca(el, [bln]) {
 
 // ---------- bantu: dapur, harga terakhir, terbilang, pesan singkat
 let PENERBIT = { nama: '', alamat: '' };   // kop nota: dari data (profil), diisi di siapkan()
+const namaTtd = () => ((D.rekening || []).find(r => r.usaha === (D.profil || {}).rekeningBawaan) || {}).atasNama || '................................';
 const kunciB = s => String(s || '').trim().toLowerCase().replace(/\s+/g, ' ');
 const angkaID = n => (+n || 0).toLocaleString('id-ID', { maximumFractionDigits: 2 });
 const nomorNota = n => String(Math.max(0, +n || 0)).padStart(3, '0');
@@ -1026,7 +1039,7 @@ function lembarInvoice(v) {
   <tfoot><tr><td colspan="5" class="kanan"><b>Total</b></td><td class="kanan"><b>${esc(rp(h.sub))}</b></td></tr>
   ${h.disk ? `<tr><td colspan="5" class="kanan">Diskon ${esc(angkaID(v.diskon))}%</td><td class="kanan">− ${esc(rp(h.disk))}</td></tr><tr><td colspan="5" class="kanan"><b>Jumlah dibayar</b></td><td class="kanan"><b>${esc(rp(h.total))}</b></td></tr>` : ''}</tfoot></table>
   <div class="kecil" style="margin-top:8px">Terbilang: <i>${esc(terbilang(h.total))}</i></div>
-  <div class="ttd"><div>Tanda terima,<br><span class="kecil">&nbsp;</span><div class="garis-ttd">( ................................ )</div></div><div>Hormat kami,<br><span class="kecil">${esc(PENERBIT.nama.toUpperCase())}</span><div class="garis-ttd">( ${esc(rk ? rk.atasNama : 'Abdullah Hanif')} )</div></div></div>`;
+  <div class="ttd"><div>Tanda terima,<br><span class="kecil">&nbsp;</span><div class="garis-ttd">( ................................ )</div></div><div>Hormat kami,<br><span class="kecil">${esc(PENERBIT.nama.toUpperCase())}</span><div class="garis-ttd">( ${esc(rk ? rk.atasNama : namaTtd())} )</div></div></div>`;
 }
 
 // Pemberitahuan fee untuk mitra. p = { noDok, mitra, outlet, toko, dasar:[[label, isi]], rows:[{barang,qty,satuan,fee}], catatan }
@@ -1040,7 +1053,7 @@ function lembarMitra(p) {
   <tbody>${rows.map((x, i) => `<tr><td>${i + 1}</td><td>${esc(x.barang)}</td><td class="kanan">${esc(angkaID(x.qty))}</td><td>${esc(x.satuan)}</td><td class="kanan">${esc(rp(x.fee))}</td><td class="kanan">${esc(rp(+x.qty * +x.fee))}</td></tr>`).join('') || '<tr><td colspan="6" style="text-align:center;color:#777">Belum ada barang dengan fee</td></tr>'}</tbody></table>
   <div class="mitra-total"><div><div style="font-size:10.5px;letter-spacing:.12em;text-transform:uppercase;color:#8a6a1f;font-weight:700">Total fee untuk mitra</div><i style="font-size:12px;color:#555">${esc(terbilang(total))}</i></div><b>${esc(rp(total))}</b></div>
   <div class="mitra-catatan">${esc(p.catatan || 'Rincian ini khusus untuk mitra dan tidak dilampirkan pada nota ke dapur.')}</div>
-  <div class="ttd"><div>Mitra penerima,<br><span class="kecil">&nbsp;</span><div class="garis-ttd">( ${esc(p.mitra || '................................')} )</div></div><div>Hormat kami,<br><span class="kecil">${esc(PENERBIT.nama.toUpperCase())}</span><div class="garis-ttd">( Abdullah Hanif )</div></div></div></div>`;
+  <div class="ttd"><div>Mitra penerima,<br><span class="kecil">&nbsp;</span><div class="garis-ttd">( ${esc(p.mitra || '................................')} )</div></div><div>Hormat kami,<br><span class="kecil">${esc(PENERBIT.nama.toUpperCase())}</span><div class="garis-ttd">( ${esc(namaTtd())} )</div></div></div></div>`;
 }
 const mitraTerakhir = outlet => (INVOICE.find(x => x.outlet === outlet && x.mitra) || {}).mitra || '';
 const noDokFee = v => `FEE-${nomorNota(v.nomor)}/${judulOutlet(v.outlet).toUpperCase().replace(/\s+/g, '')}`;
@@ -1134,6 +1147,9 @@ function editorInvoice(el) {
     </div>
     <div class="baris-aksi aksi-lekat" style="margin-top:14px">
       <button class="tombol utama" id="bSimpan">Simpan</button>
+      <button class="tombol" id="bPdf">${ik('unduh', 16)} PDF nota</button>
+      <button class="tombol" id="bPdfFee" hidden>${ik('unduh', 16)} PDF fee mitra</button>
+      ${navigator.canShare ? `<button class="tombol" id="bKirim">${ik('kirim', 16)} Kirim</button>` : ''}
       <button class="tombol" id="bCetak">${ik('cetak', 16)} Cetak nota</button>
       <button class="tombol" id="bCetakFee" hidden>${ik('cetak', 16)} Cetak fee mitra</button>
       <button class="tombol" id="bExcel">${ik('unduh', 16)} Excel nota</button>
@@ -1152,7 +1168,7 @@ function editorInvoice(el) {
         <p class="samar" style="font-size:12.5px;margin:8px 0 0">Seminggu mengumpulkan fee dari semua invoice ${esc(judulOutlet(v.outlet))} yang tersimpan pada Senin sampai Minggu itu, termasuk invoice ini.</p>`; })() : ''}` : '<span class="label">Pratinjau nota</span>';
     $$('[data-tampil]', el).forEach(b => b.onclick = () => { v._tampil = b.dataset.tampil; segar(); });
     $$('[data-cakupan]', el).forEach(b => b.onclick = () => { v._cakupan = b.dataset.cakupan; segar(); });
-    $('#bCetakFee').hidden = !adaIsiFee; $('#bExcelFee').hidden = !adaIsiFee;
+    $('#bCetakFee').hidden = !adaIsiFee; $('#bExcelFee').hidden = !adaIsiFee; $('#bPdfFee').hidden = !adaIsiFee;
     $('#cetak').innerHTML = adaIsiFee && v._tampil === 'fee' ? lembarMitraInvoice(v) : lembarInvoice(v);
     $('#ringkasInv').innerHTML = `<span class="pil hijau">Total ${esc(rp(h.total))}</span>${adaFee ? `<span class="pil kunyit">Fee dapur ${esc(rp(h.fee))}</span>` : '<span class="pil">Dapur ini tanpa fee</span>'}${h.modal ? `<span class="pil">Modal ${esc(rp(h.modal))}</span><span class="pil ${h.laba >= 0 ? 'hijau' : 'merah'}">Laba kotor ${esc(rp(h.laba))} · ${esc(pc(h.laba, h.total))}</span>` : '<span class="pil">Isi modal untuk melihat laba</span>'}`;
     $$('#tBaris tr').forEach((tr, i) => { const x = v.baris[i]; const j = tr.querySelector('[data-jumlah]'); if (j) j.textContent = x && +x.qty && +x.harga ? rp(+x.qty * +x.harga) : '-'; });
@@ -1217,6 +1233,19 @@ function editorInvoice(el) {
     v._tampil = jenis; segar();
     document.title = jenis === 'fee' ? `Fee mitra ${rekapInvoice(v, v._cakupan || 'minggu').noDok}` : `Nota ${nomorNota(v.nomor)} ${judulOutlet(v.outlet)}`;
     addEventListener('afterprint', () => { document.title = 'MBG'; }, { once: true }); window.print(); };
+  // PDF: lembar yang sama dengan pratinjau, dijadikan berkas A4. Invoice harus sudah disimpan supaya nomornya tercatat.
+  const pdf = async (jenis, kirim) => {
+    if (!v.id) return pesan('Simpan invoice dulu, supaya nomor nota tercatat dan masuk piutang.', true);
+    const tombol = kirim ? $('#bKirim') : $(jenis === 'fee' ? '#bPdfFee' : '#bPdf'), teks = tombol.innerHTML; tombol.disabled = true; tombol.textContent = 'Membuat PDF...';
+    try { const { blob, nama } = await buatPdf(jenis, v);
+      if (kirim) { const f = new File([blob], nama, { type: 'application/pdf' });
+        if (navigator.canShare && navigator.canShare({ files: [f] })) await navigator.share({ files: [f], title: nama.replace(/\.pdf$/, '') }).catch(() => {});
+        else { unduhBlob(blob, nama); pesan('HP ini tidak bisa membagikan langsung, PDF diunduh'); } }
+      else { unduhBlob(blob, nama); pesan('PDF diunduh: ' + nama); }
+    } catch (er) { pesan(er.message, true); } finally { tombol.disabled = false; tombol.innerHTML = teks; } };
+  $('#bPdf').onclick = () => pdf('nota');
+  $('#bPdfFee').onclick = () => pdf('fee');
+  if ($('#bKirim')) $('#bKirim').onclick = () => pdf(v._tampil === 'fee' && hitungInv(v).fee ? 'fee' : 'nota', true);
   $('#bCetak').onclick = () => cetak('nota');
   if ($('#bCetakFee')) $('#bCetakFee').onclick = () => cetak('fee');
   $('#bExcel').onclick = () => unduhExcelInvoice(v).catch(er => pesan(er.message, true));
@@ -1233,32 +1262,108 @@ function barisEditor(x, i, adaFee) {
     <td class="angka" data-jumlah style="padding-top:12px">-</td>${adaFee ? inp('fee', 78, 'number', true, `placeholder="${esc(tarifHint(x))}"`) : ''}${inp('modal', 90, 'number', true)}
     <td><button class="tombol-ikon" data-hapus="${i}" title="Hapus baris" aria-label="Hapus baris" style="width:32px;height:32px">×</button></td></tr>`;
 }
-async function muatXLSX() {
-  if (window.XLSX) return;
-  await new Promise((ok, gagal) => { const s = document.createElement('script'); s.src = 'https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js'; s.onload = ok; s.onerror = () => gagal(new Error('Pembuat Excel gagal dimuat. Periksa internet lalu coba lagi.')); document.head.appendChild(s); });
+// Pustaka dimuat hanya saat dibutuhkan (dari cdnjs), supaya aplikasi tetap cepat dibuka.
+async function muatSkrip(src, ada, nama) {
+  if (ada()) return;
+  await new Promise((ok, gagal) => { const e = document.createElement('script'); e.src = src; e.onload = ok; e.onerror = () => gagal(new Error(nama + ' gagal dimuat. Periksa internet lalu coba lagi.')); document.head.appendChild(e); });
 }
-// Excel berformat sama dengan lembar NOTA di berkas mingguan dapur (kop, Tanggal/Toko, NOMOR NOTA, tabel, TOTAL, Disc%, JUMLAH).
+function unduhBlob(blob, nama) {
+  const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = nama; document.body.appendChild(a); a.click(); a.remove();
+  setTimeout(() => URL.revokeObjectURL(a.href), 5000);
+}
+const namaBerkasInv = (jenis, v) => jenis === 'fee'
+  ? ((v._cakupan || 'minggu') === 'minggu' ? `FEE MITRA ${judulOutlet(v.outlet).toUpperCase()} MINGGU ${rekapInvoice(v, 'minggu').dari}` : `FEE MITRA ${judulOutlet(v.outlet).toUpperCase()} NOTA ${nomorNota(v.nomor)}`)
+  : `NOTA ${nomorNota(v.nomor)} ${judulOutlet(v.outlet).toUpperCase()} ${v.tanggal || ''}`.trim();
+// Lembar digambar utuh (html2canvas), lalu dipotong per halaman A4 tepat di batas baris tabel supaya tidak ada
+// baris yang terbelah, dan dimasukkan ke PDF (jsPDF). Lebar lembar tetap 760 px di HP maupun laptop.
+async function buatPdf(jenis, v) {
+  const h = hitungInv(v); if (!h.b.length) throw new Error('Belum ada barang.');
+  if (jenis === 'fee' && !h.fee) throw new Error('Fee belum diisi, jadi lembar fee mitra tidak dibuat.');
+  await muatSkrip('https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js', () => window.html2canvas, 'Pembuat PDF');
+  await muatSkrip('https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js', () => window.jspdf, 'Pembuat PDF');
+  const LEBAR = 760, luar = document.createElement('div'); luar.style.cssText = `position:absolute;left:-12000px;top:0;width:${LEBAR}px;background:#fff`;
+  luar.innerHTML = `<div class="lembar lembar-pdf">${jenis === 'fee' ? lembarMitraInvoice(v) : lembarInvoice(v)}</div>`; document.body.appendChild(luar);
+  try {
+    if (document.fonts && document.fonts.ready) await document.fonts.ready;
+    const el = luar.firstElementChild, atas = el.getBoundingClientRect().top, tinggi = el.scrollHeight;
+    const batas = [...el.querySelectorAll('tr, .kop, .ttd, .mitra-kop, .mitra-info, .mitra-total, .mitra-catatan, h3, h4, p')].map(e => e.getBoundingClientRect().bottom - atas);
+    const cv = await html2canvas(el, { scale: 2, backgroundColor: '#ffffff', logging: false, useCORS: true, scrollX: 0, scrollY: -scrollY, windowWidth: 1200 });
+    const pdf = new jspdf.jsPDF({ unit: 'mm', format: 'a4', orientation: 'portrait' });
+    const lebarMm = 190, mmPerPx = lebarMm / LEBAR, maksPx = 272 / mmPerPx, sk = cv.width / LEBAR;
+    let y = 0, hal = 0;
+    while (y < tinggi - 2) {
+      let akhir = Math.min(tinggi, y + maksPx);
+      if (akhir < tinggi) { const c = batas.filter(b => b > y + 80 && b <= akhir).sort((a, b) => b - a)[0]; if (c) akhir = c; }
+      const pot = document.createElement('canvas'); pot.width = cv.width; pot.height = Math.max(1, Math.round((akhir - y) * sk));
+      const g = pot.getContext('2d'); g.fillStyle = '#fff'; g.fillRect(0, 0, pot.width, pot.height);
+      g.drawImage(cv, 0, Math.round(y * sk), cv.width, pot.height, 0, 0, cv.width, pot.height);
+      if (hal++) pdf.addPage();
+      pdf.addImage(pot.toDataURL('image/jpeg', 0.95), 'JPEG', 10, 10, lebarMm, (akhir - y) * mmPerPx);
+      y = akhir;
+    }
+    return { blob: pdf.output('blob'), nama: namaBerkasInv(jenis, v) + '.pdf' };
+  } finally { luar.remove(); }
+}
+// ---------- Excel rapi (ExcelJS): tabel bergaris, kepala berwarna, rupiah berformat, siap cetak A4
+const XL = { garis: { style: 'thin', color: { argb: 'FF6B7A71' } }, kepala: { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFE3EFE7' } },
+  hari: { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFF1F4F2' } }, total: { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFFBF3E0' } }, rp: '"Rp" #,##0', qty: 'General' };
+const kotakXL = () => ({ top: XL.garis, left: XL.garis, bottom: XL.garis, right: XL.garis });
+async function bukuExcel(judulLembar, lebar) {
+  await muatSkrip('https://cdnjs.cloudflare.com/ajax/libs/exceljs/4.4.0/exceljs.min.js', () => window.ExcelJS, 'Pembuat Excel');
+  const wb = new ExcelJS.Workbook(); wb.creator = 'MBG';
+  const ws = wb.addWorksheet(judulLembar, { pageSetup: { paperSize: 9, orientation: 'portrait', fitToPage: true, fitToWidth: 1, fitToHeight: 0, margins: { left: 0.5, right: 0.5, top: 0.6, bottom: 0.6, header: 0.3, footer: 0.3 } } });
+  ws.columns = lebar.map(w => ({ width: w }));
+  return { wb, ws };
+}
+// satu baris tabel bergaris; kolom angka rata kanan dengan format
+function barisXL(ws, nilai, { tebal = false, isi = null, format = {} } = {}) {
+  const r = ws.addRow(nilai);
+  r.eachCell({ includeEmpty: true }, (c, k) => { c.border = kotakXL(); if (tebal) c.font = { bold: true }; if (isi) c.fill = isi; if (format[k]) { c.numFmt = format[k]; c.alignment = { horizontal: 'right' }; } c.alignment = { ...(c.alignment || {}), vertical: 'middle', wrapText: k === 2 }; });
+  return r;
+}
+async function simpanExcel(wb, nama) {
+  const buf = await wb.xlsx.writeBuffer();
+  unduhBlob(new Blob([buf], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' }), nama);
+}
 async function unduhExcelInvoice(v) {
   const h = hitungInv(v); if (!h.b.length) throw new Error('Belum ada barang.');
-  await muatXLSX(); const rk = rekeningInv(v);
-  const aoa = [[PENERBIT.nama, '', '', '', 'Tanggal :', new Date((tanggalInv(v)[0] || v.tanggal) + 'T00:00:00')], [PENERBIT.alamat, '', '', '', 'Toko :', v.toko || judulOutlet(v.outlet)],
-    [rk ? `No.rek ${rk.bank} : ${rk.rekening} ${rk.atasNama}` : '', '', '', '', '', v.alamat || ''], [], ['NOMOR NOTA : ' + nomorNota(v.nomor)],
-    ['NO', 'Nama Barang', 'Banyaknya', 'Satuan', 'Harga Satuan', 'JUMLAH'], [1, 2, 3, '', 4, 5],
-    ...(() => { const T = tanggalInv(v), banyak = T.length > 1, out = []; let no = 0, tAkhir = null;
-      for (const x of (banyak ? h.b.slice().sort((a, b) => tglBaris(v, a).localeCompare(tglBaris(v, b))) : h.b)) {
-        const t = tglBaris(v, x); if (banyak && t !== tAkhir) out.push(['', labelHari(t)]); tAkhir = t; no++;
-        out.push([no, x.barang, +x.qty, x.satuan, +x.harga, +x.qty * +x.harga]); }
-      return out; })(),
-    ['', '', '', '', 'TOTAL', h.sub], ['', '', '', '', 'Disc%', +v.diskon || ''], ['', '', '', '', 'JUMLAH', h.total], [], ['', 'Terbilang: ' + terbilang(h.total)], [],
-    ['', 'TANDA TERIMA,', '', '', 'HORMAT KAMI,'], ['', '', '', '', PENERBIT.nama.toUpperCase()], [], [], ['', '( ................................ )', '', '', `( ${rk ? rk.atasNama : 'Abdullah Hanif'} )`]];
-  const ws = XLSX.utils.aoa_to_sheet(aoa, { cellDates: true }); if (ws.F1) ws.F1.z = 'd mmmm yyyy'; ws['!cols'] = [{ wch: 6 }, { wch: 30 }, { wch: 11 }, { wch: 10 }, { wch: 14 }, { wch: 16 }];
-  const wb = XLSX.utils.book_new(); XLSX.utils.book_append_sheet(wb, ws, 'NOTA ' + (+v.nomor || 1));
-  XLSX.writeFile(wb, `${judulOutlet(v.outlet).toUpperCase()} NOTA ${nomorNota(v.nomor)}.xlsx`);
+  const { wb, ws } = await bukuExcel('NOTA ' + nomorNota(v.nomor), [6, 36, 12, 10, 16, 18]); const rk = rekeningInv(v);
+  ws.mergeCells('A1:D1'); ws.getCell('A1').value = PENERBIT.nama; ws.getCell('A1').font = { bold: true, size: 15 };
+  ws.mergeCells('A2:D2'); ws.getCell('A2').value = PENERBIT.alamat; ws.getCell('A2').font = { size: 10, color: { argb: 'FF555555' } };
+  ws.mergeCells('A3:D3'); ws.getCell('A3').value = rk ? `Rekening ${rk.bank} ${rk.rekening} a.n. ${rk.atasNama}` : ''; ws.getCell('A3').font = { size: 10 };
+  const info = [['Tanggal', labelHari(tanggalInv(v)[0] || v.tanggal)], ['Kepada', v.toko || judulOutlet(v.outlet)], ['', v.alamat || '']];
+  info.forEach(([k, n], i) => { ws.getCell(1 + i, 5).value = k; ws.getCell(1 + i, 5).font = { color: { argb: 'FF555555' }, size: 10 }; ws.getCell(1 + i, 6).value = n; ws.getCell(1 + i, 6).font = { bold: i === 1 }; ws.getCell(1 + i, 6).alignment = { wrapText: true, vertical: 'top' }; });
+  ws.addRow([]);
+  const judul = ws.addRow(['NOTA No. ' + nomorNota(v.nomor)]); ws.mergeCells(`A${judul.number}:F${judul.number}`);
+  judul.getCell(1).font = { bold: true, size: 13 }; judul.getCell(1).alignment = { horizontal: 'center' }; judul.getCell(1).fill = XL.kepala; judul.height = 22;
+  ws.addRow([]);
+  const kep = barisXL(ws, ['No', 'Nama Barang', 'Banyaknya', 'Satuan', 'Harga Satuan', 'Jumlah'], { tebal: true, isi: XL.kepala });
+  kep.eachCell(c => { c.alignment = { horizontal: 'center', vertical: 'middle' }; });
+  const T = tanggalInv(v), banyak = T.length > 1; let no = 0, tAkhir = null;
+  for (const x of (banyak ? h.b.slice().sort((a, b) => tglBaris(v, a).localeCompare(tglBaris(v, b))) : h.b)) {
+    const t = tglBaris(v, x);
+    if (banyak && t !== tAkhir) { const r = barisXL(ws, ['', labelHari(t), '', '', '', ''], { tebal: true, isi: XL.hari }); ws.mergeCells(`B${r.number}:F${r.number}`); }
+    tAkhir = t; no++;
+    barisXL(ws, [no, x.barang, +x.qty, x.satuan, +x.harga, +x.qty * +x.harga], { format: { 3: XL.qty, 5: XL.rp, 6: XL.rp } });
+  }
+  const bawah = (label, nilai, opsi = {}) => { const r = ws.addRow(['', '', '', '', label, nilai]); [5, 6].forEach(k => { const c = r.getCell(k); c.border = kotakXL(); c.font = { bold: !!opsi.tebal }; if (opsi.isi) c.fill = opsi.isi; });
+    r.getCell(6).numFmt = XL.rp; r.getCell(5).alignment = { horizontal: 'right' }; return r; };
+  if (h.disk) { bawah('Subtotal', h.sub); bawah(`Diskon ${angkaID(v.diskon)}%`, -h.disk); }
+  bawah('TOTAL', h.total, { tebal: true, isi: XL.total });
+  ws.addRow([]);
+  const tb = ws.addRow(['Terbilang: ' + terbilang(h.total)]); ws.mergeCells(`A${tb.number}:F${tb.number}`); tb.getCell(1).font = { italic: true };
+  ws.addRow([]); ws.addRow([]);
+  const t1 = ws.addRow(['', 'Tanda terima,', '', '', 'Hormat kami,']); t1.getCell(5).alignment = t1.getCell(2).alignment = { horizontal: 'center' };
+  ws.mergeCells(`E${t1.number}:F${t1.number}`);
+  ws.addRow([]); ws.addRow([]); ws.addRow([]);
+  const t2 = ws.addRow(['', '( ................................ )', '', '', `( ${rk ? rk.atasNama : namaTtd()} )`]); ws.mergeCells(`E${t2.number}:F${t2.number}`);
+  t2.getCell(2).alignment = t2.getCell(5).alignment = { horizontal: 'center' };
+  await simpanExcel(wb, namaBerkasInv('nota', v) + '.xlsx');
 }
 
 async function unduhExcelFeeMitra(v) {
   const c = v._cakupan || 'minggu', r = rekapInvoice(v, c); if (!hitungInv(v).fee) throw new Error('Fee belum diisi di invoice ini.');
-  await unduhExcelFeePeriode(r.o, r.dari, r.sampai, { noDok: r.noDok, toko: v.toko, berkas: c === 'minggu' ? `FEE MITRA ${judulOutlet(v.outlet).toUpperCase()} MINGGU ${r.dari}.xlsx` : `FEE MITRA ${judulOutlet(v.outlet).toUpperCase()} NOTA ${nomorNota(v.nomor)}.xlsx` });
+  await unduhExcelFeePeriode(r.o, r.dari, r.sampai, { noDok: r.noDok, toko: v.toko, berkas: namaBerkasInv('fee', v) + '.xlsx' });
 }
 
 // ---------- FEE
@@ -1296,19 +1401,41 @@ function lembarFee(o, dari, sampai, ext = {}) {
       <tr class="sub"><td colspan="4" class="kanan">Subtotal ${esc(hariNama(h.tanggal))}</td><td class="kanan">${esc(rp(h.fee))}</td></tr>`; }).join('')}</tbody></table>
   <div class="mitra-total"><div><div style="font-size:10.5px;letter-spacing:.12em;text-transform:uppercase;color:#8a6a1f;font-weight:700">Total fee untuk mitra · ${H.length} hari</div><i style="font-size:12px;color:#555">${esc(terbilang(o.total))}</i></div><b>${esc(rp(o.total))}</b></div>
   <div class="mitra-catatan">Rincian ini khusus untuk mitra dan tidak dilampirkan pada nota ke dapur.</div>
-  <div class="ttd"><div>Mitra penerima,<br><span class="kecil">&nbsp;</span><div class="garis-ttd">( ${esc(o.mitra || '................................')} )</div></div><div>Hormat kami,<br><span class="kecil">${esc(PENERBIT.nama.toUpperCase())}</span><div class="garis-ttd">( Abdullah Hanif )</div></div></div></div>`;
+  <div class="ttd"><div>Mitra penerima,<br><span class="kecil">&nbsp;</span><div class="garis-ttd">( ${esc(o.mitra || '................................')} )</div></div><div>Hormat kami,<br><span class="kecil">${esc(PENERBIT.nama.toUpperCase())}</span><div class="garis-ttd">( ${esc(namaTtd())} )</div></div></div></div>`;
 }
 async function unduhExcelFeePeriode(o, dari, sampai, ext = {}) {
-  await muatXLSX(); const H = hariFee(o);
-  const aoa = [['PEMBERITAHUAN FEE MITRA'], [PENERBIT.nama], [PENERBIT.alamat], [], ['Nomor', ext.noDok || ''], ['Kepada mitra', o.mitra || ''], ['Dapur', ext.toko || ((D.dapur || []).find(d => d.outlet === o.outlet) || {}).toko || judulOutlet(o.outlet)],
-    ['Periode', `${tgl(dari, true)} s.d. ${tgl(sampai, true)}`, `${H.length} hari pengantaran`], [], ['RINGKASAN PER HARI'], ['NO', 'Hari', 'Tanggal', 'Nota', '', 'Fee hari itu'],
-    ...H.map((h, i) => [i + 1, hariNama(h.tanggal) + (h.top ? ' (terbanyak)' : ''), tgl(h.tanggal, true), [...h.nota].filter(Boolean).join(', '), '', h.fee]), ['', '', '', '', 'TOTAL', o.total], [],
-    ['RINCIAN BARANG PER HARI'], ['Barang', 'Banyaknya', 'Satuan', 'Fee per satuan', 'Jumlah fee']];
-  for (const h of H) { aoa.push([labelHari(h.tanggal)]); for (const b of Object.values(h.barang)) aoa.push([b.barang, b.qty, b.satuan, b.fee, b.qty * b.fee]); aoa.push(['', '', '', 'Subtotal', h.fee]); }
-  aoa.push([], ['', '', '', 'TOTAL FEE', o.total], ['Terbilang: ' + terbilang(o.total)]);
-  const ws = XLSX.utils.aoa_to_sheet(aoa); ws['!cols'] = [{ wch: 30 }, { wch: 22 }, { wch: 20 }, { wch: 16 }, { wch: 14 }, { wch: 16 }];
-  const wb = XLSX.utils.book_new(); XLSX.utils.book_append_sheet(wb, ws, 'FEE MITRA');
-  XLSX.writeFile(wb, ext.berkas || `FEE MITRA ${judulOutlet(o.outlet).toUpperCase()} ${dari} sd ${sampai}.xlsx`);
+  const H = hariFee(o), { wb, ws } = await bukuExcel('FEE MITRA', [6, 34, 22, 12, 16, 18]);
+  const toko = ext.toko || ((D.dapur || []).find(d => d.outlet === o.outlet) || {}).toko || judulOutlet(o.outlet);
+  const kop = ws.addRow(['PEMBERITAHUAN FEE MITRA']); ws.mergeCells('A1:F1'); kop.getCell(1).font = { bold: true, size: 14, color: { argb: 'FFFFFFFF' } };
+  kop.getCell(1).fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF0D2419' } }; kop.height = 24; kop.getCell(1).alignment = { vertical: 'middle', indent: 1 };
+  const k2 = ws.addRow([PENERBIT.nama + (PENERBIT.alamat ? ' · ' + PENERBIT.alamat : '')]); ws.mergeCells('A2:F2'); k2.getCell(1).font = { size: 10, color: { argb: 'FF555555' } };
+  ws.addRow([]);
+  const info = [['Nomor', ext.noDok || ''], ['Kepada mitra', o.mitra || '................................'], ['Dapur', toko],
+    [dari === sampai ? 'Tanggal' : 'Periode', dari === sampai ? labelHari(dari) : `${tgl(dari, true)} s.d. ${tgl(sampai, true)} (${H.length} hari pengantaran)`]];
+  for (const [k, n] of info) { const r = ws.addRow(['', k, n]); ws.mergeCells(`C${r.number}:F${r.number}`); r.getCell(2).font = { color: { argb: 'FF555555' } }; r.getCell(3).font = { bold: true }; }
+  ws.addRow([]);
+  const sub = t => { const r = ws.addRow([t]); ws.mergeCells(`A${r.number}:F${r.number}`); r.getCell(1).font = { bold: true, size: 11, color: { argb: 'FF3A5A47' } }; };
+  sub('RINGKASAN PER HARI');
+  barisXL(ws, ['No', 'Hari', 'Tanggal', 'Nota', '', 'Fee hari itu'], { tebal: true, isi: XL.kepala }).eachCell(c => { c.alignment = { horizontal: 'center' }; });
+  H.forEach((h, i) => barisXL(ws, [i + 1, hariNama(h.tanggal) + (h.top ? '  (terbanyak)' : ''), tgl(h.tanggal, true), [...h.nota].filter(Boolean).join(', '), '', h.fee], { format: { 6: XL.rp } }));
+  barisXL(ws, ['', '', '', '', `Total ${H.length} hari`, o.total], { tebal: true, isi: XL.total, format: { 6: XL.rp } });
+  ws.addRow([]);
+  sub('RINCIAN BARANG PER HARI');
+  barisXL(ws, ['No', 'Barang', 'Banyaknya', 'Satuan', 'Fee per satuan', 'Jumlah fee'], { tebal: true, isi: XL.kepala }).eachCell(c => { c.alignment = { horizontal: 'center' }; });
+  for (const h of H) {
+    const r = barisXL(ws, [labelHari(h.tanggal) + ([...h.nota].filter(Boolean).length ? ' · nota ' + [...h.nota].filter(Boolean).join(', ') : ''), '', '', '', '', ''], { tebal: true, isi: XL.hari }); ws.mergeCells(`A${r.number}:F${r.number}`);
+    Object.values(h.barang).sort((a, b) => b.qty * b.fee - a.qty * a.fee).forEach((b, i) => barisXL(ws, [i + 1, b.barang, b.qty, b.satuan, b.fee, b.qty * b.fee], { format: { 3: XL.qty, 5: XL.rp, 6: XL.rp } }));
+    barisXL(ws, ['', '', '', '', 'Subtotal ' + hariNama(h.tanggal), h.fee], { tebal: true, format: { 6: XL.rp } });
+  }
+  ws.addRow([]);
+  barisXL(ws, ['', '', '', '', 'TOTAL FEE', o.total], { tebal: true, isi: XL.total, format: { 6: XL.rp } }).getCell(6).font = { bold: true, size: 13 };
+  const tb = ws.addRow(['Terbilang: ' + terbilang(o.total)]); ws.mergeCells(`A${tb.number}:F${tb.number}`); tb.getCell(1).font = { italic: true };
+  ws.addRow([]); ws.addRow([]);
+  const t1 = ws.addRow(['', 'Mitra penerima,', '', '', 'Hormat kami,']); ws.mergeCells(`E${t1.number}:F${t1.number}`);
+  ws.addRow([]); ws.addRow([]); ws.addRow([]);
+  const t2 = ws.addRow(['', `( ${o.mitra || '................................'} )`, '', '', `( ${namaTtd()} )`]); ws.mergeCells(`E${t2.number}:F${t2.number}`);
+  [t1, t2].forEach(r => { r.getCell(2).alignment = r.getCell(5).alignment = { horizontal: 'center' }; });
+  await simpanExcel(wb, ext.berkas || `FEE MITRA ${judulOutlet(o.outlet).toUpperCase()} ${dari} sd ${sampai}.xlsx`);
 }
 function vFee(el) { return vTarifFee(el); }
 // Tarif fee: fee per satuan tiap barang per dapur. Awalnya dari laporan terakhir; yang diubah di sini dipakai invoice berikutnya.
