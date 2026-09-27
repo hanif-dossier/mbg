@@ -316,7 +316,7 @@ async function muat() {
   if (!a.ok) { sesi.hapus(); return layarMasuk(a.pesan); }
   D = a.nilai; CATATAN = b.ok ? b.nilai : null; PEMBARUAN = c.ok ? c.nilai : null;
   TARIF = (t.ok && t.nilai) || {}; INVOICE = inv.ok ? inv.invoice : [];
-  KRY = { orang: [], absen: {}, bayar: {}, manual: {}, pinjam: [], ...((kr.ok && kr.nilai) || {}) }; KELUAR = { daftar: [], ...((kl.ok && kl.nilai) || {}) }; PIU = { baru: [], bayar: [], ...((pu.ok && pu.nilai) || {}) }; DAPUR_T = ((dt.ok && dt.nilai) || {}).tambahan || []; STOK = { gerak: [], ubah: {}, baru: [], ...((st.ok && st.nilai) || {}) };
+  KRY = { orang: [], absen: {}, bayar: {}, manual: {}, pinjam: [], ...((kr.ok && kr.nilai) || {}) }; KELUAR = { daftar: [], ...((kl.ok && kl.nilai) || {}) }; PIU = { baru: [], bayar: [], ubah: {}, ...((pu.ok && pu.nilai) || {}) }; DAPUR_T = ((dt.ok && dt.nilai) || {}).tambahan || []; STOK = { gerak: [], ubah: {}, baru: [], ...((st.ok && st.nilai) || {}) };
   if (!D) { akar.innerHTML = `<div class="masuk"><div class="kotak"><h1>Belum ada data</h1><p>Data dikirim dari laptop setiap kali berkas Excel MBG disimpan. Nyalakan laptop, lalu buka lagi.</p></div></div>`; return; }
   siapkan(); tampil();
 }
@@ -998,7 +998,7 @@ function vStok(el) {
 }
 
 // ---------- PIUTANG: buku piutang Excel + piutang baru dan pembayaran yang dicatat di aplikasi
-let PIU = { baru: [], bayar: [] };
+let PIU = { baru: [], bayar: [], ubah: {} };
 // Kunci satu baris buku Excel. Kalau baris itu diubah di Excel (nominal atau tanggal), pembayaran lama dari aplikasi
 // tidak lagi menempel, supaya tidak terhitung dua kali.
 const refPiutang = p => 'x:' + [p.pihak, p.tanggal || '', p.nominal].join('|');
@@ -1011,12 +1011,16 @@ function semuaPiutang() {
     if (!p.usaha) return true;
     const v = INVOICE.find(v => !dipakai.has(v.id) && v.outlet === p.outlet && Math.abs(totalInv(v) - p.nominal) < 1 && (!p.tanggal || !v.tanggal || selisihHari(p.tanggal, v.tanggal) <= 7));
     if (!v) return true; dipakai.add(v.id); kembar.push({ excel: p, invoice: v }); return false;
-  }).map(p => ({ ...p, ref: refPiutang(p), sumber: 'laporan' }));
+  }).map(p => { const ref = refPiutang(p);
+    // rekap cicilan dari berkas "Total selisih nota dan transferan" kalau sisanya sama dengan baris buku piutang
+    const cicilan = p.usaha ? (D.cicilan || []).find(c => c.outlet === p.outlet && Math.abs(c.selisih - p.nominal) < 1) : null;
+    return { ...p, ...((PIU.ubah || {})[ref] || {}), ref, sumber: 'laporan', cicilan, nominalBuku: p.nominal }; });
   semuaPiutang.kembar = kembar;
   const ap = PIU.baru.map(p => ({ ...p, ref: 'a:' + p.id, sumber: 'app', lunas: false }));
   // invoice aplikasi yang belum lunas = tagihan ke dapur; yang sudah lunas tidak ikut sama sekali
   const iv = INVOICE.filter(v => !v.lunas && totalInv(v) > 0).map(v => ({ ref: 'i:' + v.id, sumber: 'invoice', invId: v.id, usaha: true, outlet: v.outlet, pihak: judulOutlet(v.outlet),
-    nominal: totalInv(v), tanggal: v.tanggal, jatuhTempo: null, catatan: 'invoice nota ' + nomorNota(v.nomor), lunas: false }));
+    nominal: totalInv(v), tanggal: v.tanggal, jatuhTempo: null, catatan: 'invoice nota ' + nomorNota(v.nomor), lunas: false }))
+    .map(p => { const u = (PIU.ubah || {})[p.ref] || {}; return { ...p, jatuhTempo: u.jatuhTempo ?? p.jatuhTempo, catatan: u.catatan ?? p.catatan }; });
   return [...ex, ...ap, ...iv].map(p => {
     const riwayat = PIU.bayar.filter(b => b.ref === p.ref).sort((a, b) => a.tgl.localeCompare(b.tgl)), dibayar = riwayat.reduce((a, b) => a + b.jumlah, 0);
     const lunas = p.lunas || dibayar >= p.nominal;
@@ -1037,7 +1041,8 @@ async function setLunasInvoice(id, lunas, tgl) {
   INVOICE = INVOICE.map(x => x.id === id ? data : x);
   if (INV && INV.id === id) { INV.lunas = data.lunas; INV.tglLunas = data.tglLunas; }
 }
-function vPiutang(el) {
+function vPiutang(el, a = []) {
+  if (a[0]) return vPiutangRinci(el, a[0]);
   const P = semuaPiutang(), hariIni = new Date(); hariIni.setHours(0, 0, 0, 0);
   const hIni = new Date().toLocaleDateString('sv-SE'), f = vPiutang.f ||= { usaha: true, buka: null };
   const umur = p => p.tanggal ? Math.round((hariIni - tglD(p.tanggal)) / 864e5) : null;
@@ -1053,7 +1058,7 @@ function vPiutang(el) {
           <label class="isian">Tanggal<input type="date" id="byTgl" value="${hIni}"></label>
           <label class="isian">Keterangan<input id="byKet" placeholder="transfer, tunai"></label></div>
         <div class="baris-aksi" style="margin-top:10px"><button class="tombol utama kecil" id="bySimpan" data-ref="${esc(p.ref)}">Simpan pembayaran</button><button class="tombol kecil" id="byTutup">Batal</button></div>`
-      : `<div class="baris-aksi" style="margin-top:8px"><button class="tombol kecil" data-buka="${esc(p.ref)}">Catat pembayaran</button>${p.sumber === 'invoice' ? `<button class="tombol kecil" data-lunasinv="${esc(p.invId)}">Tandai lunas</button>` : ''}${p.sumber === 'app' && !p.dibayar ? `<button class="tombol kecil bahaya" data-hapuspiu="${esc(p.id)}">hapus</button>` : ''}</div>`}
+      : `<div class="baris-aksi" style="margin-top:8px"><a class="tombol kecil" href="#piutang/${encodeURIComponent(p.ref)}">${p.cicilan ? 'Rincian cicilan' : 'Rincian & ubah'}</a><button class="tombol kecil" data-buka="${esc(p.ref)}">Catat pembayaran</button>${p.sumber === 'invoice' ? `<button class="tombol kecil" data-lunasinv="${esc(p.invId)}">Tandai lunas</button>` : ''}${p.sumber === 'app' && !p.dibayar ? `<button class="tombol kecil bahaya" data-hapuspiu="${esc(p.id)}">hapus</button>` : ''}</div>`}
       </div>
       <span class="angka">${esc(rp(p.nominal))}${p.dibayar ? '<div class="samar" style="font-size:11.5px">sisa</div>' : ''}${u != null && u >= 0 ? `<br><span class="pil ${u > 30 ? 'merah' : u > 14 ? 'kunyit' : ''}" style="margin-top:4px">${u} hari</span>` : ''}</span></div>`; }).join('');
   el.innerHTML = `
@@ -1114,6 +1119,123 @@ function vPiutang(el) {
     if (nominal <= 0) return pesan('Jumlah belum diisi.', true);
     const x = { id: idBaru(), usaha: f.usaha, outlet, pihak: f.usaha ? judulOutlet(outlet) : outlet, nominal, tanggal: t || null, jatuhTempo: $('#puTempo', el).value || null, catatan: $('#puCatatan', el).value.trim() };
     try { await simpanPiutang({ ...PIU, baru: [...PIU.baru, x] }); pesan('Piutang ' + x.pihak + ' ' + rp(nominal) + ' dicatat'); ulang(); } catch (er) { pesan(er.message, true); } };
+}
+
+// ---------- RINCIAN PIUTANG (tabel cicilan) dan ubah piutang
+function barisCicilan(p) {
+  const R = [];
+  if (p.cicilan) {
+    for (const n of p.cicilan.nota) R.push({ tgl: n.tgl, ket: 'Nota pengantaran', tagih: n.nominal });
+    for (const t of p.cicilan.transfer) R.push({ tgl: t.tgl, ket: t.ket ? 'Transfer, ' + t.ket.toLowerCase() : 'Transfer', bayar: t.nominal });
+    const selisih = p.awal - p.cicilan.selisih;   // koreksi nilai yang diketik di aplikasi
+    if (Math.abs(selisih) >= 1) R.push({ tgl: new Date().toLocaleDateString('sv-SE'), ket: 'Koreksi nilai piutang', tagih: selisih });
+  } else R.push({ tgl: p.tanggal || '', ket: p.catatan || (p.sumber === 'invoice' ? 'Invoice' : 'Piutang'), tagih: p.awal });
+  for (const b of p.riwayat) R.push({ tgl: b.tgl, ket: b.ket ? 'Bayar, ' + b.ket : 'Bayar', bayar: b.jumlah, id: b.id });
+  if (p.lunas && p.sumber === 'laporan' && !p.riwayat.length && !p.cicilan) R.push({ tgl: p.diterima || '', ket: 'Lunas (buku piutang)', bayar: p.awal });
+  R.sort((a, b) => (a.tgl || '').localeCompare(b.tgl || '') || (a.tagih ? -1 : 1));
+  let sisa = 0; for (const r of R) { sisa += (r.tagih || 0) - (r.bayar || 0); r.sisa = sisa; }
+  return R;
+}
+const namaPiutang = p => p.usaha ? (((daftarDapur().find(d => d.outlet === p.outlet) || {}).toko) || judulOutlet(p.outlet)) : p.pihak;
+function lembarCicilan(p, R) {
+  const tagih = R.reduce((a, r) => a + (r.tagih || 0), 0), bayar = R.reduce((a, r) => a + (r.bayar || 0), 0), rk = (D.rekening || []).find(r => r.usaha === (D.profil || {}).rekeningBawaan);
+  return `<div class="kop"><div><b>${esc(PENERBIT.nama)}</b><div class="kecil">${esc(PENERBIT.alamat)}</div>${rk ? `<div class="kecil">No. rek ${esc(rk.bank)} ${esc(rk.rekening)} a.n. ${esc(rk.atasNama)}</div>` : ''}</div>
+    <div style="text-align:right"><div>Kepada: <b>${esc(namaPiutang(p))}</b></div><div class="kecil">Per ${esc(tgl(new Date().toLocaleDateString('sv-SE'), true))}</div></div></div>
+  <h3>RINCIAN TAGIHAN DAN PEMBAYARAN</h3>
+  <table><thead><tr><th style="width:34px">No</th><th>Tanggal</th><th>Keterangan</th><th class="kanan">Tagihan</th><th class="kanan">Pembayaran</th><th class="kanan">Sisa</th></tr></thead>
+  <tbody>${R.map((r, i) => `<tr><td>${i + 1}</td><td>${esc(r.tgl ? tgl(r.tgl, true) : '-')}</td><td>${esc(r.ket)}</td><td class="kanan">${r.tagih ? esc(rp(r.tagih)) : ''}</td><td class="kanan">${r.bayar ? esc(rp(r.bayar)) : ''}</td><td class="kanan">${esc(rp(r.sisa))}</td></tr>`).join('')}</tbody>
+  <tfoot><tr><td colspan="3" class="kanan"><b>Total</b></td><td class="kanan"><b>${esc(rp(tagih))}</b></td><td class="kanan"><b>${esc(rp(bayar))}</b></td><td class="kanan"><b>${esc(rp(tagih - bayar))}</b></td></tr></tfoot></table>
+  <div class="mitra-total" style="margin-top:14px"><div><div style="font-size:10.5px;letter-spacing:.12em;text-transform:uppercase;color:#8a6a1f;font-weight:700">Sisa yang belum dibayar</div><i style="font-size:12px;color:#555">${esc(terbilang(Math.max(0, tagih - bayar)))}</i></div><b>${esc(rp(Math.max(0, tagih - bayar)))}</b></div>
+  <div class="ttd"><div>Mengetahui,<br><span class="kecil">&nbsp;</span><div class="garis-ttd">( ................................ )</div></div><div>Hormat kami,<br><span class="kecil">${esc(PENERBIT.nama.toUpperCase())}</span><div class="garis-ttd">( ${esc(namaTtd())} )</div></div></div>`;
+}
+function vPiutangRinci(el, ref) {
+  const p = semuaPiutang().find(x => x.ref === ref);
+  if (!p) { el.innerHTML = `<section class="bagian"><a href="#piutang" class="pil" style="text-decoration:none">← Piutang</a><div class="kartu kosong" style="margin-top:14px">Piutang ini sudah tidak ada atau sudah lunas lewat invoice.</div></section>`; return; }
+  const f = vPiutangRinci.f ||= {}; if (f.ref !== ref) { f.ref = ref; f.ubahBayar = null; }
+  const R = barisCicilan(p), tagih = R.reduce((a, r) => a + (r.tagih || 0), 0), bayar = R.reduce((a, r) => a + (r.bayar || 0), 0);
+  const hIni = new Date().toLocaleDateString('sv-SE'), u = (PIU.ubah || {})[ref];
+  const namaBerkas = `RINCIAN PIUTANG ${(p.usaha ? judulOutlet(p.outlet) : p.pihak).toUpperCase()} ${hIni}`;
+  el.innerHTML = `
+  <section class="bagian" style="margin-top:6px">
+    <a href="#piutang" class="pil" style="text-decoration:none">← Piutang</a>
+    <h2 style="margin-top:14px">${esc(p.usaha ? judulOutlet(p.outlet) : p.pihak)} <span class="miring">${p.cicilan ? 'cicilan' : 'rincian'}</span></h2>
+    <p class="ket">${p.cicilan ? `Rekap dari berkas ${esc(p.cicilan.berkas.split('/').pop())} (lembar ${esc(p.cicilan.lembar)}): ${p.cicilan.nota.length} nota pengantaran dan ${p.cicilan.transfer.length} transfer. Pembayaran berikutnya dicatat di sini dan langsung masuk tabel.` : 'Tagihan dan semua pembayaran untuk piutang ini.'}${p.sumber === 'invoice' ? ` Piutang ini dari <a href="#invoice/${encodeURIComponent(p.invId)}">invoice nota</a>; jumlahnya diubah lewat invoicenya.` : ''}</p>
+    <div class="grid g3">
+      <div class="kartu ubin"><span class="label">Total tagihan</span><div class="nilai kecil">${esc(rp(tagih))}</div><small>${R.filter(r => r.tagih).length} baris</small></div>
+      <div class="kartu ubin"><span class="label">Sudah dibayar</span><div class="nilai kecil hijau">${esc(rp(bayar))}</div><small>${R.filter(r => r.bayar).length} kali bayar</small></div>
+      <div class="kartu ubin"><span class="label">Sisa</span><div class="nilai kecil ${tagih - bayar > 0 ? 'kunyit' : 'hijau'}">${esc(rp(Math.max(0, tagih - bayar)))}</div><small>${tagih - bayar > 0 ? 'belum dibayar' : 'lunas'}</small></div>
+    </div>
+    <div class="baris-aksi aksi-lekat" style="margin-top:14px">
+      ${tagih - bayar > 0 ? '<button class="tombol utama" id="rBayar">+ Catat pembayaran</button>' : ''}
+      <button class="tombol" id="rPdf">${ik('unduh', 16)} PDF tabel</button>
+      ${navigator.canShare ? `<button class="tombol" id="rKirim">${ik('kirim', 16)} Kirim</button>` : ''}
+      <button class="tombol" id="rUbah">Ubah piutang</button>
+    </div>
+    <div id="rForm"></div>
+  </section>
+  <section class="bagian kartu"><span class="label">Tabel tagihan dan pembayaran</span>
+    <div class="tbl-bungkus" style="margin-top:8px"><table><thead><tr><th>No</th><th>Tanggal</th><th>Keterangan</th><th class="angka">Tagihan</th><th class="angka">Pembayaran</th><th class="angka">Sisa</th><th></th></tr></thead>
+      <tbody>${R.map((r, i) => f.ubahBayar && f.ubahBayar === r.id ? `<tr><td>${i + 1}</td><td class="sel"><input type="date" id="ubTgl" value="${esc(r.tgl)}"></td><td class="sel"><input id="ubKet" value="${esc((p.riwayat.find(b => b.id === r.id) || {}).ket || '')}" placeholder="keterangan"></td><td></td><td class="sel"><input type="number" id="ubJml" class="angka" inputmode="numeric" value="${r.bayar}" style="min-width:110px"></td><td></td>
+          <td style="white-space:nowrap"><button class="tombol kecil utama" id="ubSimpan" style="padding:4px 10px;font-size:12px">Simpan</button> <button class="tombol kecil" id="ubBatal" style="padding:4px 10px;font-size:12px">Batal</button></td></tr>`
+        : `<tr><td class="samar">${i + 1}</td><td style="white-space:nowrap">${esc(r.tgl ? tglP(r.tgl) + ' ' + r.tgl.slice(0, 4) : '-')}</td><td>${esc(r.ket)}</td><td class="angka">${r.tagih ? esc(rp(r.tagih)) : ''}</td><td class="angka hijau">${r.bayar ? esc(rp(r.bayar)) : ''}</td><td class="angka"><b>${esc(rp(r.sisa))}</b></td>
+          <td style="white-space:nowrap">${r.id ? `<button class="tombol kecil" data-ubahbayar="${esc(r.id)}" style="padding:3px 9px;font-size:11.5px">ubah</button> <button class="tombol kecil bahaya" data-hapusbayar="${esc(r.id)}" style="padding:3px 9px;font-size:11.5px">hapus</button>` : ''}</td></tr>`).join('')}</tbody>
+      <tfoot><tr><td colspan="3">Total</td><td class="angka">${esc(rp(tagih))}</td><td class="angka">${esc(rp(bayar))}</td><td class="angka">${esc(rp(tagih - bayar))}</td><td></td></tr></tfoot></table></div>
+    ${p.cicilan ? '<p class="samar" style="font-size:12px;margin:10px 0 0">Baris dari berkas Excel diubah di berkasnya sendiri; baris pembayaran dari aplikasi bisa diubah atau dihapus di sini.</p>' : ''}
+  </section>
+  <section class="bagian"><span class="label">Tampilan untuk dapur (PDF)</span><div class="lembar" id="rLembar" style="margin-top:10px">${lembarCicilan(p, R)}</div></section>`;
+
+  const ulang = () => vPiutangRinci(el, ref);
+  // ----- catat pembayaran
+  if ($('#rBayar', el)) $('#rBayar', el).onclick = () => { $('#rForm', el).innerHTML = `<div class="kartu" style="margin-top:12px"><span class="label">Catat pembayaran</span>
+      <div class="grid g3" style="margin-top:10px"><label class="isian">Jumlah<input type="number" id="rbJml" inputmode="numeric" min="1" placeholder="0"></label><label class="isian">Tanggal<input type="date" id="rbTgl" value="${hIni}"></label><label class="isian">Keterangan<input id="rbKet" placeholder="transfer, tunai"></label></div>
+      <div class="baris-aksi" style="margin-top:10px"><button class="tombol utama kecil" id="rbSimpan">Simpan pembayaran</button><button class="tombol kecil" id="rbBatal">Batal</button></div></div>`;
+    $('#rbJml', el).focus();
+    $('#rbBatal', el).onclick = ulang;
+    $('#rbSimpan', el).onclick = async () => { const jumlah = +$('#rbJml', el).value || 0, t = $('#rbTgl', el).value, sisa = p.nominal;
+      if (jumlah <= 0) return pesan('Jumlah belum diisi.', true);
+      if (jumlah > sisa) return pesan('Lebih besar dari sisa piutang (' + rp(sisa) + ').', true);
+      try { await simpanPiutang({ ...PIU, bayar: [...PIU.bayar, { id: idBaru(), ref, tgl: t || hIni, jumlah, ket: $('#rbKet', el).value.trim() }] });
+        if (p.sumber === 'invoice' && jumlah >= sisa) await setLunasInvoice(p.invId, true, t);
+        pesan('Pembayaran ' + rp(jumlah) + ' dicatat, sisa ' + rp(sisa - jumlah)); ulang(); } catch (er) { pesan(er.message, true); } }; };
+  // ----- ubah / hapus pembayaran
+  $$('[data-ubahbayar]', el).forEach(b => b.onclick = () => { f.ubahBayar = b.dataset.ubahbayar; ulang(); });
+  if ($('#ubBatal', el)) $('#ubBatal', el).onclick = () => { f.ubahBayar = null; ulang(); };
+  if ($('#ubSimpan', el)) $('#ubSimpan', el).onclick = async () => { const jumlah = +$('#ubJml', el).value || 0; if (jumlah <= 0) return pesan('Jumlah belum diisi.', true);
+    const lama = PIU.bayar.find(x => x.id === f.ubahBayar); if (jumlah - lama.jumlah > p.nominal) return pesan('Lebih besar dari sisa piutang.', true);
+    try { await simpanPiutang({ ...PIU, bayar: PIU.bayar.map(x => x.id === f.ubahBayar ? { ...x, jumlah, tgl: $('#ubTgl', el).value || x.tgl, ket: $('#ubKet', el).value.trim() } : x) });
+      f.ubahBayar = null; pesan('Pembayaran diubah'); ulang(); } catch (er) { pesan(er.message, true); } };
+  $$('[data-hapusbayar]', el).forEach(b => b.onclick = async () => { if (!confirm('Hapus pembayaran ini? Sisa piutang bertambah lagi.')) return;
+    try { await simpanPiutang({ ...PIU, bayar: PIU.bayar.filter(x => x.id !== b.dataset.hapusbayar) }); if (p.sumber === 'invoice') await setLunasInvoice(p.invId, false); pesan('Pembayaran dihapus'); ulang(); } catch (er) { pesan(er.message, true); } });
+  // ----- ubah piutang
+  $('#rUbah', el).onclick = () => { const kunciNominal = p.sumber === 'invoice';
+    $('#rForm', el).innerHTML = `<div class="kartu" style="margin-top:12px"><span class="label">Ubah piutang</span>
+      <div class="grid g3" style="margin-top:10px">
+        ${p.usaha ? '' : `<label class="isian">Nama yang berutang<input id="upNama" value="${esc(p.pihak)}"></label>`}
+        <label class="isian">Jumlah piutang awal${kunciNominal ? ' (dari invoice)' : ''}<input type="number" id="upNom" inputmode="numeric" value="${p.awal}" ${kunciNominal ? 'disabled' : ''}></label>
+        ${p.cicilan || kunciNominal ? '' : `<label class="isian">Tanggal<input type="date" id="upTgl" value="${esc(p.tanggal || '')}"></label>`}
+        <label class="isian">Jatuh tempo<input type="date" id="upTempo" value="${esc(p.jatuhTempo || '')}"></label>
+        <label class="isian" style="grid-column:span 2">Catatan<input id="upCat" value="${esc(p.catatan || '')}"></label>
+      </div>
+      ${p.sumber === 'laporan' ? `<p class="samar" style="font-size:12px;margin:8px 0 0">Piutang ini dari buku piutang Excel. Perubahan disimpan sebagai koreksi di aplikasi; berkas Excel tidak diubah.${u ? ' <button class="tombol kecil" id="upReset" style="padding:3px 9px;font-size:11.5px">Kembalikan seperti buku Excel</button>' : ''}</p>` : ''}
+      <div class="baris-aksi" style="margin-top:10px"><button class="tombol utama kecil" id="upSimpan">Simpan perubahan</button><button class="tombol kecil" id="upBatal">Batal</button></div></div>`;
+    $('#upBatal', el).onclick = ulang;
+    if ($('#upReset', el)) $('#upReset', el).onclick = async () => { const ub = { ...(PIU.ubah || {}) }; delete ub[ref]; try { await simpanPiutang({ ...PIU, ubah: ub }); pesan('Kembali seperti buku Excel'); ulang(); } catch (er) { pesan(er.message, true); } };
+    $('#upSimpan', el).onclick = async () => {
+      const nominal = +$('#upNom', el).value || 0; if (!kunciNominal && nominal <= 0) return pesan('Jumlah piutang tidak boleh kosong.', true);
+      if (!kunciNominal && nominal < p.dibayar) return pesan('Jumlah lebih kecil dari yang sudah dibayar (' + rp(p.dibayar) + ').', true);
+      const isi = { jatuhTempo: $('#upTempo', el).value || null, catatan: $('#upCat', el).value.trim() };
+      if ($('#upNama', el)) isi.pihak = $('#upNama', el).value.trim() || p.pihak;
+      if ($('#upTgl', el)) isi.tanggal = $('#upTgl', el).value || null;
+      if (!kunciNominal) isi.nominal = nominal;
+      let baru;
+      if (p.sumber === 'app') baru = { ...PIU, baru: PIU.baru.map(x => x.id === p.id ? { ...x, ...isi, outlet: x.usaha ? x.outlet : (isi.pihak || x.outlet) } : x) };
+      else { if (p.sumber === 'laporan' && nominal === p.nominalBuku) delete isi.nominal; baru = { ...PIU, ubah: { ...(PIU.ubah || {}), [ref]: { ...((PIU.ubah || {})[ref] || {}), ...isi } } }; }
+      try { await simpanPiutang(baru); pesan('Piutang diubah'); ulang(); } catch (er) { pesan(er.message, true); } }; };
+  // ----- PDF dan kirim tabel untuk dapur
+  const jalan = async (tombol, kerja) => { const t = tombol.innerHTML; tombol.disabled = true; tombol.textContent = 'Menyiapkan...'; try { await kerja(); } catch (er) { pesan(er.message, true); } finally { tombol.disabled = false; tombol.innerHTML = t; } };
+  $('#rPdf', el).onclick = () => jalan($('#rPdf', el), async () => { unduhBlob(await pdfLembar(lembarCicilan(p, R)), namaBerkas + '.pdf'); pesan('PDF diunduh: ' + namaBerkas + '.pdf'); });
+  if ($('#rKirim', el)) $('#rKirim', el).onclick = () => jalan($('#rKirim', el), async () => { const blob = await pdfLembar(lembarCicilan(p, R)), berkas = new File([blob], namaBerkas + '.pdf', { type: 'application/pdf' });
+    if (navigator.canShare({ files: [berkas] })) await navigator.share({ files: [berkas], title: namaBerkas }).catch(() => {}); else { unduhBlob(blob, berkas.name); pesan('HP ini tidak bisa membagikan langsung, PDF diunduh'); } });
 }
 
 // ---------- NERACA
