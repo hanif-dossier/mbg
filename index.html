@@ -486,6 +486,8 @@ async function simpanNilai(kunci, nilai) {
   if (!r.ok) throw new Error(r.pesan || 'Gagal menyimpan.');
 }
 // Pekan gaji karyawan: Minggu sampai Sabtu (permintaan pemilik, 27 Sep 2026).
+// Pencatatan gaji di aplikasi dimulai 27 Sep 2026 (permintaan pemilik); sebelum itu gaji ada di laporan Excel.
+const mulaiGaji = () => KRY.mulai || '2026-09-27';
 const awalPekanKry = t => { const d = tglD(t); d.setDate(d.getDate() - d.getDay()); return d.toLocaleDateString('sv-SE'); };
 // Gaji satu orang dalam satu pekan: dihitung per hari (hadir = upah harian, setengah hari = separuh upah).
 // Kalau pemilik mengetik gaji manual untuk pekan itu, angka manual yang dipakai.
@@ -532,7 +534,8 @@ function vOperasional(el, [tab]) {
       ${senin !== pekanIni ? '<button class="tombol kecil" id="bPekanIni">Pekan ini</button>' : '<span class="pil hijau">pekan ini</span>'}</div>
     <div id="opIsi"></div>
   </section>`;
-  $('#bPekanL', el).onclick = () => { PEKAN_OP = tambahHari(senin, -7); tampil(); };
+  if (tab === 'absensi' && senin <= awalPekanKry(mulaiGaji())) { $('#bPekanL', el).disabled = true; $('#bPekanL', el).style.opacity = .35; }
+  $('#bPekanL', el).onclick = () => { if (tab === 'absensi' && senin <= awalPekanKry(mulaiGaji())) return; PEKAN_OP = tambahHari(senin, -7); tampil(); };
   $('#bPekanN', el).onclick = () => { PEKAN_OP = tambahHari(senin, 7); tampil(); };
   if ($('#bPekanIni', el)) $('#bPekanIni', el).onclick = () => { PEKAN_OP = pekanIni; tampil(); };
   (tab === 'absensi' ? opAbsensi : opBiaya)($('#opIsi', el), senin, hariIni);
@@ -540,7 +543,7 @@ function vOperasional(el, [tab]) {
 function opAbsensi(el, awal, hariIni) {
   const hari = [0, 1, 2, 3, 4, 5, 6].map(i => tambahHari(awal, i));
   const orang = KRY.orang.filter(o => o.aktif !== false || hari.some(t => (KRY.absen[t] || {})[o.id]) || KRY.bayar[awal + '|' + o.id]);
-  const lapGaji = biayaLaporan(awal).filter(b => b.jenis === 'gaji');
+  const lapGaji = awal < awalPekanKry(mulaiGaji()) ? biayaLaporan(awal).filter(b => b.jenis === 'gaji') : [];
   const usul = {}; for (const w of M) for (const b of w.biaya || []) { const m = String(b.ket || '').match(/^(?:gaji|upah)\s+(.+)$/i); if (m && /^[a-z]/i.test(m[1].trim()) && !/^(antar|upah|gaji)\b/i.test(m[1].trim())) usul[m[1].trim()] = b.jumlah; }
   const belumAda = Object.keys(usul).filter(n => !KRY.orang.some(o => kunciB(o.nama) === kunciB(n)));
   const G = orang.map(o => gajiPekan(o, awal)), tot = G.reduce((a, x) => a + x.gaji, 0), dibayar = G.filter(x => x.bayar).reduce((a, x) => a + x.bayar.jumlah, 0);
@@ -552,10 +555,10 @@ function opAbsensi(el, awal, hariIni) {
   const pinjamTerbaru = (KRY.pinjam || []).slice().sort((a, b) => (b.tgl + (b.dibuat || '')).localeCompare(a.tgl + (a.dibuat || ''))).slice(0, 20);
   const angka = n => (+n || 0).toLocaleString('id-ID', { maximumFractionDigits: 1 });
   el.innerHTML = `
-  <p class="ket">Pekan gaji Minggu sampai Sabtu. Ketuk kotak hari: sekali <b class="hijau">H</b> hadir, dua kali <b class="kunyit">½</b> setengah hari, tiga kali kosong. Gaji dihitung per hari (hari hadir × upah harian) dan bisa diketik manual. Pinjaman bisa dipotong dari gaji saat dibayar.</p>
+  <p class="ket">Pencatatan gaji di aplikasi mulai ${esc(hariNama(mulaiGaji()) + ', ' + tgl(mulaiGaji(), true))}. Pekan gaji Minggu sampai Sabtu. Ketuk kotak hari: sekali <b class="hijau">H</b> hadir, dua kali <b class="kunyit">½</b> setengah hari, tiga kali kosong. Gaji dihitung per hari (hari hadir × upah harian) dan bisa diketik manual. Pinjaman bisa dipotong dari gaji saat dibayar.</p>
   ${orang.length ? `<div class="kartu"><span class="label">Absensi pekan ini</span><div class="tbl-bungkus" style="margin-top:6px"><table class="absen"><thead><tr><th>Karyawan</th>${hari.map(t => `<th>${esc(hariNama(t).slice(0, 3))}<div style="font-weight:500;letter-spacing:0">${tglD(t).getDate()}</div></th>`).join('')}<th class="angka laptop-saja">Hari</th></tr></thead>
     <tbody>${orang.map(o => `<tr><td><b>${esc(o.nama)}</b><div class="samar" style="font-size:12px">${o.upah ? esc(rpS(+o.upah)) + '/hari' : 'upah belum diisi'}</div></td>
-      ${hari.map(t => { const st = (KRY.absen[t] || {})[o.id] || ''; return `<td><button class="hadir ${st} ${t === hariIni ? 'kini' : ''}" data-o="${esc(o.id)}" data-t="${t}" aria-label="${esc(o.nama)} ${esc(hariNama(t))}">${st === 'm' ? 'H' : st === 's' ? '½' : ''}</button></td>`; }).join('')}
+      ${hari.map(t => { const st = (KRY.absen[t] || {})[o.id] || ''; return `<td><button class="hadir ${st} ${t === hariIni ? 'kini' : ''}" data-o="${esc(o.id)}" data-t="${t}" aria-label="${esc(o.nama)} ${esc(hariNama(t))}" ${t < mulaiGaji() ? 'disabled style="opacity:.3"' : ''}>${st === 'm' ? 'H' : st === 's' ? '½' : ''}</button></td>`; }).join('')}
       <td class="angka laptop-saja">${angka(gajiPekan(o, awal).m + gajiPekan(o, awal).s / 2)}</td></tr>`).join('')}</tbody></table></div>
     <span class="pil" id="stAbsen" hidden style="margin-top:8px"></span></div>
 
