@@ -333,7 +333,7 @@ function siapkan() {
   // invoice tidak ditambahkan lagi (supaya tidak dobel kalau omzetnya juga diketik di Excel).
   const sudah = new Set((D.omzetHarian || []).map(x => x.outlet + '|' + x.tanggal));
   HARIAN = [...(D.omzetHarian || [])];
-  for (const v of INVOICE) { const t = totalInv(v); if (!v.tanggal || !t || sudah.has(v.outlet + '|' + v.tanggal)) continue;
+  for (const v of INVOICE) { const t = omzetInv(v); if (!v.tanggal || !t || sudah.has(v.outlet + '|' + v.tanggal)) continue;
     const x = { tanggal: v.tanggal, outlet: v.outlet, omzet: t, invoice: v.id }; HARIAN.push(x); (OUT[v.outlet] ||= { nama: v.outlet, harian: [], minggu: [] }).harian.push(x); }
   HARIAN.sort((a, b) => a.tanggal.localeCompare(b.tanggal));
   for (const w of M) for (const o of w.outlet) { const q = OUT[o.outlet] ||= { nama: o.outlet, harian: [], minggu: [] }; q.minggu.push({ ...o, minggu: w.minggu, awal: w.awal, akhir: w.akhir }); }
@@ -788,7 +788,7 @@ const patokanStok = () => ((D.sumber || []).find(x => /stok barang/i.test(x.berk
 // Barang keluar lewat invoice aplikasi: hanya kalau nama dan satuannya sama persis dengan barang di stok.
 function keluarInvoice(daftar) {
   const out = [];
-  for (const v of INVOICE) for (const x of hitungInv(v).b) {
+  for (const v of INVOICE) for (const x of hitungInv(v).b.filter(x => !x.titip)) {
     const b = daftar.find(b => (kunciB(b.nama) === kunciB(x.barang) || namaInti(b.nama) === kunciB(x.barang)) && kunciB(b.satuan) === kunciB(x.satuan));
     if (b) out.push({ id: 'inv:' + v.id + ':' + x.barang, kode: b.kode, jenis: 'keluar', jumlah: +x.qty, tgl: v.tanggal, ket: `invoice ${judulOutlet(v.outlet)} nota ${nomorNota(v.nomor)}`, dibuat: v.dibuat || '', inv: v.id });
   }
@@ -1160,10 +1160,13 @@ function namaBarang(outlet) {
 const barisKosong = (t = '') => ({ tgl: t, barang: '', qty: '', satuan: '', harga: '', fee: '', modal: '' });
 const tglBaris = (v, x) => v.tanggal;   // satu invoice = satu hari pengantaran
 const tanggalInv = v => [...new Set(hitungInv(v).b.map(x => tglBaris(v, x)))].sort();
-const hitungInv = v => { const b = v.baris.filter(x => x.barang && +x.qty);
-  const sub = b.reduce((a, x) => a + +x.qty * (+x.harga || 0), 0), disk = Math.round(sub * (+v.diskon || 0) / 100);
-  const fee = b.reduce((a, x) => a + +x.qty * (+x.fee || 0), 0), modal = b.reduce((a, x) => a + +x.qty * (+x.modal || 0), 0);
-  return { b, sub, disk, total: sub - disk, fee, modal, laba: sub - disk - modal - fee }; };
+// Barang titipan (x.titip) ikut ditagih ke dapur, tapi bukan omzet, tanpa fee, dan tanpa modal.
+const hitungInv = v => { const b = v.baris.filter(x => x.barang && +x.qty), jml = x => +x.qty * (+x.harga || 0), milik = b.filter(x => !x.titip);
+  const sub = b.reduce((a, x) => a + jml(x), 0), disk = Math.round(sub * (+v.diskon || 0) / 100), titip = b.filter(x => x.titip).reduce((a, x) => a + jml(x), 0);
+  const fee = milik.reduce((a, x) => a + +x.qty * (+x.fee || 0), 0), modal = milik.reduce((a, x) => a + +x.qty * (+x.modal || 0), 0), omzet = sub - disk - titip;
+  return { b, sub, disk, total: sub - disk, titip, omzet, fee, modal, laba: omzet - modal - fee }; };
+const namaNota = x => x.barang + (x.titip && !/titip/i.test(x.barang) ? ' (titipan)' : '');
+const omzetInv = v => hitungInv(v).omzet;
 const rekeningInv = v => (D.rekening || [])[+v.rek] || null;
 
 // ---------- lembar nota (tampil di layar dan dicetak)
@@ -1172,7 +1175,7 @@ function lembarInvoice(v) {
   const urut = banyak ? h.b.slice().sort((a, b) => tglBaris(v, a).localeCompare(tglBaris(v, b))) : h.b;
   let no = 0, tAkhir = null;
   const isiTabel = urut.map(x => { const t = tglBaris(v, x), judul = banyak && t !== tAkhir ? `<tr class="hari-nota"><td colspan="6">${esc(labelHari(t))}</td></tr>` : ''; tAkhir = t; no++;
-    return judul + `<tr><td>${no}</td><td>${esc(x.barang)}</td><td class="kanan">${esc(angkaID(x.qty))}</td><td>${esc(x.satuan)}</td><td class="kanan">${esc(rp(x.harga))}</td><td class="kanan">${esc(rp(+x.qty * (+x.harga || 0)))}</td></tr>`; }).join('');
+    return judul + `<tr><td>${no}</td><td>${esc(namaNota(x))}</td><td class="kanan">${esc(angkaID(x.qty))}</td><td>${esc(x.satuan)}</td><td class="kanan">${esc(rp(x.harga))}</td><td class="kanan">${esc(rp(+x.qty * (+x.harga || 0)))}</td></tr>`; }).join('');
   return `<div class="kop"><div><b>${esc(PENERBIT.nama)}</b><div class="kecil">${esc(PENERBIT.alamat)}</div>${rk ? `<div class="kecil">No. rek ${esc(rk.bank)} ${esc(rk.rekening)} a.n. ${esc(rk.atasNama)}</div>` : ''}</div>
     <div style="text-align:right"><div>Tanggal: <b>${esc(banyak ? `${tgl(T[0], true)} s.d. ${tgl(T.at(-1), true)}` : tgl(T[0] || v.tanggal, true))}</b></div><div>Kepada: <b>${esc(v.toko || judulOutlet(v.outlet))}</b></div>${v.alamat ? `<div class="kecil">${esc(v.alamat)}</div>` : ''}</div></div>
   <h3>NOTA · NOMOR ${esc(nomorNota(v.nomor))}</h3>
@@ -1203,11 +1206,13 @@ const noDokFee = v => `FEE-${nomorNota(v.nomor)}/${judulOutlet(v.outlet).toUpper
 const seninDari = t => { const d = tglD(t); d.setDate(d.getDate() - ((d.getDay() + 6) % 7)); return d.toLocaleDateString('sv-SE'); };
 const tambahHari = (t, n) => { const d = tglD(t); d.setDate(d.getDate() + n); return d.toLocaleDateString('sv-SE'); };
 // cakupan 'minggu': invoice dapur yang sama bertanggal Senin-Minggu minggu itu (yang sedang dibuka memakai isian terkini).
+// Baris untuk lembar fee: barang ber-fee dan barang titipan (fee nol, tetap tampil supaya hitungannya utuh).
+const barisFee = u => hitungInv(u).b.filter(x => +x.qty && (+x.fee || x.titip)).map(x => ({ outlet: u.outlet, tanggal: u.tanggal, nota: 'NOTA ' + nomorNota(u.nomor), barang: x.barang, qty: +x.qty, satuan: x.satuan, fee: x.titip ? 0 : +x.fee, harga: +x.harga || 0, titip: !!x.titip }));
 function rekapInvoice(v, cakupan = 'minggu') {
   const senin = seninDari(v.tanggal), minggu = tambahHari(senin, 6);
   const sumber = cakupan === 'minggu'
     ? [v, ...INVOICE.filter(x => x.outlet === v.outlet && x.id !== v.id && x.tanggal >= senin && x.tanggal <= minggu)] : [v];
-  const rows = sumber.flatMap(u => hitungInv(u).b.filter(x => +x.fee && +x.qty).map(x => ({ outlet: u.outlet, tanggal: u.tanggal, nota: 'NOTA ' + nomorNota(u.nomor), barang: x.barang, qty: +x.qty, satuan: x.satuan, fee: +x.fee, harga: +x.harga || 0 })));
+  const rows = sumber.flatMap(u => barisFee(u));
   const o = rekapFee(rows)[0] || { outlet: v.outlet, total: 0, nota: new Set(), barang: {}, hari: {} }; o.mitra = v.mitra;
   return cakupan === 'minggu' ? { o, dari: senin, sampai: minggu, noDok: `FEE-${judulOutlet(v.outlet).toUpperCase().replace(/\s+/g, '')}/${senin.replace(/-/g, '')}` }
     : { o, dari: v.tanggal, sampai: v.tanggal, noDok: noDokFee(v) };
@@ -1277,7 +1282,7 @@ function editorInvoice(el) {
         <label style="display:flex;gap:8px;align-items:center;margin-top:10px;font-size:13.5px"><input type="checkbox" id="dbFee"> Dapur ini memakai fee mitra</label>
         <div class="baris-aksi" style="margin-top:12px"><button class="tombol utama kecil" id="dbSimpan">Simpan dapur</button><button class="tombol kecil" id="dbBatal">Batal</button></div>
       </div>
-      <div class="tbl-bungkus" style="margin-top:16px"><table class="ed"><thead><tr><th>No</th><th style="min-width:170px">Barang</th><th class="angka">Banyaknya</th><th>Satuan</th><th class="angka">Harga</th><th class="angka">Jumlah</th>${adaFee ? '<th class="angka">Fee/sat</th>' : ''}<th class="angka" title="Tidak dicetak">Modal/sat</th><th></th></tr></thead>
+      <div class="tbl-bungkus" style="margin-top:16px"><table class="ed"><thead><tr><th>No</th><th style="min-width:170px">Barang</th><th class="angka">Banyaknya</th><th>Satuan</th><th class="angka">Harga</th><th class="angka">Jumlah</th><th title="Bahan titipan dari pihak dapur: ikut ditagih, tapi bukan omzet dan tanpa fee">Titipan</th>${adaFee ? '<th class="angka">Fee/sat</th>' : ''}<th class="angka" title="Tidak dicetak">Modal/sat</th><th></th></tr></thead>
         <tbody id="tBaris">${v.baris.map((x, i) => barisEditor(x, i, adaFee)).join('')}</tbody></table></div>
       <datalist id="dlBarang">${namaBarang(v.outlet).map(n => `<option value="${esc(n)}">`).join('')}</datalist>
       <div class="baris-aksi" style="margin-top:12px;justify-content:space-between">
@@ -1312,7 +1317,7 @@ function editorInvoice(el) {
     $$('[data-cakupan]', el).forEach(b => b.onclick = () => { v._cakupan = b.dataset.cakupan; segar(); });
     $('#bCetakFee').hidden = !adaIsiFee; $('#bExcelFee').hidden = !adaIsiFee; $('#bPdfFee').hidden = !adaIsiFee;
     $('#cetak').innerHTML = adaIsiFee && v._tampil === 'fee' ? lembarMitraInvoice(v) : lembarInvoice(v);
-    $('#ringkasInv').innerHTML = `<span class="pil hijau">Total ${esc(rp(h.total))}</span>${adaFee ? `<span class="pil kunyit">Fee dapur ${esc(rp(h.fee))}</span>` : '<span class="pil">Dapur ini tanpa fee</span>'}${h.modal ? `<span class="pil">Modal ${esc(rp(h.modal))}</span><span class="pil ${h.laba >= 0 ? 'hijau' : 'merah'}">Laba kotor ${esc(rp(h.laba))} · ${esc(pc(h.laba, h.total))}</span>` : '<span class="pil">Isi modal untuk melihat laba</span>'}`;
+    $('#ringkasInv').innerHTML = `<span class="pil hijau">Total ${esc(rp(h.total))}</span>${h.titip ? `<span class="pil">Titipan ${esc(rp(h.titip))}, bukan omzet dan tanpa fee</span>` : ''}${adaFee ? `<span class="pil kunyit">Fee dapur ${esc(rp(h.fee))}</span>` : '<span class="pil">Dapur ini tanpa fee</span>'}${h.modal ? `<span class="pil">Modal ${esc(rp(h.modal))}</span><span class="pil ${h.laba >= 0 ? 'hijau' : 'merah'}">Laba kotor ${esc(rp(h.laba))} · ${esc(pc(h.laba, h.total))}</span>` : '<span class="pil">Isi modal untuk melihat laba</span>'}`;
     $$('#tBaris tr').forEach((tr, i) => { const x = v.baris[i]; const j = tr.querySelector('[data-jumlah]'); if (j) j.textContent = x && +x.qty && +x.harga ? rp(+x.qty * +x.harga) : '-'; });
   };
   const ulang = () => editorInvoice(el);
@@ -1350,8 +1355,12 @@ function editorInvoice(el) {
   $('#iDiskon').oninput = e => { v.diskon = +e.target.value || 0; segar(); };
   $('#bTambah').onclick = () => { v.baris.push(barisKosong()); ulang(); setTimeout(() => { const i = $$('#tBaris input[data-k="barang"]').pop(); if (i) i.focus(); }, 30); };
   const tb = $('#tBaris');
-  tb.addEventListener('input', e => { const t = e.target, i = +t.dataset.i, k = t.dataset.k; if (k == null || !v.baris[i]) return; v.baris[i][k] = k === 'barang' || k === 'satuan' ? t.value : t.value; segar(); });
-  tb.addEventListener('change', e => { const t = e.target, i = +t.dataset.i; if (t.dataset.k !== 'barang') return;
+  tb.addEventListener('input', e => { const t = e.target, i = +t.dataset.i, k = t.dataset.k; if (k == null || !v.baris[i] || t.type === 'checkbox') return; v.baris[i][k] = k === 'barang' || k === 'satuan' ? t.value : t.value; segar(); });
+  tb.addEventListener('change', e => { const t = e.target, i = +t.dataset.i;
+    if (t.dataset.k === 'titip') { const x = v.baris[i]; x.titip = t.checked; if (x.titip) { x.fee = ''; x.modal = ''; } else delete x.titip; ulang(); return; }
+    if (t.dataset.k !== 'barang') return;
+    // nama barang yang memuat kata "titip" langsung ditandai titipan
+    if (/titip/i.test(v.baris[i].barang) && !v.baris[i].titip) { v.baris[i].titip = true; v.baris[i].fee = ''; v.baris[i].modal = ''; ulang(); return; }
     const x = v.baris[i], inf = infoBarang(v.outlet, x.barang); if (!inf) return;
     // hanya kotak yang masih kosong yang diisi, supaya ketikan pemilik tidak tertimpa
     if (!x.satuan) x.satuan = inf.satuan; if (!+x.harga) x.harga = inf.harga || ''; if (!+x.modal) x.modal = inf.modal || '';
@@ -1363,7 +1372,7 @@ function editorInvoice(el) {
     try { await setLunasInvoice(v.id, jadi); pesan(jadi ? 'Invoice ditandai lunas' : 'Invoice kembali belum lunas'); ulang(); } catch (er) { pesan(er.message, true); } };
   $('#bSimpan').onclick = async () => {
     const h = hitungInv(v); if (!h.b.length) return pesan('Isi minimal satu barang dengan banyaknya.', true);
-    const data = { ...v, baris: h.b.map(({ tgl, ...x }) => x), total: h.total, fee: h.fee, dibuat: v.dibuat || new Date().toISOString() }; delete data._dari; delete data._tampil; delete data._cakupan;
+    const data = { ...v, baris: h.b.map(({ tgl, ...x }) => x), total: h.total, fee: h.fee, titip: h.titip, omzet: h.omzet, dibuat: v.dibuat || new Date().toISOString() }; delete data._dari; delete data._tampil; delete data._cakupan;
     if (!OUTLET_FEE.includes(v.outlet)) delete data.mitra;
     try { const r = await rpc('mbg_invoice_simpan', { p_token: sesi.baca().token, p_data: data }); if (!r.ok) return pesan(r.pesan || 'Gagal menyimpan.', true);
       data.id = r.id; INVOICE = [data, ...INVOICE.filter(x => x.id !== r.id)].sort((a, b) => (b.tanggal || '').localeCompare(a.tanggal || ''));
@@ -1401,7 +1410,8 @@ function barisEditor(x, i, adaFee) {
   const tarifHint = x => { if (!INV || !x.barang) return ''; const inf = infoBarang(INV.outlet, x.barang); return inf && inf.fee ? String(inf.fee) : ''; };
   const inp = (k, lebar, jenis = 'text', kanan = false, extra = '') => `<td class="sel"><input data-i="${i}" data-k="${k}" type="${jenis}" value="${esc(x[k] ?? '')}" style="min-width:${lebar}px" ${kanan ? 'class="angka"' : ''} ${jenis === 'number' ? 'step="any" inputmode="decimal"' : ''} ${extra}></td>`;
   return `<tr><td class="samar">${i + 1}</td>${inp('barang', 170, 'text', false, 'list="dlBarang" autocomplete="off"')}${inp('qty', 76, 'number', true)}${inp('satuan', 70)}${inp('harga', 96, 'number', true)}
-    <td class="angka" data-jumlah style="padding-top:12px">-</td>${adaFee ? inp('fee', 78, 'number', true, `placeholder="${esc(tarifHint(x))}"`) : ''}${inp('modal', 90, 'number', true)}
+    <td class="angka" data-jumlah style="padding-top:12px">-</td><td style="text-align:center;vertical-align:middle"><input type="checkbox" data-i="${i}" data-k="titip" ${x.titip ? 'checked' : ''} aria-label="Barang titipan" style="width:18px;height:18px"></td>
+    ${adaFee ? (x.titip ? `<td class="sel"><input data-i="${i}" data-k="fee" disabled placeholder="titipan" style="min-width:78px"></td>` : inp('fee', 78, 'number', true, `placeholder="${esc(tarifHint(x))}"`)) : ''}${x.titip ? `<td class="sel"><input data-i="${i}" data-k="modal" disabled placeholder="-" style="min-width:90px"></td>` : inp('modal', 90, 'number', true)}
     <td><button class="tombol-ikon" data-hapus="${i}" title="Hapus baris" aria-label="Hapus baris" style="width:32px;height:32px">×</button></td></tr>`;
 }
 // Pustaka dimuat hanya saat dibutuhkan (dari cdnjs), supaya aplikasi tetap cepat dibuka.
@@ -1491,7 +1501,7 @@ async function unduhExcelInvoice(v) {
     const t = tglBaris(v, x);
     if (banyak && t !== tAkhir) { const r = barisXL(ws, ['', labelHari(t), '', '', '', ''], { tebal: true, isi: XL.hari }); ws.mergeCells(`B${r.number}:F${r.number}`); }
     tAkhir = t; no++;
-    barisXL(ws, [no, x.barang, +x.qty, x.satuan, +x.harga, +x.qty * +x.harga], { format: { 3: XL.qty, 5: XL.rp, 6: XL.rp } });
+    barisXL(ws, [no, namaNota(x), +x.qty, x.satuan, +x.harga, +x.qty * +x.harga], { format: { 3: XL.qty, 5: XL.rp, 6: XL.rp } });
   }
   const bawah = (label, nilai, opsi = {}) => { const r = ws.addRow(['', '', '', '', label, nilai]); [5, 6].forEach(k => { const c = r.getCell(k); c.border = kotakXL(); c.font = { bold: !!opsi.tebal }; if (opsi.isi) c.fill = opsi.isi; });
     r.getCell(6).numFmt = XL.rp; r.getCell(5).alignment = { horizontal: 'right' }; return r; };
@@ -1516,19 +1526,20 @@ async function unduhExcelFeeMitra(v) {
 // ---------- FEE
 function rekapFee(rows) {
   const per = {};
-  for (const r of rows) { const o = per[r.outlet] ||= { outlet: r.outlet, total: 0, jual: 0, nota: new Set(), barang: {}, hari: {}, mitra: mitraTerakhir(r.outlet) };
-    const hr = o.hari[r.tanggal] ||= { tanggal: r.tanggal, nota: new Set(), fee: 0, jual: 0, barang: {} };
-    const k = kunciB(r.barang) + '|' + r.fee + '|' + kunciB(r.satuan) + '|' + (r.harga || 0);
-    const bh = hr.barang[k] ||= { barang: r.barang, satuan: r.satuan, fee: r.fee, harga: r.harga || 0, qty: 0 };
-    bh.qty += r.qty; hr.fee += r.qty * r.fee; hr.jual += r.qty * (r.harga || 0); hr.nota.add(String(r.nota || '').replace(/^NOTA\s*/i, ''));
-    const b = o.barang[k] ||= { barang: r.barang, satuan: r.satuan, fee: r.fee, harga: r.harga || 0, qty: 0 };
-    b.qty += r.qty; o.total += r.qty * r.fee; o.jual += r.qty * (r.harga || 0); o.nota.add(r.nota); }
+  for (const r of rows) { const o = per[r.outlet] ||= { outlet: r.outlet, total: 0, jual: 0, titip: 0, nota: new Set(), barang: {}, hari: {}, mitra: mitraTerakhir(r.outlet) };
+    const hr = o.hari[r.tanggal] ||= { tanggal: r.tanggal, nota: new Set(), fee: 0, jual: 0, titip: 0, barang: {} };
+    const k = kunciB(r.barang) + '|' + r.fee + '|' + kunciB(r.satuan) + '|' + (r.harga || 0) + (r.titip ? '|titip' : '');
+    const bh = hr.barang[k] ||= { barang: r.barang, satuan: r.satuan, fee: r.fee, harga: r.harga || 0, qty: 0, titip: !!r.titip };
+    const nJual = r.qty * (r.harga || 0);
+    bh.qty += r.qty; hr.fee += r.qty * r.fee; hr.jual += nJual; if (r.titip) hr.titip += nJual; hr.nota.add(String(r.nota || '').replace(/^NOTA\s*/i, ''));
+    const b = o.barang[k] ||= { barang: r.barang, satuan: r.satuan, fee: r.fee, harga: r.harga || 0, qty: 0, titip: !!r.titip };
+    b.qty += r.qty; o.total += r.qty * r.fee; o.jual += nJual; if (r.titip) o.titip += nJual; o.nota.add(r.nota); }
   return OUTLET_FEE.map(o => per[o]).filter(Boolean);
 }
 // Fee gabungan satu dapur untuk satu periode, dari semua invoice aplikasi bertanggal di dalamnya.
 function rekapPeriode(outlet, dari, sampai, mitra) {
   const sumber = INVOICE.filter(v => v.outlet === outlet && v.tanggal >= dari && v.tanggal <= sampai);
-  const rows = sumber.flatMap(u => hitungInv(u).b.filter(x => +x.fee && +x.qty).map(x => ({ outlet: u.outlet, tanggal: u.tanggal, nota: 'NOTA ' + nomorNota(u.nomor), barang: x.barang, qty: +x.qty, satuan: x.satuan, fee: +x.fee, harga: +x.harga || 0 })));
+  const rows = sumber.flatMap(u => barisFee(u));
   const o = rekapFee(rows)[0] || { outlet, total: 0, jual: 0, nota: new Set(), barang: {}, hari: {} }; o.mitra = mitra ?? mitraTerakhir(outlet);
   const toko = (sumber.at(-1) || {}).toko;
   return { o, dari, sampai, toko, jumlahInvoice: sumber.length, noDok: `FEE-${judulOutlet(outlet).toUpperCase().replace(/\s+/g, '')}/${dari.replace(/-/g, '')}${sampai !== dari ? '-' + sampai.replace(/-/g, '') : ''}` };
@@ -1547,15 +1558,15 @@ function lembarFee(o, dari, sampai, ext = {}) {
     <div><span>${dari === sampai ? 'Tanggal' : 'Periode'}</span><b>${dari === sampai ? esc(labelHari(dari)) : `${esc(tgl(dari, true))}<br>sampai ${esc(tgl(sampai, true))}`}</b><small class="kecil" style="display:block;margin-top:2px">${H.length} hari pengantaran · ${o.nota.size} nota</small></div></div>
   <h4>Ringkasan per hari</h4>
   <table><thead><tr><th style="width:34px">No</th><th>Hari</th><th>Tanggal</th><th>Nota</th><th style="width:22%"></th><th class="kanan">Penjualan</th><th class="kanan">Fee hari itu</th></tr></thead>
-  <tbody>${H.map((h, i) => `<tr><td>${i + 1}</td><td><b>${esc(hariNama(h.tanggal))}</b>${h.top ? '<span class="tanda-top">terbanyak</span>' : ''}</td><td>${esc(tgl(h.tanggal, true))}</td><td>${esc([...h.nota].filter(Boolean).join(', '))}</td><td><span class="batang-hari" style="width:${h.lebar}%"></span></td><td class="kanan">${esc(rp(h.jual))}</td><td class="kanan">${esc(rp(h.fee))}</td></tr>`).join('')}</tbody>
+  <tbody>${H.map((h, i) => `<tr><td>${i + 1}</td><td><b>${esc(hariNama(h.tanggal))}</b>${h.top ? '<span class="tanda-top">terbanyak</span>' : ''}</td><td>${esc(tgl(h.tanggal, true))}</td><td>${esc([...h.nota].filter(Boolean).join(', '))}</td><td><span class="batang-hari" style="width:${h.lebar}%"></span></td><td class="kanan">${esc(rp(h.jual))}${h.titip ? `<div class="kecil">termasuk titipan ${esc(rp(h.titip))}</div>` : ''}</td><td class="kanan">${esc(rp(h.fee))}</td></tr>`).join('')}</tbody>
   <tfoot><tr class="sub"><td colspan="5" class="kanan">Total ${H.length} hari</td><td class="kanan">${esc(rp(o.jual))}</td><td class="kanan">${esc(rp(o.total))}</td></tr></tfoot></table>
   <h4>Rincian barang per hari</h4>
   <table><thead><tr><th>Barang</th><th class="kanan">Banyaknya</th><th>Satuan</th><th class="kanan">Harga jual</th><th class="kanan">Jumlah jual</th><th class="kanan">Fee/sat</th><th class="kanan">Jumlah fee</th></tr></thead>
   <tbody>${H.map(h => { const B = Object.values(h.barang).sort((a, b) => b.qty * b.fee - a.qty * a.fee);
     return `<tr class="hari"><td colspan="7">${esc(labelHari(h.tanggal))}${[...h.nota].filter(Boolean).length ? ' · nota ' + esc([...h.nota].filter(Boolean).join(', ')) : ''}</td></tr>
-      ${B.map(b => `<tr><td>${esc(b.barang)}</td><td class="kanan">${esc(angkaID(b.qty))}</td><td>${esc(b.satuan)}</td><td class="kanan">${esc(rp(b.harga))}</td><td class="kanan">${esc(rp(b.qty * b.harga))}</td><td class="kanan">${esc(rp(b.fee))}</td><td class="kanan">${esc(rp(b.qty * b.fee))}</td></tr>`).join('')}
+      ${B.map(b => `<tr><td>${esc(namaNota(b))}</td><td class="kanan">${esc(angkaID(b.qty))}</td><td>${esc(b.satuan)}</td><td class="kanan">${esc(rp(b.harga))}</td><td class="kanan">${esc(rp(b.qty * b.harga))}</td>${b.titip ? '<td class="kanan kecil">titipan</td><td class="kanan">-</td>' : `<td class="kanan">${esc(rp(b.fee))}</td><td class="kanan">${esc(rp(b.qty * b.fee))}</td>`}</tr>`).join('')}
       <tr class="sub"><td colspan="4" class="kanan">Subtotal ${esc(hariNama(h.tanggal))}</td><td class="kanan">${esc(rp(h.jual))}</td><td></td><td class="kanan">${esc(rp(h.fee))}</td></tr>`; }).join('')}</tbody></table>
-  <div class="mitra-total"><div><div style="font-size:10.5px;letter-spacing:.12em;text-transform:uppercase;color:#8a6a1f;font-weight:700">Total fee untuk mitra · ${H.length} hari</div><i style="font-size:12px;color:#555">${esc(terbilang(o.total))}</i><div style="font-size:12px;color:#555;margin-top:4px">Total penjualan periode ini ${esc(rp(o.jual || 0))}</div></div><b>${esc(rp(o.total))}</b></div>
+  <div class="mitra-total"><div><div style="font-size:10.5px;letter-spacing:.12em;text-transform:uppercase;color:#8a6a1f;font-weight:700">Total fee untuk mitra · ${H.length} hari</div><i style="font-size:12px;color:#555">${esc(terbilang(o.total))}</i><div style="font-size:12px;color:#555;margin-top:4px">Total penjualan periode ini ${esc(rp(o.jual || 0))}${o.titip ? `, termasuk barang titipan ${esc(rp(o.titip))} yang tidak dihitung fee` : ''}</div></div><b>${esc(rp(o.total))}</b></div>
   <div class="mitra-catatan">Rincian ini khusus untuk mitra dan tidak dilampirkan pada nota ke dapur.</div>
   <div class="ttd"><div>Mitra penerima,<br><span class="kecil">&nbsp;</span><div class="garis-ttd">( ${esc(o.mitra || '................................')} )</div></div><div>Hormat kami,<br><span class="kecil">${esc(PENERBIT.nama.toUpperCase())}</span><div class="garis-ttd">( ${esc(namaTtd())} )</div></div></div></div>`;
 }
@@ -1574,19 +1585,20 @@ async function unduhExcelFeePeriode(o, dari, sampai, ext = {}) {
   const sub = t => { const r = ws.addRow([t]); gabung(r); r.getCell(1).font = { bold: true, size: 11, color: { argb: 'FF3A5A47' } }; };
   sub('RINGKASAN PER HARI');
   barisXL(ws, ['No', 'Hari', 'Tanggal', 'Nota', '', 'Penjualan', '', 'Fee hari itu'], { tebal: true, isi: XL.kepala }).eachCell(c => { c.alignment = { horizontal: 'center' }; });
-  H.forEach((h, i) => barisXL(ws, [i + 1, hariNama(h.tanggal) + (h.top ? '  (terbanyak)' : ''), tgl(h.tanggal, true), [...h.nota].filter(Boolean).join(', '), '', h.jual, '', h.fee], { format: { 6: XL.rp, 8: XL.rp } }));
+  H.forEach((h, i) => barisXL(ws, [i + 1, hariNama(h.tanggal) + (h.top ? '  (terbanyak)' : ''), tgl(h.tanggal, true), [...h.nota].filter(Boolean).join(', '), h.titip ? 'titipan ' + rp(h.titip) : '', h.jual, '', h.fee], { format: { 6: XL.rp, 8: XL.rp } }));
   barisXL(ws, ['', '', '', '', `Total ${H.length} hari`, o.jual, '', o.total], { tebal: true, isi: XL.total, format: { 6: XL.rp, 8: XL.rp } });
   ws.addRow([]);
   sub('RINCIAN BARANG PER HARI');
   barisXL(ws, ['No', 'Barang', 'Banyaknya', 'Satuan', 'Harga jual', 'Jumlah jual', 'Fee/sat', 'Jumlah fee'], { tebal: true, isi: XL.kepala }).eachCell(c => { c.alignment = { horizontal: 'center' }; });
   for (const h of H) {
     const r = barisXL(ws, [labelHari(h.tanggal) + ([...h.nota].filter(Boolean).length ? ', nota ' + [...h.nota].filter(Boolean).join(', ') : ''), '', '', '', '', '', '', ''], { tebal: true, isi: XL.hari }); gabung(r);
-    Object.values(h.barang).sort((a, b) => b.qty * b.fee - a.qty * a.fee).forEach((b, i) => barisXL(ws, [i + 1, b.barang, b.qty, b.satuan, b.harga, b.qty * b.harga, b.fee, b.qty * b.fee], { format: { 3: XL.qty, 5: XL.rp, 6: XL.rp, 7: XL.rp, 8: XL.rp } }));
+    Object.values(h.barang).sort((a, b) => b.qty * b.fee - a.qty * a.fee).forEach((b, i) => barisXL(ws, [i + 1, namaNota(b), b.qty, b.satuan, b.harga, b.qty * b.harga, b.titip ? 'titipan' : b.fee, b.titip ? '' : b.qty * b.fee], { format: { 3: XL.qty, 5: XL.rp, 6: XL.rp, 7: XL.rp, 8: XL.rp } }));
     barisXL(ws, ['', '', '', '', 'Subtotal ' + hariNama(h.tanggal), h.jual, '', h.fee], { tebal: true, format: { 6: XL.rp, 8: XL.rp } });
   }
   ws.addRow([]);
   barisXL(ws, ['', '', '', '', 'TOTAL', o.jual, '', o.total], { tebal: true, isi: XL.total, format: { 6: XL.rp, 8: XL.rp } }).getCell(8).font = { bold: true, size: 13 };
   const tb = ws.addRow(['Terbilang fee: ' + terbilang(o.total)]); gabung(tb); tb.getCell(1).font = { italic: true };
+  if (o.titip) { const tt = ws.addRow([`Penjualan termasuk barang titipan ${rp(o.titip)} yang tidak dihitung fee.`]); gabung(tt); tt.getCell(1).font = { size: 10, color: { argb: 'FF555555' } }; }
   ws.addRow([]); ws.addRow([]);
   const t1 = ws.addRow(['', 'Mitra penerima,', '', '', '', 'Hormat kami,']); ws.mergeCells(`F${t1.number}:H${t1.number}`);
   ws.addRow([]); ws.addRow([]); ws.addRow([]);
