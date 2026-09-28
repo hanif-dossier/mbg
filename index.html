@@ -196,7 +196,7 @@ table.absen .hp-baris{display:none}
 .lembar th{background:#eef3ef;font-size:11px;letter-spacing:.06em;text-transform:uppercase}
 .lembar .kanan{text-align:right;white-space:nowrap}
 .lembar .ttd{display:flex;justify-content:space-between;margin-top:26px;text-align:center}
-.lembar .ttd div{min-width:180px}
+.lembar .ttd div{min-width:160px}
 .lembar .ttd .garis-ttd{margin-top:54px;border-top:1px dotted #333;padding-top:4px}
 .lembar .kecil{font-size:11.5px;color:#444}
 .lembar.lembar-pdf{border-radius:0;padding:0;overflow:visible;width:760px} .lembar.lembar-pdf table{min-width:0}
@@ -903,6 +903,7 @@ function vStok(el) {
       <td class="angka redup">${esc(rp(b.harga))}${b.belanjaApp ? '<div class="samar" style="font-size:11px">belanja terakhir</div>' : ''}</td><td class="angka">${esc(rp(b.nilai))}</td></tr>`;
   const beliApp = STOK.gerak.filter(x => x.jenis === 'beli').map(x => ({ ...x, nama: (S.barang.find(b => b.kode === x.kode) || {}).nama || x.kode, app: true }));
   const beliExcel = (D.stok ? D.stok.pembelian : []).map(p => ({ tgl: p.tanggal, nama: p.barang, jumlah: +p.jumlah, harga: +p.harga, ket: p.ket }));
+  const f2 = vStok.f2 ||= { ubah: null };
   const riwayatApp = S.gerak.slice().sort((a, b) => (b.tgl + (b.dibuat || '')).localeCompare(a.tgl + (a.dibuat || ''))).slice(0, 15);
   el.innerHTML = `
   <section class="bagian" style="margin-top:6px">
@@ -918,7 +919,8 @@ function vStok(el) {
   <section class="bagian kartu">
     <span class="label">Catat belanja barang</span>
     <div class="grid g3" style="margin-top:12px">
-      <label class="isian" style="grid-column:span 2">Barang<select id="bBarang">${pilihan.map(b => `<option value="${esc(b.kode)}">${esc(b.nama)} (${esc(b.satuan)})</option>`).join('')}<option value="__baru">+ Barang baru</option></select></label>
+      <label class="isian" style="grid-column:span 2">Barang<input id="bBarang" list="dlStok" autocomplete="off" placeholder="ketik nama barang, pilih dari saran atau tulis barang baru"><span id="bInfo" class="samar" style="font-weight:500;font-size:12px"></span></label>
+      <datalist id="dlStok">${pilihan.map(b => `<option value="${esc(b.nama)}">${esc(b.satuan)}</option>`).join('')}</datalist>
       <label class="isian">Tanggal<input type="date" id="bTgl" value="${hIni}"></label>
       <label class="isian">Jumlah<input type="number" id="bJml" inputmode="decimal" step="any" min="0" placeholder="0"></label>
       <label class="isian">Harga beli per satuan (modal)<input type="number" id="bHarga" inputmode="numeric" min="0"></label>
@@ -928,7 +930,6 @@ function vStok(el) {
     <div id="formBaru" hidden style="margin-top:12px;padding:12px;border:1px dashed var(--garis2);border-radius:14px">
       <span class="label">Barang baru</span>
       <div class="grid g3" style="margin-top:8px">
-        <label class="isian">Nama barang<input id="nbNama" placeholder="misalnya Tahu putih"></label>
         <label class="isian">Kategori<input id="nbKat" list="dlKat" placeholder="Bahan Pokok"></label>
         <label class="isian">Satuan<input id="nbSat" placeholder="kg, papan, karung"></label>
         <label class="isian">Stok minimum<input type="number" id="nbMin" step="any" value="0"></label>
@@ -944,27 +945,37 @@ function vStok(el) {
   ${riwayatApp.length ? `<section class="bagian"><h2>Catatan stok <span class="miring">terbaru</span></h2><div class="kartu"><div class="daftar">${riwayatApp.map(x => { const b = S.barang.find(b => b.kode === x.kode) || { nama: x.kode, satuan: '' };
       return `<div><div style="flex:1;min-width:0"><b>${esc(b.nama)}</b> <span class="pil ${x.jenis === 'beli' ? 'hijau' : x.jenis === 'keluar' ? 'kunyit' : ''}" style="font-size:10.5px;padding:2px 8px">${x.jenis === 'beli' ? 'belanja' : x.jenis === 'keluar' ? 'keluar' : 'hitung ulang'}</span>
         <div class="samar" style="font-size:12px">${esc(tgl(x.tgl))} · ${x.jenis === 'set' ? 'stok jadi ' : x.jenis === 'keluar' ? '− ' : '+ '}${esc(angkaStok(x.jumlah))} ${esc(b.satuan)}${x.jenis === 'beli' ? ' × ' + esc(rp(x.harga)) : ''}${x.tempat ? ' · ' + esc(x.tempat) : ''}${x.ket ? ' · ' + esc(x.ket) : ''}${b.dariExcel && x.tgl <= S.patokan ? ' · sudah termasuk di Excel' : ''}</div></div>
-        <span class="angka">${x.jenis === 'beli' ? esc(rp(x.jumlah * x.harga)) + '<br>' : ''}${x.app ? `<button class="tombol kecil bahaya" data-hapusgerak="${esc(x.id)}" style="padding:3px 9px;font-size:11.5px;margin-top:4px">hapus</button>` : `<a href="#invoice/${encodeURIComponent(x.inv)}" style="font-size:12px">buka invoice</a>`}</span></div>`; }).join('')}</div></div></section>` : ''}
+        <span class="angka">${x.jenis === 'beli' ? esc(rp(x.jumlah * x.harga)) + '<br>' : ''}${x.app ? `<button class="tombol kecil" data-ubahgerak="${esc(x.id)}" style="padding:3px 9px;font-size:11.5px;margin-top:4px">ubah</button> <button class="tombol kecil bahaya" data-hapusgerak="${esc(x.id)}" style="padding:3px 9px;font-size:11.5px;margin-top:4px">hapus</button>` : `<a href="#invoice/${encodeURIComponent(x.inv)}" style="font-size:12px">buka invoice</a>`}</span></div>
+        ${f2.ubah === x.id ? `<div style="display:block;border-bottom:1px solid var(--garis);padding:4px 0 14px"><div class="grid g3">
+          <label class="isian">${x.jenis === 'set' ? 'Stok jadi' : 'Jumlah'} (${esc(b.satuan)})<input type="number" id="ugJml" step="any" inputmode="decimal" value="${x.jumlah}"></label>
+          ${x.jenis === 'beli' ? `<label class="isian">Harga beli per satuan<input type="number" id="ugHarga" inputmode="numeric" value="${x.harga}"></label>` : ''}
+          <label class="isian">Tanggal<input type="date" id="ugTgl" value="${esc(x.tgl)}"></label>
+          ${x.jenis === 'beli' ? `<label class="isian">Belanja di mana<input id="ugTempat" value="${esc(x.tempat || '')}"></label>` : `<label class="isian">Keterangan<input id="ugKet" value="${esc(x.ket || '')}"></label>`}</div>
+          <div class="baris-aksi" style="margin-top:10px"><button class="tombol utama kecil" id="ugSimpan">Simpan perubahan</button><button class="tombol kecil" id="ugBatal">Batal</button></div></div>` : ''}`; }).join('')}</div></div></section>` : ''}
   <section class="bagian"><h2>Belanja <span class="miring">terakhir</span></h2><div class="kartu"><div class="daftar">${[...beliApp, ...beliExcel].sort((a, b) => b.tgl.localeCompare(a.tgl)).slice(0, 20).map(p => `<div><div><b>${esc(p.nama)}</b><div class="samar" style="font-size:12px">${esc(tgl(p.tgl))} · ${esc(angkaStok(p.jumlah))} × ${esc(rp(p.harga))}${p.tempat ? ' · ' + esc(p.tempat) : ''}${p.ket ? ' · ' + esc(p.ket) : ''}${p.app ? '' : ' · dari Excel'}</div></div><span class="angka">${esc(rp(p.jumlah * p.harga))}</span></div>`).join('') || '<div class="kosong">Belum ada belanja.</div>'}</div></div></section>`;
 
   const ulang = () => vStok(el);
   // ----- form belanja
-  const pilih = () => $('#bBarang', el).value;
+  // nama yang diketik dicocokkan ke daftar stok (tanpa beda huruf besar/kecil); kalau tidak ada = barang baru
+  const pilih = () => { const n = kunciB($('#bBarang', el).value); if (!n) return ''; const b = S.barang.find(x => kunciB(x.nama) === n); return b ? b.kode : '__baru'; };
   const segarBelanja = () => { const k = pilih(), b = S.barang.find(x => x.kode === k); $('#formBaru', el).hidden = k !== '__baru';
+    $('#bInfo', el).textContent = b ? `Di stok: ${angkaStok(b.stok)} ${b.satuan}, modal terakhir ${rp(b.harga)} per ${b.satuan}` : k === '__baru' ? 'Belum ada di daftar stok: akan dibuat sebagai barang baru, isi satuan di bawah.' : '';
     const j = +$('#bJml', el).value || 0, h = +$('#bHarga', el).value || 0, pk = +$('#bParkir', el).value || 0;
     $('#bRingkas', el).innerHTML = `<span class="pil hijau">Total belanja ${esc(rp(j * h))}</span>${pk ? `<span class="pil kunyit">Parkir/ongkos ${esc(rp(pk))} masuk Pengeluaran</span>` : ''}${b && h && b.harga && h !== +b.harga ? `<span class="pil">Modal lama ${esc(rp(b.harga))}, jadi ${esc(rp(h))}</span>` : ''}`; };
-  $('#bBarang', el).onchange = () => { const b = S.barang.find(x => x.kode === pilih()); $('#bHarga', el).value = b ? (b.harga || '') : ''; segarBelanja(); };
+  $('#bBarang', el).oninput = () => { const b = S.barang.find(x => x.kode === pilih()); if (b && !$('#bHarga', el).dataset.diketik) $('#bHarga', el).value = b.harga || ''; segarBelanja(); };
+  $('#bHarga', el).addEventListener('input', () => { $('#bHarga', el).dataset.diketik = '1'; });
   ['#bJml', '#bHarga', '#bParkir'].forEach(id => $(id, el).oninput = segarBelanja);
-  $('#bHarga', el).value = (S.barang.find(x => x.kode === pilih()) || {}).harga || ''; segarBelanja();
+  segarBelanja();
   $('#bSimpanBelanja', el).onclick = async () => {
     const jumlah = +$('#bJml', el).value || 0, harga = +$('#bHarga', el).value || 0, t = $('#bTgl', el).value, tempat = $('#bTempat', el).value.trim(), parkir = +$('#bParkir', el).value || 0;
     if (!t) return pesan('Tanggal belum diisi.', true);
     if (jumlah <= 0) return pesan('Jumlah belanja belum diisi.', true);
     if (harga <= 0) return pesan('Harga beli per satuan belum diisi.', true);
     const baru = { gerak: [...STOK.gerak], ubah: { ...STOK.ubah }, baru: [...STOK.baru] }; let kode = pilih(), nama;
+    if (!kode) return pesan('Nama barang belum diisi.', true);
     if (kode === '__baru') {
-      nama = $('#nbNama', el).value.trim(); const sat = $('#nbSat', el).value.trim();
-      if (!nama || !sat) return pesan('Isi nama dan satuan barang baru.', true);
+      nama = $('#bBarang', el).value.trim().replace(/\s+/g, ' '); const sat = $('#nbSat', el).value.trim();
+      if (!sat) return pesan('Isi satuan barang baru (kg, papan, karung).', true);
       if (S.barang.some(b => kunciB(b.nama) === kunciB(nama))) return pesan(nama + ' sudah ada di daftar stok.', true);
       kode = 'APP-' + idBaru(); baru.baru.push({ kode, nama, kategori: $('#nbKat', el).value.trim() || 'Lainnya', satuan: sat, minimum: +$('#nbMin', el).value || 0, harga });
     } else nama = S.barang.find(b => b.kode === kode).nama;
@@ -993,6 +1004,11 @@ function vStok(el) {
     if ($('#bHapusBarang', el)) $('#bHapusBarang', el).onclick = async () => { if (!confirm('Hapus ' + b.nama + ' dari daftar stok?')) return;
       try { await simpanStok({ ...STOK, baru: STOK.baru.filter(x => x.kode !== b.kode) }); f.buka = null; pesan('Barang dihapus'); ulang(); } catch (er) { pesan(er.message, true); } };
   }
+  $$('[data-ubahgerak]', el).forEach(x => x.onclick = () => { f2.ubah = x.dataset.ubahgerak; ulang(); const e = $('#ugJml', el); if (e) { e.scrollIntoView({ block: 'center' }); e.focus(); } });
+  if ($('#ugBatal', el)) $('#ugBatal', el).onclick = () => { f2.ubah = null; ulang(); };
+  if ($('#ugSimpan', el)) $('#ugSimpan', el).onclick = async () => { const jumlah = +$('#ugJml', el).value; if (!(jumlah >= 0) || $('#ugJml', el).value === '') return pesan('Jumlah belum diisi.', true);
+    const gantiNilai = x => ({ ...x, jumlah, tgl: $('#ugTgl', el).value || x.tgl, ...($('#ugHarga', el) ? { harga: +$('#ugHarga', el).value || x.harga } : {}), ...($('#ugTempat', el) ? { tempat: $('#ugTempat', el).value.trim() } : {}), ...($('#ugKet', el) ? { ket: $('#ugKet', el).value.trim() } : {}) });
+    try { await simpanStok({ ...STOK, gerak: STOK.gerak.map(x => x.id === f2.ubah ? gantiNilai(x) : x) }); f2.ubah = null; pesan('Catatan stok diubah'); ulang(); } catch (er) { pesan(er.message, true); } };
   $$('[data-hapusgerak]', el).forEach(x => x.onclick = async () => { if (!confirm('Hapus catatan stok ini? Stok kembali seperti sebelum dicatat.')) return;
     try { await simpanStok({ ...STOK, gerak: STOK.gerak.filter(g => g.id !== x.dataset.hapusgerak) }); pesan('Catatan dihapus'); ulang(); } catch (er) { pesan(er.message, true); } });
 }
@@ -1374,6 +1390,18 @@ function lembarInvoice(v) {
   <div class="ttd"><div>Tanda terima,<br><span class="kecil">&nbsp;</span><div class="garis-ttd">( ................................ )</div></div><div>Hormat kami,<br><span class="kecil">${esc(PENERBIT.nama.toUpperCase())}</span><div class="garis-ttd">( ${esc(rk ? rk.atasNama : namaTtd())} )</div></div></div>`;
 }
 
+// Surat jalan: daftar barang yang diantar tanpa harga, untuk ditandatangani penerima di dapur.
+function lembarSuratJalan(v) {
+  const h = hitungInv(v);
+  return `<div class="kop"><div><b>${esc(PENERBIT.nama)}</b><div class="kecil">${esc(PENERBIT.alamat)}</div></div>
+    <div style="text-align:right"><div>Tanggal: <b>${esc(tgl(v.tanggal, true))}</b></div><div>Kepada: <b>${esc(v.toko || judulOutlet(v.outlet))}</b></div>${v.alamat ? `<div class="kecil">${esc(v.alamat)}</div>` : ''}</div></div>
+  <h3>SURAT JALAN · NOMOR ${esc(nomorNota(v.nomor))}</h3>
+  <table><thead><tr><th style="width:34px">No</th><th>Nama barang</th><th class="kanan">Banyaknya</th><th>Satuan</th><th style="width:28%">Keterangan</th></tr></thead>
+  <tbody>${h.b.map((x, i) => `<tr><td>${i + 1}</td><td>${esc(namaNota(x))}</td><td class="kanan">${esc(angkaID(x.qty))}</td><td>${esc(x.satuan)}</td><td></td></tr>`).join('') || '<tr><td colspan="5" style="text-align:center;color:#777">Belum ada barang</td></tr>'}</tbody>
+  <tfoot><tr><td colspan="2" class="kanan"><b>Jumlah jenis barang</b></td><td class="kanan"><b>${h.b.length}</b></td><td colspan="2"></td></tr></tfoot></table>
+  <div class="kecil" style="margin-top:8px">Barang di atas sudah diterima dalam keadaan baik dan jumlahnya sesuai.</div>
+  <div class="ttd"><div>Penerima,<br><span class="kecil">&nbsp;</span><div class="garis-ttd">( ................................ )</div></div><div>Pengirim,<br><span class="kecil">&nbsp;</span><div class="garis-ttd">( ................................ )</div></div><div>Hormat kami,<br><span class="kecil">${esc(PENERBIT.nama.toUpperCase())}</span><div class="garis-ttd">( ${esc(namaTtd())} )</div></div></div>`;
+}
 // Pemberitahuan fee untuk mitra. p = { noDok, mitra, outlet, toko, dasar:[[label, isi]], rows:[{barang,qty,satuan,fee}], catatan }
 function lembarMitra(p) {
   const rows = p.rows.filter(x => +x.fee && +x.qty), total = rows.reduce((a, x) => a + +x.qty * +x.fee, 0);
@@ -1485,9 +1513,11 @@ function editorInvoice(el) {
     <div class="baris-aksi aksi-lekat" style="margin-top:14px">
       <button class="tombol utama" id="bSimpan">Simpan</button>
       <button class="tombol" id="bPdf">${ik('unduh', 16)} PDF nota</button>
+      <button class="tombol" id="bPdfSj">${ik('unduh', 16)} PDF surat jalan</button>
       <button class="tombol" id="bPdfFee" hidden>${ik('unduh', 16)} PDF fee mitra</button>
       ${navigator.canShare ? `<button class="tombol" id="bKirim">${ik('kirim', 16)} Kirim</button>` : ''}
       <button class="tombol" id="bCetak">${ik('cetak', 16)} Cetak nota</button>
+      <button class="tombol" id="bCetakSj">${ik('cetak', 16)} Cetak surat jalan</button>
       <button class="tombol" id="bCetakFee" hidden>${ik('cetak', 16)} Cetak fee mitra</button>
       <button class="tombol" id="bExcel">${ik('unduh', 16)} Excel nota</button>
       <button class="tombol" id="bExcelFee" hidden>${ik('unduh', 16)} Excel fee mitra</button>
@@ -1498,15 +1528,15 @@ function editorInvoice(el) {
   const segar = () => {
     const h = hitungInv(v);
     // Lembar fee mitra hanya ada kalau fee diisi (pemilik: kalau fee tidak dicantumkan, fee mitra tidak dibuat).
-    const adaIsiFee = adaFee && h.fee > 0; if (!adaIsiFee) v._tampil = 'nota';
-    $('#tabLembar').innerHTML = adaIsiFee ? `<div class="tab-baris" role="tablist"><button class="tab ${v._tampil !== 'fee' ? 'aktif' : ''}" data-tampil="nota">Nota untuk dapur</button><button class="tab ${v._tampil === 'fee' ? 'aktif' : ''}" data-tampil="fee">Fee untuk mitra</button></div>
+    const adaIsiFee = adaFee && h.fee > 0; if (!adaIsiFee && v._tampil === 'fee') v._tampil = 'nota';
+    $('#tabLembar').innerHTML = `<div class="tab-baris" role="tablist"><button class="tab ${!v._tampil || v._tampil === 'nota' ? 'aktif' : ''}" data-tampil="nota">Nota untuk dapur</button><button class="tab ${v._tampil === 'sj' ? 'aktif' : ''}" data-tampil="sj">Surat jalan</button>${adaIsiFee ? `<button class="tab ${v._tampil === 'fee' ? 'aktif' : ''}" data-tampil="fee">Fee untuk mitra</button>` : ''}</div>
       ${v._tampil === 'fee' ? (() => { const r = rekapInvoice(v, 'minggu'), n = Object.keys(r.o.hari).length;
         return `<div class="pil-baris" style="margin-top:10px"><button class="tab ${(v._cakupan || 'minggu') === 'minggu' ? 'aktif' : ''}" data-cakupan="minggu">Seminggu · ${esc(tglP(r.dari))} - ${esc(tglP(r.sampai))} (${n} hari)</button><button class="tab ${v._cakupan === 'nota' ? 'aktif' : ''}" data-cakupan="nota">Nota ini saja</button></div>
-        <p class="samar" style="font-size:12.5px;margin:8px 0 0">Seminggu mengumpulkan fee dari semua invoice ${esc(judulOutlet(v.outlet))} yang tersimpan pada Senin sampai Minggu itu, termasuk invoice ini. Untuk periode lain (pekan lalu, sebulan, tanggal bebas) pakai <a href="#fee/gabung/${encodeURIComponent(v.outlet)}">Fee mitra gabungan</a>.</p>`; })() : ''}` : '<span class="label">Pratinjau nota</span>';
+        <p class="samar" style="font-size:12.5px;margin:8px 0 0">Seminggu mengumpulkan fee dari semua invoice ${esc(judulOutlet(v.outlet))} yang tersimpan pada Senin sampai Minggu itu, termasuk invoice ini. Untuk periode lain (pekan lalu, sebulan, tanggal bebas) pakai <a href="#fee/gabung/${encodeURIComponent(v.outlet)}">Fee mitra gabungan</a>.</p>`; })() : ''}`;
     $$('[data-tampil]', el).forEach(b => b.onclick = () => { v._tampil = b.dataset.tampil; segar(); });
     $$('[data-cakupan]', el).forEach(b => b.onclick = () => { v._cakupan = b.dataset.cakupan; segar(); });
     $('#bCetakFee').hidden = !adaIsiFee; $('#bExcelFee').hidden = !adaIsiFee; $('#bPdfFee').hidden = !adaIsiFee;
-    $('#cetak').innerHTML = adaIsiFee && v._tampil === 'fee' ? lembarMitraInvoice(v) : lembarInvoice(v);
+    $('#cetak').innerHTML = adaIsiFee && v._tampil === 'fee' ? lembarMitraInvoice(v) : v._tampil === 'sj' ? lembarSuratJalan(v) : lembarInvoice(v);
     $('#ringkasInv').innerHTML = `<span class="pil hijau">Total ${esc(rp(h.total))}</span>${h.titip ? `<span class="pil">Titipan mitra ${esc(rp(h.titip))}: ikut ditagih, masuk ke mitra, bukan omzet</span>` : ''}${adaFee ? `<span class="pil kunyit">Fee dapur ${esc(rp(h.fee))}</span>` : '<span class="pil">Dapur ini tanpa fee</span>'}${h.modal ? `<span class="pil">Modal ${esc(rp(h.modal))}</span><span class="pil ${h.laba >= 0 ? 'hijau' : 'merah'}">Laba kotor ${esc(rp(h.laba))} · ${esc(pc(h.laba, h.total))}</span>` : '<span class="pil">Isi modal untuk melihat laba</span>'}`;
     $$('#tBaris tr').forEach((tr, i) => { const x = v.baris[i]; const j = tr.querySelector('[data-jumlah]'); if (j) j.textContent = x && +x.qty && +x.harga ? rp(+x.qty * +x.harga) : '-'; });
   };
@@ -1572,12 +1602,12 @@ function editorInvoice(el) {
   const cetak = jenis => { const h = hitungInv(v); if (!h.b.length) return pesan('Belum ada barang untuk dicetak.', true);
     if (jenis === 'fee' && !h.fee) return pesan('Fee belum diisi, jadi lembar fee mitra tidak dibuat.', true);
     v._tampil = jenis; segar();
-    document.title = jenis === 'fee' ? `Fee mitra ${rekapInvoice(v, v._cakupan || 'minggu').noDok}` : `Nota ${nomorNota(v.nomor)} ${judulOutlet(v.outlet)}`;
+    document.title = jenis === 'fee' ? `Fee mitra ${rekapInvoice(v, v._cakupan || 'minggu').noDok}` : `${jenis === 'sj' ? 'Surat jalan' : 'Nota'} ${nomorNota(v.nomor)} ${judulOutlet(v.outlet)}`;
     addEventListener('afterprint', () => { document.title = 'MBG'; }, { once: true }); window.print(); };
   // PDF: lembar yang sama dengan pratinjau, dijadikan berkas A4. Invoice harus sudah disimpan supaya nomornya tercatat.
   const pdf = async (jenis, kirim) => {
     if (!v.id) return pesan('Simpan invoice dulu, supaya nomor nota tercatat dan masuk piutang.', true);
-    const tombol = kirim ? $('#bKirim') : $(jenis === 'fee' ? '#bPdfFee' : '#bPdf'), teks = tombol.innerHTML; tombol.disabled = true; tombol.textContent = 'Membuat PDF...';
+    const tombol = kirim ? $('#bKirim') : $(jenis === 'fee' ? '#bPdfFee' : jenis === 'sj' ? '#bPdfSj' : '#bPdf'), teks = tombol.innerHTML; tombol.disabled = true; tombol.textContent = 'Membuat PDF...';
     try { const { blob, nama } = await buatPdf(jenis, v);
       if (kirim) { const f = new File([blob], nama, { type: 'application/pdf' });
         if (navigator.canShare && navigator.canShare({ files: [f] })) await navigator.share({ files: [f], title: nama.replace(/\.pdf$/, '') }).catch(() => {});
@@ -1586,7 +1616,9 @@ function editorInvoice(el) {
     } catch (er) { pesan(er.message, true); } finally { tombol.disabled = false; tombol.innerHTML = teks; } };
   $('#bPdf').onclick = () => pdf('nota');
   $('#bPdfFee').onclick = () => pdf('fee');
-  if ($('#bKirim')) $('#bKirim').onclick = () => pdf(v._tampil === 'fee' && hitungInv(v).fee ? 'fee' : 'nota', true);
+  $('#bPdfSj').onclick = () => pdf('sj');
+  $('#bCetakSj').onclick = () => cetak('sj');
+  if ($('#bKirim')) $('#bKirim').onclick = () => pdf(v._tampil === 'fee' && hitungInv(v).fee ? 'fee' : v._tampil === 'sj' ? 'sj' : 'nota', true);
   $('#bCetak').onclick = () => cetak('nota');
   if ($('#bCetakFee')) $('#bCetakFee').onclick = () => cetak('fee');
   $('#bExcel').onclick = () => unduhExcelInvoice(v).catch(er => pesan(er.message, true));
@@ -1615,13 +1647,13 @@ function unduhBlob(blob, nama) {
 }
 const namaBerkasInv = (jenis, v) => jenis === 'fee'
   ? ((v._cakupan || 'minggu') === 'minggu' ? `FEE MITRA ${judulOutlet(v.outlet).toUpperCase()} MINGGU ${rekapInvoice(v, 'minggu').dari}` : `FEE MITRA ${judulOutlet(v.outlet).toUpperCase()} NOTA ${nomorNota(v.nomor)}`)
-  : `NOTA ${nomorNota(v.nomor)} ${judulOutlet(v.outlet).toUpperCase()} ${v.tanggal || ''}`.trim();
+  : `${jenis === 'sj' ? 'SURAT JALAN' : 'NOTA'} ${nomorNota(v.nomor)} ${judulOutlet(v.outlet).toUpperCase()} ${v.tanggal || ''}`.trim();
 // Lembar digambar utuh (html2canvas), lalu dipotong per halaman A4 tepat di batas baris tabel supaya tidak ada
 // baris yang terbelah, dan dimasukkan ke PDF (jsPDF). Lebar lembar tetap 760 px di HP maupun laptop.
 async function buatPdf(jenis, v) {
   const h = hitungInv(v); if (!h.b.length) throw new Error('Belum ada barang.');
   if (jenis === 'fee' && !h.fee) throw new Error('Fee belum diisi, jadi lembar fee mitra tidak dibuat.');
-  return { blob: await pdfLembar(jenis === 'fee' ? lembarMitraInvoice(v) : lembarInvoice(v)), nama: namaBerkasInv(jenis, v) + '.pdf' };
+  return { blob: await pdfLembar(jenis === 'fee' ? lembarMitraInvoice(v) : jenis === 'sj' ? lembarSuratJalan(v) : lembarInvoice(v)), nama: namaBerkasInv(jenis, v) + '.pdf' };
 }
 async function pdfLembar(html) {
   await muatSkrip('https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js', () => window.html2canvas, 'Pembuat PDF');
