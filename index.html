@@ -271,7 +271,16 @@ const rentang = (a, b) => { if (!a) return '-'; const A = tglD(a), B = tglD(b ||
 const kapan = iso => { if (!iso) return '-'; const d = new Date(iso);
   return d.toLocaleString('id-ID', { weekday: 'long', day: 'numeric', month: 'long', hour: '2-digit', minute: '2-digit' }).replace('pukul ', '').replace(/\./g, ':').replace(/:(\d\d)$/, '.$1'); };
 const judulOutlet = o => String(o || '').replace(/^MBG\s+/i, '').toLowerCase().replace(/\b\w/g, c => c.toUpperCase()).replace(/\bTpi\b/, 'TPI').replace(/\bPnk\b/, 'PNK').replace(/\bSpo\b/, 'SPO');
-let OUTLET_FEE = [], DAPUR_T = [];   // DAPUR_T: dapur yang ditambah dari aplikasi (belum ada di berkas Excel)   // dapur yang kena fee: dari data (profil.outletFee), diisi di siapkan()
+let OUTLET_FEE = [], DAPUR_T = [], FEE_ATUR = {};   // FEE_ATUR: fee dinyalakan/dimatikan per dapur dari aplikasi (menimpa data Excel)   // DAPUR_T: dapur yang ditambah dari aplikasi (belum ada di berkas Excel)   // dapur yang kena fee: dari data (profil.outletFee), diisi di siapkan()
+// Dapur ber-fee = dari data Excel (profil.outletFee) + dapur tambahan yang ber-fee, lalu ditimpa tombol di aplikasi.
+function hitungOutletFee() { const pr = (D && D.profil) || {}, s = new Set([...(pr.outletFee || []), ...DAPUR_T.filter(d => d.fee).map(d => d.outlet)]);
+  for (const [o, nyala] of Object.entries(FEE_ATUR)) nyala ? s.add(o) : s.delete(o); return [...s]; }
+const simpanDapur = () => simpanNilai('dapur', { tambahan: DAPUR_T, feeAtur: FEE_ATUR });
+// Nyalakan / matikan fee satu dapur. Invoice lama tidak diubah; fee yang sudah tertulis di invoice tetap.
+async function aturFee(outlet, nyala) { const lama = FEE_ATUR[outlet];
+  FEE_ATUR = { ...FEE_ATUR, [outlet]: nyala };
+  try { await simpanDapur(); siapkan(); pesan(`Fee ${judulOutlet(outlet)} ${nyala ? 'aktif' : 'tidak aktif'}`); return true; }
+  catch (er) { FEE_ATUR = { ...FEE_ATUR }; if (lama === undefined) delete FEE_ATUR[outlet]; else FEE_ATUR[outlet] = lama; pesan(er.message, true); return false; } }
 const daftarFee = () => { const n = OUTLET_FEE.map(judulOutlet); return n.length > 1 ? n.slice(0, -1).join(', ') + ', dan ' + n.at(-1) : (n[0] || '-'); };
 
 // ---------- ikon (garis, 24px)
@@ -317,7 +326,7 @@ async function muat() {
   if (!a.ok) { sesi.hapus(); return layarMasuk(a.pesan); }
   D = a.nilai; CATATAN = b.ok ? b.nilai : null; PEMBARUAN = c.ok ? c.nilai : null;
   TARIF = (t.ok && t.nilai) || {}; INVOICE = inv.ok ? inv.invoice : [];
-  KRY = { orang: [], absen: {}, harian: {}, bayar: {}, manual: {}, pinjam: [], ...((kr.ok && kr.nilai) || {}) }; KELUAR = { daftar: [], ...((kl.ok && kl.nilai) || {}) }; PIU = { baru: [], bayar: [], ubah: {}, ...((pu.ok && pu.nilai) || {}) }; DAPUR_T = ((dt.ok && dt.nilai) || {}).tambahan || []; STOK = { gerak: [], ubah: {}, baru: [], ...((st.ok && st.nilai) || {}) };
+  KRY = { orang: [], absen: {}, harian: {}, bayar: {}, manual: {}, pinjam: [], ...((kr.ok && kr.nilai) || {}) }; KELUAR = { daftar: [], ...((kl.ok && kl.nilai) || {}) }; PIU = { baru: [], bayar: [], ubah: {}, ...((pu.ok && pu.nilai) || {}) }; DAPUR_T = ((dt.ok && dt.nilai) || {}).tambahan || []; FEE_ATUR = ((dt.ok && dt.nilai) || {}).feeAtur || {}; STOK = { gerak: [], ubah: {}, baru: [], ...((st.ok && st.nilai) || {}) };
   if (!D) { akar.innerHTML = `<div class="masuk"><div class="kotak"><h1>Belum ada data</h1><p>Data dikirim dari laptop setiap kali berkas Excel MBG disimpan. Nyalakan laptop, lalu buka lagi.</p></div></div>`; return; }
   siapkan(); tampil();
 }
@@ -325,7 +334,7 @@ async function muat() {
 // ---------- olahan data
 let M = [], OUT = {}, BULAN = [], HARIAN = [];   // HARIAN = omzet harian Excel + invoice aplikasi
 function siapkan() {
-  const pr = D.profil || {}; OUTLET_FEE = [...new Set([...(pr.outletFee || []), ...DAPUR_T.filter(d => d.fee).map(d => d.outlet)])]; PENERBIT = { nama: pr.usaha || '', alamat: pr.alamat || '' };
+  const pr = D.profil || {}; OUTLET_FEE = hitungOutletFee(); PENERBIT = { nama: pr.usaha || '', alamat: pr.alamat || '' };
   M = D.mingguan || [];
   // outlet: gabungan omzet harian (patokan, sejak Mei) dan laporan mingguan (laba)
   OUT = {};
@@ -1470,6 +1479,9 @@ function daftarInvoice(el) {
     <h2>Invoice <span class="miring">ke dapur</span></h2>
     <p class="ket">Nota pengajuan tagihan ke dapur dengan kop ${esc(PENERBIT.nama)}. Nomor melanjutkan nota terakhir tiap dapur dan harga terisi dari nota sebelumnya. Buat satu invoice untuk tiap hari pengantaran. Kalau fee diisi (${esc(daftarFee())}), keluar juga lembar terpisah untuk mitra yang mengumpulkan fee seminggu, dirinci per hari. Invoice di sini tidak mengubah berkas Excel; unduh Excel-nya kalau mau disimpan ke folder dapur.</p>
     <div class="baris-aksi" style="margin-bottom:16px"><a class="tombol utama" href="#invoice/baru" id="bBaru">+ Buat invoice baru</a><a class="tombol" href="#fee/tarif">Tarif fee</a><a class="tombol" href="#fee/gabung">${ik('fee', 16)} Fee mitra gabungan</a></div>
+    <details class="kartu" style="margin-bottom:16px" id="feeDapur"><summary style="cursor:pointer"><span class="label" style="display:inline">Fee per dapur</span> <span class="redup" style="font-size:13px">· ${OUTLET_FEE.length} dapur ber-fee dari ${daftarDapur().length}</span></summary>
+      <p class="samar" style="font-size:12.5px;margin:8px 0 4px">Centang dapur yang minta fee untuk mitra. Berlaku untuk invoice baru; invoice lama tidak berubah.</p>
+      <div class="daftar">${daftarDapur().map(d => `<div><label style="display:flex;gap:10px;align-items:center;cursor:pointer;flex:1"><input type="checkbox" data-fee="${esc(d.outlet)}" ${OUTLET_FEE.includes(d.outlet) ? 'checked' : ''}><span><b>${esc(judulOutlet(d.outlet))}</b>${d.aktif === false ? ' <span class="samar" style="font-size:12px">(tidak aktif)</span>' : ''}</span></label><span class="pil ${OUTLET_FEE.includes(d.outlet) ? 'kunyit' : ''}" style="font-size:11px;padding:2px 9px">${OUTLET_FEE.includes(d.outlet) ? 'fee aktif' : 'tanpa fee'}</span></div>`).join('')}</div></details>
     ${DAPUR_T.length ? `<div class="kartu" style="margin-bottom:16px"><span class="label">Dapur yang ditambah di aplikasi</span><div class="daftar" style="margin-top:4px">${DAPUR_T.map(d => { const n = INVOICE.filter(v => v.outlet === d.outlet).length;
       return `<div><div><b>${esc(judulOutlet(d.outlet))}</b>${d.fee ? ' <span class="pil kunyit" style="font-size:10.5px;padding:2px 8px">fee</span>' : ''}<div class="samar" style="font-size:12px">${esc(d.toko)}${d.alamat ? ' · ' + esc(d.alamat) : ''} · ${n} invoice</div></div>${n ? '' : `<button class="tombol kecil bahaya" data-hapusdapur="${esc(d.outlet)}" style="padding:4px 11px;font-size:12px">hapus</button>`}</div>`; }).join('')}</div>
       <p class="samar" style="font-size:12px;margin:8px 0 0">Dapur yang sudah punya invoice tidak bisa dihapus.</p></div>` : ''}
@@ -1479,9 +1491,10 @@ function daftarInvoice(el) {
       : `<div class="kartu kosong">Belum ada invoice yang dibuat di aplikasi.${akhir ? ` Nota terakhir di laporan: minggu ${akhir.minggu}, ${esc(rentang(akhir.awal, akhir.akhir))}.` : ''}</div>`}
   </section>`;
   $('#bBaru', el).onclick = () => { INV = null; };
+  $$('[data-fee]', el).forEach(c => c.onchange = async () => { c.disabled = true; await aturFee(c.dataset.fee, c.checked); daftarInvoice(el); const f = $('#feeDapur', el); if (f) f.open = true; });
   $$('[data-hapusdapur]', el).forEach(b => b.onclick = async () => { if (!confirm('Hapus dapur ' + judulOutlet(b.dataset.hapusdapur) + ' dari daftar?')) return;
     const baru = DAPUR_T.filter(d => d.outlet !== b.dataset.hapusdapur);
-    try { await simpanNilai('dapur', { tambahan: baru }); DAPUR_T = baru; OUTLET_FEE = OUTLET_FEE.filter(o => o !== b.dataset.hapusdapur || ((D.profil || {}).outletFee || []).includes(o)); pesan('Dapur dihapus'); daftarInvoice(el); } catch (er) { pesan(er.message, true); } });
+    try { const lamaT = DAPUR_T; DAPUR_T = baru; delete FEE_ATUR[b.dataset.hapusdapur]; await simpanDapur().catch(e => { DAPUR_T = lamaT; throw e; }); OUTLET_FEE = hitungOutletFee(); pesan('Dapur dihapus'); daftarInvoice(el); } catch (er) { pesan(er.message, true); } });
 }
 function editorInvoice(el) {
   const v = INV, dp = daftarDapur(), adaFee = OUTLET_FEE.includes(v.outlet);
@@ -1498,6 +1511,7 @@ function editorInvoice(el) {
         <label class="isian">Dapur<select id="iDapur">${dp.map(d => `<option value="${esc(d.outlet)}" ${d.outlet === v.outlet ? 'selected' : ''}>${esc(judulOutlet(d.outlet))}${d.aktif === false ? ' (tidak aktif)' : ''}</option>`).join('')}<option value="__baru">+ Tambah dapur baru</option></select></label>
         <label class="isian">Tanggal<input type="date" id="iTgl" value="${esc(v.tanggal)}"></label>
         <label class="isian">Nomor nota<input type="number" id="iNomor" min="1" value="${esc(v.nomor)}" inputmode="numeric"></label>
+        <label style="display:flex;gap:8px;align-items:center;font-size:13.5px;grid-column:1/-1;margin-top:-4px"><input type="checkbox" id="iFee" ${adaFee ? 'checked' : ''}> ${esc(judulOutlet(v.outlet))} minta fee untuk mitra <span class="samar" style="font-size:12px">(bisa dinyalakan atau dimatikan kapan saja)</span></label>
         <label class="isian">Nama dapur di nota<input id="iToko" value="${esc(v.toko)}"></label>
         <label class="isian">Alamat dapur<input id="iAlamat" value="${esc(v.alamat)}"></label>
         ${adaFee ? `<label class="isian">Mitra penerima fee<input id="iMitra" value="${esc(v.mitra || '')}" placeholder="nama mitra di dapur ini"></label>` : ''}
@@ -1562,8 +1576,8 @@ function editorInvoice(el) {
     const outlet = 'MBG ' + nama.toUpperCase().replace(/\s+/g, ' ');
     if (dp.some(d => d.outlet === outlet)) return pesan(judulOutlet(outlet) + ' sudah ada di daftar dapur.', true);
     const d = { outlet, toko: $('#dbToko').value.trim() || outlet, alamat: $('#dbAlamat').value.trim(), fee: $('#dbFee').checked, dibuat: new Date().toLocaleDateString('sv-SE') };
-    try { const baru = [...DAPUR_T, d]; await simpanNilai('dapur', { tambahan: baru }); DAPUR_T = baru;
-      if (d.fee && !OUTLET_FEE.includes(outlet)) OUTLET_FEE.push(outlet);
+    try { const lamaT = DAPUR_T; DAPUR_T = [...DAPUR_T, d]; FEE_ATUR[outlet] = d.fee; await simpanDapur().catch(e => { DAPUR_T = lamaT; delete FEE_ATUR[outlet]; throw e; });
+      OUTLET_FEE = hitungOutletFee();
       v.outlet = outlet; v.toko = d.toko; v.alamat = d.alamat; if (!v.id) v.nomor = 1; v.mitra = '';
       if (!d.fee) { v._tampil = 'nota'; v.baris.forEach(x => { x.fee = ''; }); }
       pesan('Dapur ' + judulOutlet(outlet) + ' ditambahkan'); ulang(); } catch (er) { pesan(er.message, true); } };
@@ -1575,6 +1589,10 @@ function editorInvoice(el) {
     if (!OUTLET_FEE.includes(d.outlet)) v._tampil = 'nota';
     // harga dan fee barang yang sudah diketik disesuaikan dengan dapur baru
     v.baris.forEach(x => { const inf = infoBarang(v.outlet, x.barang); if (inf) x.harga = inf.harga || x.harga; if (!OUTLET_FEE.includes(v.outlet)) x.fee = ''; });
+    ulang(); };
+  $('#iFee').onchange = async e => { e.target.disabled = true; const nyala = e.target.checked;
+    if (!(await aturFee(v.outlet, nyala))) { e.target.checked = !nyala; e.target.disabled = false; return; }
+    if (!nyala) { v._tampil = 'nota'; v.baris.forEach(x => { x.fee = ''; }); } else v.baris.forEach(x => { if (x.barang && (x.fee === '' || x.fee == null)) { const inf = infoBarang(v.outlet, x.barang); if (inf && inf.fee) x.fee = inf.fee; } });
     ulang(); };
   $('#iTgl').oninput = e => { v.tanggal = e.target.value; v.baris.forEach(x => { delete x.tgl; }); segar(); };
   if ($('#iMitra')) $('#iMitra').oninput = e => { v.mitra = e.target.value; segar(); };
