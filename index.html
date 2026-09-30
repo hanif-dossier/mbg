@@ -85,6 +85,8 @@ main{padding-top:26px;padding-bottom:60px}
 .g2{grid-template-columns:repeat(2,minmax(0,1fr))} .g3{grid-template-columns:repeat(3,minmax(0,1fr))} .g4{grid-template-columns:repeat(4,minmax(0,1fr))}
 @media (max-width:860px){ .g3,.g4{grid-template-columns:repeat(2,minmax(0,1fr))} }
 @media (max-width:560px){ .g2,.g3{grid-template-columns:1fr} .bagian > h2{font-size:26px} }
+.fee-saklar{grid-column:1/-1;display:flex;flex-wrap:wrap;align-items:center;gap:8px 14px;padding:10px 14px;border-radius:14px;border:1px dashed var(--garis2);margin-top:-2px}
+.fee-saklar.nyala{border-style:solid;border-color:var(--kunyit)}.fee-saklar .fee-status{color:var(--redup)}.fee-saklar.nyala .fee-status{color:var(--kunyit)}
 .pil{display:inline-flex;align-items:center;gap:6px;font-size:12px;font-weight:600;padding:4px 11px;border-radius:99px;background:rgba(255,255,255,.06);color:var(--redup);white-space:nowrap}
 .pil.hijau{background:var(--hijau-bg);color:var(--hijau)} .pil.kunyit{background:var(--kunyit-bg);color:var(--kunyit)} .pil.merah{background:var(--merah-bg);color:var(--merah)}
 .pil-baris{display:flex;flex-wrap:wrap;gap:8px}
@@ -1511,7 +1513,7 @@ function editorInvoice(el) {
         <label class="isian">Dapur<select id="iDapur">${dp.map(d => `<option value="${esc(d.outlet)}" ${d.outlet === v.outlet ? 'selected' : ''}>${esc(judulOutlet(d.outlet))}${d.aktif === false ? ' (tidak aktif)' : ''}</option>`).join('')}<option value="__baru">+ Tambah dapur baru</option></select></label>
         <label class="isian">Tanggal<input type="date" id="iTgl" value="${esc(v.tanggal)}"></label>
         <label class="isian">Nomor nota<input type="number" id="iNomor" min="1" value="${esc(v.nomor)}" inputmode="numeric"></label>
-        <label style="display:flex;gap:8px;align-items:center;font-size:13.5px;grid-column:1/-1;margin-top:-4px"><input type="checkbox" id="iFee" ${adaFee ? 'checked' : ''}> ${esc(judulOutlet(v.outlet))} minta fee untuk mitra <span class="samar" style="font-size:12px">(bisa dinyalakan atau dimatikan kapan saja)</span></label>
+        <div class="fee-saklar ${adaFee ? 'nyala' : ''}"><span>Fee mitra untuk <b>${esc(judulOutlet(v.outlet))}</b>: <b class="fee-status">${adaFee ? 'aktif' : 'tidak aktif'}</b></span><button type="button" class="tombol kecil ${adaFee ? '' : 'utama'}" id="iFee">${adaFee ? 'Matikan fee' : 'Aktifkan fee'}</button><span class="samar" style="font-size:12px">Kalau dapur ini tiba-tiba minta fee, tekan Aktifkan fee. Bisa dimatikan lagi kapan saja.</span></div>
         <label class="isian">Nama dapur di nota<input id="iToko" value="${esc(v.toko)}"></label>
         <label class="isian">Alamat dapur<input id="iAlamat" value="${esc(v.alamat)}"></label>
         ${adaFee ? `<label class="isian">Mitra penerima fee<input id="iMitra" value="${esc(v.mitra || '')}" placeholder="nama mitra di dapur ini"></label>` : ''}
@@ -1564,7 +1566,7 @@ function editorInvoice(el) {
     $$('[data-cakupan]', el).forEach(b => b.onclick = () => { v._cakupan = b.dataset.cakupan; segar(); });
     $('#bCetakFee').hidden = !adaIsiFee; $('#bExcelFee').hidden = !adaIsiFee; $('#bPdfFee').hidden = !adaIsiFee;
     $('#cetak').innerHTML = adaIsiFee && v._tampil === 'fee' ? lembarMitraInvoice(v) : v._tampil === 'sj' ? lembarSuratJalan(v) : lembarInvoice(v);
-    $('#ringkasInv').innerHTML = `<span class="pil hijau">Total ${esc(rp(h.total))}</span>${h.titip ? `<span class="pil">Titipan mitra ${esc(rp(h.titip))}: ikut ditagih, masuk ke mitra, bukan omzet</span>` : ''}${adaFee ? `<span class="pil kunyit">Fee dapur ${esc(rp(h.fee))}</span>` : '<span class="pil">Dapur ini tanpa fee</span>'}${h.modal ? `<span class="pil">Modal ${esc(rp(h.modal))}</span><span class="pil ${h.laba >= 0 ? 'hijau' : 'merah'}">Laba kotor ${esc(rp(h.laba))} · ${esc(pc(h.laba, h.total))}</span>` : '<span class="pil">Isi modal untuk melihat laba</span>'}`;
+    $('#ringkasInv').innerHTML = `<span class="pil hijau">Total ${esc(rp(h.total))}</span>${h.titip ? `<span class="pil">Titipan mitra ${esc(rp(h.titip))}: ikut ditagih, masuk ke mitra, bukan omzet</span>` : ''}${adaFee ? `<span class="pil kunyit">Fee dapur ${esc(rp(h.fee))}</span>` : '<button type="button" class="pil" data-aktiffee style="cursor:pointer;border:1px dashed var(--kunyit)">Dapur ini tanpa fee · ketuk untuk aktifkan</button>'}${h.modal ? `<span class="pil">Modal ${esc(rp(h.modal))}</span><span class="pil ${h.laba >= 0 ? 'hijau' : 'merah'}">Laba kotor ${esc(rp(h.laba))} · ${esc(pc(h.laba, h.total))}</span>` : '<span class="pil">Isi modal untuk melihat laba</span>'}`;
     $$('#tBaris tr').forEach((tr, i) => { const x = v.baris[i]; const j = tr.querySelector('[data-jumlah]'); if (j) j.textContent = x && +x.qty && +x.harga ? rp(+x.qty * +x.harga) : '-'; });
   };
   const ulang = () => editorInvoice(el);
@@ -1590,10 +1592,12 @@ function editorInvoice(el) {
     // harga dan fee barang yang sudah diketik disesuaikan dengan dapur baru
     v.baris.forEach(x => { const inf = infoBarang(v.outlet, x.barang); if (inf) x.harga = inf.harga || x.harga; if (!OUTLET_FEE.includes(v.outlet)) x.fee = ''; });
     ulang(); };
-  $('#iFee').onchange = async e => { e.target.disabled = true; const nyala = e.target.checked;
-    if (!(await aturFee(v.outlet, nyala))) { e.target.checked = !nyala; e.target.disabled = false; return; }
+  const gantiFee = async tombol => { if (tombol) tombol.disabled = true; const nyala = !OUTLET_FEE.includes(v.outlet);
+    if (!(await aturFee(v.outlet, nyala))) { if (tombol) tombol.disabled = false; return; }
     if (!nyala) { v._tampil = 'nota'; v.baris.forEach(x => { x.fee = ''; }); } else v.baris.forEach(x => { if (x.barang && (x.fee === '' || x.fee == null)) { const inf = infoBarang(v.outlet, x.barang); if (inf && inf.fee) x.fee = inf.fee; } });
     ulang(); };
+  $('#iFee').onclick = e => gantiFee(e.currentTarget);
+  $('#ringkasInv').addEventListener('click', e => { const t = e.target.closest('[data-aktiffee]'); if (t) gantiFee(t); });   // #ringkasInv dibuat baru tiap kali editor digambar
   $('#iTgl').oninput = e => { v.tanggal = e.target.value; v.baris.forEach(x => { delete x.tgl; }); segar(); };
   if ($('#iMitra')) $('#iMitra').oninput = e => { v.mitra = e.target.value; segar(); };
   if ($('#bTarif')) $('#bTarif').onclick = () => { let n = 0;
