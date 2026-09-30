@@ -1098,7 +1098,7 @@ function vPiutang(el, a = []) {
           <label class="isian">Tanggal<input type="date" id="byTgl" value="${hIni}"></label>
           <label class="isian">Keterangan<input id="byKet" placeholder="transfer, tunai"></label></div>
         <div class="baris-aksi" style="margin-top:10px"><button class="tombol utama kecil" id="bySimpan" data-ref="${esc(p.ref)}">Simpan pembayaran</button><button class="tombol kecil" id="byTutup">Batal</button></div>`
-      : `<div class="baris-aksi" style="margin-top:8px"><a class="tombol kecil" href="#piutang/${encodeURIComponent(p.ref)}">${p.cicilan ? 'Rincian cicilan' : 'Rincian & ubah'}</a><button class="tombol kecil" data-buka="${esc(p.ref)}">Catat pembayaran</button>${p.sumber === 'invoice' ? `<button class="tombol kecil" data-lunasinv="${esc(p.invId)}">Tandai lunas</button>` : ''}${p.sumber === 'app' && !p.dibayar ? `<button class="tombol kecil bahaya" data-hapuspiu="${esc(p.id)}">hapus</button>` : ''}</div>`}
+      : `<div class="baris-aksi" style="margin-top:8px"><a class="tombol kecil" href="#piutang/${encodeURIComponent(p.ref)}">${p.cicilan ? 'Rincian cicilan' : 'Rincian & ubah'}</a><button class="tombol kecil" data-buka="${esc(p.ref)}">Catat pembayaran</button>${p.sumber === 'invoice' ? `<button class="tombol kecil" data-lunasinv="${esc(p.invId)}">Tandai lunas</button>` : `<button class="tombol kecil" data-lunas="${esc(p.ref)}">Tandai lunas</button>`}${p.sumber === 'app' && !p.dibayar ? `<button class="tombol kecil bahaya" data-hapuspiu="${esc(p.id)}">hapus</button>` : ''}</div>`}
       </div>
       <span class="angka">${esc(rp(p.nominal))}${p.dibayar ? '<div class="samar" style="font-size:11.5px">sisa</div>' : ''}${u != null && u >= 0 ? `<br><span class="pil ${u > 30 ? 'merah' : u > 14 ? 'kunyit' : ''}" style="margin-top:4px">${u} hari</span>` : ''}</span></div>`; }).join('');
   el.innerHTML = `
@@ -1150,6 +1150,11 @@ function vPiutang(el, a = []) {
   $$('[data-lunasinv]', el).forEach(b => b.onclick = async () => { const v = INVOICE.find(x => x.id === b.dataset.lunasinv);
     if (!confirm(`Tandai invoice ${judulOutlet(v.outlet)} nota ${nomorNota(v.nomor)} sudah lunas? Invoice ini akan hilang dari daftar piutang.`)) return;
     try { await setLunasInvoice(v.id, true); pesan('Invoice ditandai lunas'); ulang(); } catch (er) { pesan(er.message, true); } });
+  // Tandai lunas untuk piutang buku Excel dan piutang yang dicatat di aplikasi: dicatat sebagai pembayaran sebesar sisanya
+  // hari ini, jadi masuk daftar "Sudah lunas" dan bisa dibatalkan dari sana. Berkas Excel tidak diubah.
+  $$('[data-lunas]', el).forEach(b => b.onclick = async () => { const p = P.find(x => x.ref === b.dataset.lunas);
+    if (!confirm(`Tandai ${namaP(p)} ${rp(p.nominal)} sudah lunas hari ini? Bisa dibatalkan lagi dari daftar "Sudah lunas".`)) return;
+    try { await simpanPiutang({ ...PIU, bayar: [...PIU.bayar, { id: idBaru(), ref: p.ref, tgl: hIni, jumlah: p.nominal, ket: 'lunas' }] }); pesan(namaP(p) + ' lunas'); ulang(); } catch (er) { pesan(er.message, true); } });
   $$('[data-hapuspiu]', el).forEach(b => b.onclick = async () => { if (!confirm('Hapus piutang ini? Pakai ini kalau salah catat.')) return;
     try { await simpanPiutang({ ...PIU, baru: PIU.baru.filter(x => x.id !== b.dataset.hapuspiu) }); pesan('Piutang dihapus'); ulang(); } catch (er) { pesan(er.message, true); } });
   $('#bSimpanPiu', el).onclick = async () => {
@@ -1206,7 +1211,7 @@ function vPiutangRinci(el, ref) {
       <div class="kartu ubin"><span class="label">Sisa</span><div class="nilai kecil ${tagih - bayar > 0 ? 'kunyit' : 'hijau'}">${esc(rp(Math.max(0, tagih - bayar)))}</div><small>${tagih - bayar > 0 ? 'belum dibayar' : 'lunas'}</small></div>
     </div>
     <div class="baris-aksi aksi-lekat" style="margin-top:14px">
-      ${tagih - bayar > 0 ? '<button class="tombol utama" id="rBayar">+ Catat pembayaran</button>' : ''}
+      ${tagih - bayar > 0 ? '<button class="tombol utama" id="rBayar">+ Catat pembayaran</button><button class="tombol" id="rLunas">Tandai lunas</button>' : ''}
       <button class="tombol" id="rPdf">${ik('unduh', 16)} PDF tabel</button>
       ${navigator.canShare ? `<button class="tombol" id="rKirim">${ik('kirim', 16)} Kirim</button>` : ''}
       <button class="tombol" id="rUbah">Ubah piutang</button>
@@ -1237,6 +1242,10 @@ function vPiutangRinci(el, ref) {
       try { await simpanPiutang({ ...PIU, bayar: [...PIU.bayar, { id: idBaru(), ref, tgl: t || hIni, jumlah, ket: $('#rbKet', el).value.trim() }] });
         if (p.sumber === 'invoice' && jumlah >= sisa) await setLunasInvoice(p.invId, true, t);
         pesan('Pembayaran ' + rp(jumlah) + ' dicatat, sisa ' + rp(sisa - jumlah)); ulang(); } catch (er) { pesan(er.message, true); } }; };
+  if ($('#rLunas', el)) $('#rLunas', el).onclick = async () => { const sisa = Math.max(0, tagih - bayar);
+    if (!confirm(`Tandai sisa ${rp(sisa)} sudah lunas hari ini?`)) return;
+    try { await simpanPiutang({ ...PIU, bayar: [...PIU.bayar, { id: idBaru(), ref, tgl: hIni, jumlah: sisa, ket: 'lunas' }] });
+      if (p.sumber === 'invoice') await setLunasInvoice(p.invId, true, hIni); pesan('Lunas'); ulang(); } catch (er) { pesan(er.message, true); } };
   // ----- ubah / hapus pembayaran
   $$('[data-ubahbayar]', el).forEach(b => b.onclick = () => { f.ubahBayar = b.dataset.ubahbayar; ulang(); });
   if ($('#ubBatal', el)) $('#ubBatal', el).onclick = () => { f.ubahBayar = null; ulang(); };
