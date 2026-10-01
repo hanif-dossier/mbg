@@ -1,7 +1,7 @@
 {
-  "name": "MBG",
-  "short_name": "MBG",
-  "description": "Aplikasi pribadi.",
+  "name": "NTA",
+  "short_name": "NTA",
+  "description": "Needs that Arise",
   "lang": "id",
   "start_url": "./",
   "scope": "./",

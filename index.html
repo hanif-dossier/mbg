@@ -14,7 +14,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&family=Plus+Jakarta+Sans:wght@400;500;600;700&family=JetBrains+Mono:wght@500&display=swap">
-<title>MBG</title>
+<title>NTA</title>
 <style>
 /* Aplikasi laporan usaha pribadi. Semua angka dan identitas usaha datang dari database setelah masuk dengan sandi;
    kode ini sengaja tidak memuat nama usaha, alamat, rekening, atau nama pelanggan. */
@@ -324,12 +324,12 @@ let D = null, CATATAN = null, PEMBARUAN = null, TARIF = {}, INVOICE = [];
 async function muat() {
   const s = sesi.baca(); if (!s) return layarMasuk();
   const ambil = k => rpc('mbg_ambil_nilai', { p_token: s.token, p_kunci: k });
-  const [a, b, c, t, inv, kr, kl, pu, dt, st] = await Promise.all([ambil('data'), ambil('catatan'), ambil('pembaruan'), ambil('tarif-fee'), rpc('mbg_invoice_daftar', { p_token: s.token }), ambil('karyawan'), ambil('pengeluaran'), ambil('piutang'), ambil('dapur'), ambil('stok')]);
+  const [a, b, c, t, inv, kr, kl, pu, dt, st] = await Promise.all([ambil('data'), ambil('catatan'), ambil('pembaruan'), ambil('tarif-fee'), rpc('mbg_invoice_daftar', { p_token: s.token }), rpc('mbg_gaji_nta', { p_token: s.token }).catch(() => ({ ok: false })), ambil('pengeluaran'), ambil('piutang'), ambil('dapur'), ambil('stok')]);
   if (!a.ok) { sesi.hapus(); return layarMasuk(a.pesan); }
   D = a.nilai; CATATAN = b.ok ? b.nilai : null; PEMBARUAN = c.ok ? c.nilai : null;
   TARIF = (t.ok && t.nilai) || {}; INVOICE = inv.ok ? inv.invoice : [];
-  KRY = { orang: [], absen: {}, harian: {}, bayar: {}, manual: {}, pinjam: [], ...((kr.ok && kr.nilai) || {}) }; KELUAR = { daftar: [], ...((kl.ok && kl.nilai) || {}) }; PIU = { baru: [], bayar: [], ubah: {}, ...((pu.ok && pu.nilai) || {}) }; DAPUR_T = ((dt.ok && dt.nilai) || {}).tambahan || []; FEE_ATUR = ((dt.ok && dt.nilai) || {}).feeAtur || {}; STOK = { gerak: [], ubah: {}, baru: [], ...((st.ok && st.nilai) || {}) };
-  if (!D) { akar.innerHTML = `<div class="masuk"><div class="kotak"><h1>Belum ada data</h1><p>Data dikirim dari laptop setiap kali berkas Excel MBG disimpan. Nyalakan laptop, lalu buka lagi.</p></div></div>`; return; }
+  KRY = bangunKry(kr.ok ? kr.karyawan : []); KRY.diubah = kr.ok ? kr.diubah : null; KRY.gagal = !kr.ok; KELUAR = { daftar: [], ...((kl.ok && kl.nilai) || {}) }; PIU = { baru: [], bayar: [], ubah: {}, ...((pu.ok && pu.nilai) || {}) }; DAPUR_T = ((dt.ok && dt.nilai) || {}).tambahan || []; FEE_ATUR = ((dt.ok && dt.nilai) || {}).feeAtur || {}; STOK = { gerak: [], ubah: {}, baru: [], ...((st.ok && st.nilai) || {}) };
+  if (!D) { akar.innerHTML = `<div class="masuk"><div class="kotak"><h1>Belum ada data</h1><p>Data dikirim dari laptop setiap kali berkas Excel disimpan. Nyalakan laptop, lalu buka lagi.</p></div></div>`; return; }
   siapkan(); tampil();
 }
 
@@ -373,7 +373,7 @@ function tampil() {
   const upd = PEMBARUAN && PEMBARUAN.waktu ? PEMBARUAN.waktu : D.diperbarui;
   akar.innerHTML = `
   <header class="kepala"><div class="bungkus">
-    <a class="merek" href="#beranda"><img src="ikon-any-192.png?v=1" alt=""><span><b>MBG</b><small>${esc((D.profil || {}).singkat || 'Laporan usaha')}</small></span></a>
+    <a class="merek" href="#beranda"><img src="ikon-any-192.png?v=1" alt=""><span><b>NTA</b><small>${esc((D.profil || {}).singkat || 'Needs that Arise')}</small></span></a>
     <nav class="menu-atas" aria-label="Menu">${MENU.map(m => `<a href="#${m[0]}" class="${h === m[0] || (h === 'fee' && m[0] === 'invoice') ? 'aktif' : ''}">${m[1]}</a>`).join('')}</nav>
     <div class="kanan-kepala">
       <a class="pil-hijau" href="#kabar" title="Catatan pembaruan"><span class="titik"></span>${upd ? 'Diperbarui ' + esc(tglP(upd.slice(0, 10))) : 'Belum diperbarui'}</a>
@@ -489,6 +489,18 @@ function vBeranda(el) {
 
 // ---------- OPERASIONAL: absensi & gaji karyawan, pengeluaran kecil dengan keterkaitannya
 let KRY = { orang: [], absen: {}, harian: {}, bayar: {}, manual: {}, pinjam: [] }, KELUAR = { daftar: [] }, PEKAN_OP = null, SIMPAN_ABSEN = null;
+// Sejak 1 Okt 2026 absensi & gaji karyawan NTA dicatat di aplikasi OFU (lembar gaji NTA per karyawan, minggu bernomor:
+// minggu 20 = Senin 21 Sep 2026, 7 kotak Senin..Minggu). Di sini hanya dibaca (mbg_gaji_nta) dan disusun ulang menjadi
+// gaji per tanggal supaya hitungan pekan (Minggu..Sabtu), beranda, dan laba rugi tetap jalan.
+const OFU_URL = 'https://minyak.markasku.my.id';
+const SENIN20 = Date.UTC(2026, 8, 21);
+function bangunKry(daftar) { const harian = {}, orang = [], pinjam = [];
+  for (const k of daftar || []) { orang.push({ id: k.kode, nama: k.nama, aktif: k.aktif !== false, tugas: '' });
+    for (const w of k.nta || []) { const senin = SENIN20 + ((+w.w || 0) - 20) * 7 * 864e5;
+      (w.hari || []).forEach((n, i) => { if (+n > 0) { const t = new Date(senin + i * 864e5).toISOString().slice(0, 10); (harian[t] ||= {})[k.kode] = +n; } }); }
+    for (const d of k.hutang || []) { if (+d.pinjam > 0) pinjam.push({ id: k.kode + '|' + (d.tgl || '') + '|p', orang: k.kode, jenis: 'pinjam', jumlah: +d.pinjam, tgl: d.tgl || '', ket: d.ket || '' });
+      if (+d.bayar > 0) pinjam.push({ id: k.kode + '|' + (d.tgl || '') + '|b', orang: k.kode, jenis: 'bayar', jumlah: +d.bayar, tgl: d.tgl || '', ket: d.ket || '' }); } }
+  return { orang, absen: {}, harian, bayar: {}, manual: {}, pinjam }; }
 const JENIS_KELUAR = ['Parkir', 'Bensin', 'Makan', 'Ongkos antar', 'Perlengkapan', 'Lainnya'];
 const TERKAIT = [['belanja', 'Belanja barang'], ['antar', 'Antar ke dapur'], ['umum', 'Operasional umum'], ['pribadi', 'Pribadi']];
 const namaTerkait = x => x.terkait === 'belanja' ? 'Belanja' + (x.tempat ? ' di ' + x.tempat : ' barang') : x.terkait === 'antar' ? 'Antar ke ' + (x.dapur ? judulOutlet(x.dapur) : 'dapur') : x.terkait === 'pribadi' ? 'Pribadi' : x.terkait === 'gaji' ? 'Gaji karyawan' : 'Operasional umum';
@@ -528,7 +540,8 @@ function keluarPekan(senin) {
   const minggu = tambahHari(senin, 6);
   const app = KELUAR.daftar.filter(x => x.tgl >= senin && x.tgl <= minggu).map(x => ({ ...x, sumber: 'app' }));
   const lap = biayaLaporan(senin).filter(b => b.jenis !== 'gaji').map(b => ({ id: '', tgl: b.tanggal, jenis: b.jenis, ket: b.ket, jumlah: b.jumlah, terkait: !b.operasional ? 'pribadi' : b.jenis === 'Ongkos antar' ? 'antar' : 'umum', sumber: 'laporan' }));
-  const gaji = KRY.orang.map(o => gajiPekan(o, senin)).filter(x => x.bayar).map(x => ({ id: '', tgl: x.bayar.tgl, jenis: 'Gaji', ket: x.o.nama, jumlah: x.bayar.jumlah, terkait: 'gaji', sumber: 'absensi' }));
+  const gaji = KRY.orang.map(o => gajiPekan(o, senin)).filter(x => x.gaji > 0).map(x => { const hari = [6, 5, 4, 3, 2, 1, 0].map(i => tambahHari(senin, i)).find(t => gajiHari(t, x.o.id) > 0);
+    return { id: '', tgl: hari || minggu, jenis: 'Gaji', ket: x.o.nama, jumlah: x.gaji, terkait: 'gaji', sumber: 'absensi' }; });
   return [...app, ...lap, ...gaji].sort((a, b) => b.tgl.localeCompare(a.tgl));
 }
 function vOperasional(el, [tab]) {
@@ -553,112 +566,25 @@ function vOperasional(el, [tab]) {
   (tab === 'absensi' ? opAbsensi : opBiaya)($('#opIsi', el), senin, hariIni);
 }
 function opAbsensi(el, awal, hariIni) {
-  const hari = [0, 1, 2, 3, 4, 5, 6].map(i => tambahHari(awal, i)), mulai = mulaiGaji();
-  const orang = KRY.orang.filter(o => o.aktif !== false || hari.some(t => gajiHari(t, o.id)) || KRY.bayar[awal + '|' + o.id]);
-  const usul = {}; for (const w of M) for (const b of w.biaya || []) { const m = String(b.ket || '').match(/^(?:gaji|upah)\s+(.+)$/i); if (m && /^[a-z]/i.test(m[1].trim()) && !/^(antar|upah|gaji)\b/i.test(m[1].trim())) usul[m[1].trim()] = b.jumlah; }
-  const belumAda = Object.keys(usul).filter(n => !KRY.orang.some(o => kunciB(o.nama) === kunciB(n)));
-  const G = orang.map(o => gajiPekan(o, awal)), tot = G.reduce((a, x) => a + x.gaji, 0), dibayar = G.filter(x => x.bayar).reduce((a, x) => a + x.bayar.jumlah, 0);
-  const nama = id => (KRY.orang.find(o => o.id === id) || {}).nama || '-';
-  const angka = n => (+n || 0).toLocaleString('id-ID', { maximumFractionDigits: 1 });
-  // rekap per minggu: semua pekan yang punya gaji harian atau pembayaran
-  const pekanSet = new Set([...Object.keys(KRY.harian || {}).filter(t => Object.values(KRY.harian[t]).some(n => +n > 0)).map(awalPekanKry), ...Object.keys(KRY.bayar).map(k => k.split('|')[0])]);
-  const rekap = [...pekanSet].sort().reverse().map(a => ({ awal: a, per: KRY.orang.map(o => gajiPekan(o, a)) }));
-  const riwayat = Object.entries(KRY.bayar).map(([k, b]) => ({ awal: k.split('|')[0], id: k.split('|')[1], ...b }));
-  const hariKerja = id => Object.keys(KRY.harian || {}).filter(t => gajiHari(t, id) > 0).length;
-  const semua = KRY.orang.map(o => { const R = riwayat.filter(r => r.id === o.id).sort((a, b) => b.awal.localeCompare(a.awal));
-    const totalGaji = Object.keys(KRY.harian || {}).reduce((a, t) => a + gajiHari(t, o.id), 0);
-    return { o, hari: hariKerja(o.id), gaji: totalGaji, dibayar: R.reduce((a, r) => a + (+r.jumlah || 0), 0), potong: R.reduce((a, r) => a + (+r.potong || 0), 0), sisa: sisaPinjam(o.id), akhir: R[0] }; });
-  const pinjamTerbaru = (KRY.pinjam || []).slice().sort((a, b) => (b.tgl + (b.dibuat || '')).localeCompare(a.tgl + (a.dibuat || ''))).slice(0, 20);
+  const hari = [0, 1, 2, 3, 4, 5, 6].map(i => tambahHari(awal, i)), orang = KRY.orang.filter(o => o.aktif !== false || hari.some(t => gajiHari(t, o.id)));
+  const G = orang.map(o => gajiPekan(o, awal)), tot = G.reduce((a, x) => a + x.gaji, 0);
+  const pekanSet = [...new Set(Object.keys(KRY.harian || {}).map(awalPekanKry))].sort().reverse();
+  const kapan = KRY.diubah ? new Date(KRY.diubah).toLocaleString('id-ID', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' }) : '';
   el.innerHTML = `
-  <p class="ket">Pencatatan gaji mulai ${esc(hariNama(mulai) + ', ' + tgl(mulai, true))}. Ketik gaji tiap karyawan pada hari dan tanggalnya; kosongkan kalau tidak masuk. Tersimpan sendiri. Rekap gaji dihitung per minggu, Minggu sampai Sabtu. Pinjaman bisa dipotong saat gaji dibayar.</p>
-  ${orang.length ? `<div class="kartu"><span class="label">Gaji harian pekan ini</span>
-    <div class="tbl-bungkus" style="margin-top:6px"><table class="ed gaji-harian"><thead><tr><th>Hari, tanggal</th>${orang.map(o => `<th class="angka">${esc(o.nama)}</th>`).join('')}<th class="angka">Jumlah</th></tr></thead>
-      <tbody>${hari.map(t => { const mati = t < mulai, jml = orang.reduce((a, o) => a + gajiHari(t, o.id), 0);
-        return `<tr class="${t === hariIni ? 'hari-ini' : ''}"><td style="white-space:nowrap"><b>${esc(hariNama(t))}</b> <span class="samar">${esc(tglP(t))}</span>${t === hariIni ? ' <span class="pil hijau" style="font-size:10px;padding:1px 7px">hari ini</span>' : ''}</td>
-          ${orang.map(o => `<td class="sel"><input type="number" inputmode="numeric" min="0" step="1000" class="angka" data-gaji="${esc(o.id)}" data-t="${t}" value="${gajiHari(t, o.id) || ''}" placeholder="${mati ? '-' : '0'}" ${mati || KRY.bayar[awal + '|' + o.id] ? 'disabled' : ''} style="min-width:96px"></td>`).join('')}
-          <td class="angka" data-jmlhari="${t}">${jml ? esc(rp(jml)) : '-'}</td></tr>`; }).join('')}</tbody>
-      <tfoot><tr><td>Total pekan</td>${G.map(g => `<td class="angka" data-totorang="${esc(g.o.id)}">${esc(rp(g.gaji))}</td>`).join('')}<td class="angka" id="totPekan">${esc(rp(tot))}</td></tr></tfoot></table></div>
-    <div class="pil-baris" style="margin-top:8px"><span class="pil" id="stAbsen" hidden></span><span class="samar" style="font-size:12px">Kotak kosong berarti tidak masuk. Kotak terkunci kalau gaji pekan itu sudah ditandai dibayar; tekan batal di rekap untuk mengubah.</span></div></div>
-
-  <div class="kartu" style="margin-top:14px"><span class="label">Rekap gaji pekan ini</span>
-    <div class="daftar" style="margin-top:4px">${G.map(g => { const sisa = sisaPinjam(g.o.id);
-      return `<div style="flex-wrap:wrap;align-items:flex-start"><div style="flex:1;min-width:180px"><b>${esc(g.o.nama)}</b>
-          <div class="samar" style="font-size:12px">${g.m} hari masuk · ${esc(rp(g.gaji))}</div>
-          ${sisa > 0 ? `<div style="font-size:12px;margin-top:2px"><span class="pil kunyit">sisa pinjaman ${esc(rp(sisa))}</span></div>` : ''}</div>
-        ${g.bayar ? `<div style="text-align:right;margin-left:auto"><b class="angka">${esc(rp(g.bayar.jumlah))}</b><div class="samar" style="font-size:12px">gaji ${esc(rp(g.bayar.gaji ?? g.bayar.jumlah))}${+g.bayar.potong ? ' − pinjaman ' + esc(rp(g.bayar.potong)) : ''}</div>
-            <div style="margin-top:4px"><span class="pil hijau">dibayar ${esc(tglP(g.bayar.tgl))}</span> <button class="tombol kecil" data-batal="${esc(g.o.id)}" style="padding:3px 9px;font-size:11.5px">batal</button></div></div>`
-          : `<div class="grid g2" style="gap:8px;min-width:230px;flex:1;max-width:360px">
-            <label class="isian">Potong pinjaman<input type="number" inputmode="numeric" data-potong="${esc(g.o.id)}" value="0" min="0" max="${Math.max(0, sisa)}" ${sisa > 0 ? '' : 'disabled'}></label>
-            <button class="tombol kecil utama" data-bayar="${esc(g.o.id)}" style="align-self:end" ${g.gaji > 0 ? '' : 'disabled'}>Tandai dibayar</button></div>`}</div>`; }).join('')}</div>
-    <div class="pil-baris" style="margin-top:12px"><span class="pil">gaji pekan ini ${esc(rp(tot))}</span><span class="pil hijau">sudah dibayar ${esc(rp(dibayar))}</span>${G.filter(x => !x.bayar).reduce((a, x) => a + x.gaji, 0) ? `<span class="pil kunyit">belum dibayar ${esc(rp(G.filter(x => !x.bayar).reduce((a, x) => a + x.gaji, 0)))}</span>` : ''}</div></div>`
-    : '<div class="kartu kosong">Belum ada karyawan. Tambahkan di bawah.</div>'}
-
-  ${rekap.length ? `<div class="kartu" style="margin-top:14px"><span class="label">Rekap gaji per minggu</span>
-    <div class="tbl-bungkus" style="margin-top:6px"><table><thead><tr><th>Pekan</th>${KRY.orang.map(o => `<th class="angka">${esc(o.nama)}</th>`).join('')}<th class="angka">Total</th><th>Status</th></tr></thead>
-      <tbody>${rekap.map(r => { const t = r.per.reduce((a, g) => a + g.gaji, 0), lunas = r.per.filter(g => g.gaji > 0).every(g => g.bayar);
-        return `<tr><td style="white-space:nowrap"><a href="#" data-kepekan="${r.awal}">${esc(rentang(r.awal, tambahHari(r.awal, 6)))}</a></td>${r.per.map(g => `<td class="angka">${g.gaji ? esc(rp(g.gaji)) + `<div class="samar" style="font-size:11px">${g.m} hari</div>` : '-'}</td>`).join('')}<td class="angka"><b>${esc(rp(t))}</b></td><td><span class="pil ${lunas && t ? 'hijau' : t ? 'kunyit' : ''}">${lunas && t ? 'dibayar' : t ? 'belum dibayar' : '-'}</span></td></tr>`; }).join('')}</tbody></table></div></div>` : ''}
-
-  ${KRY.orang.length ? `<div class="kartu" style="margin-top:14px"><span class="label">Pinjaman karyawan</span>
-    <div class="grid g3" style="margin-top:10px">
-      <label class="isian">Karyawan<select id="pjOrang">${KRY.orang.map(o => `<option value="${esc(o.id)}">${esc(o.nama)}</option>`).join('')}</select></label>
-      <label class="isian">Jenis<select id="pjJenis"><option value="pinjam">Pinjam (kasbon)</option><option value="bayar">Bayar tunai</option></select></label>
-      <label class="isian">Tanggal<input type="date" id="pjTgl" value="${hariIni}"></label>
-      <label class="isian">Jumlah (Rp)<input type="number" inputmode="numeric" id="pjJumlah" min="1" placeholder="0"></label>
-      <label class="isian" style="grid-column:span 2">Keterangan<input id="pjKet" placeholder="boleh kosong"></label>
-    </div>
-    <div class="baris-aksi" style="margin-top:12px"><button class="tombol utama kecil" id="bPinjam">Simpan pinjaman</button></div>
-    ${pinjamTerbaru.length ? `<div class="daftar" style="margin-top:10px">${pinjamTerbaru.map(x => `<div><div style="flex:1;min-width:0"><b>${esc(nama(x.orang))}</b> <span class="pil ${x.jenis === 'pinjam' ? 'kunyit' : 'hijau'}" style="font-size:10.5px;padding:2px 8px">${x.jenis === 'pinjam' ? 'pinjam' : 'bayar tunai'}</span>
-        <div class="samar" style="font-size:12px">${esc(tgl(x.tgl))}${x.ket ? ' · ' + esc(x.ket) : ''}</div></div><span class="angka">${x.jenis === 'pinjam' ? '' : '− '}${esc(rp(x.jumlah))}<br><button class="tombol kecil bahaya" data-hapuspinjam="${esc(x.id)}" style="padding:3px 9px;font-size:11.5px;margin-top:4px">hapus</button></span></div>`).join('')}</div>` : ''}</div>
-
-  <div class="kartu" style="margin-top:14px"><span class="label">Semua gaji karyawan</span>
-    <div class="tbl-bungkus" style="margin-top:6px"><table><thead><tr><th>Karyawan</th><th class="angka">Hari masuk</th><th class="angka">Total gaji</th><th class="angka">Potong pinjaman</th><th class="angka">Sudah diterima</th><th class="angka">Sisa pinjaman</th><th>Terakhir dibayar</th></tr></thead>
-      <tbody>${semua.map(x => `<tr><td><b>${esc(x.o.nama)}</b>${x.o.aktif === false ? ' <span class="samar">(tidak aktif)</span>' : ''}</td><td class="angka">${angka(x.hari)}</td><td class="angka">${esc(rp(x.gaji))}</td><td class="angka redup">${x.potong ? esc(rp(x.potong)) : '-'}</td><td class="angka"><b>${esc(rp(x.dibayar))}</b></td><td class="angka ${x.sisa > 0 ? 'kunyit' : ''}">${x.sisa > 0 ? esc(rp(x.sisa)) : '-'}</td><td class="redup">${x.akhir ? esc(tglP(x.akhir.tgl)) : '-'}</td></tr>`).join('')}</tbody>
-      <tfoot><tr><td>Total</td><td class="angka">${angka(semua.reduce((a, x) => a + x.hari, 0))}</td><td class="angka">${esc(rp(semua.reduce((a, x) => a + x.gaji, 0)))}</td><td class="angka">${esc(rp(semua.reduce((a, x) => a + x.potong, 0)))}</td><td class="angka">${esc(rp(semua.reduce((a, x) => a + x.dibayar, 0)))}</td><td class="angka">${esc(rp(semua.reduce((a, x) => a + Math.max(0, x.sisa), 0)))}</td><td></td></tr></tfoot></table></div></div>` : ''}
-
-  <div class="kartu" style="margin-top:14px"><span class="label">Daftar karyawan</span>
-    <div class="tbl-bungkus" style="margin-top:8px"><table class="ed"><thead><tr><th>Nama</th><th>Tugas</th><th>Aktif</th></tr></thead>
-      <tbody id="tKry">${KRY.orang.map((o, i) => `<tr><td class="sel"><input data-i="${i}" data-k="nama" value="${esc(o.nama)}" style="min-width:140px"></td><td class="sel"><input data-i="${i}" data-k="tugas" value="${esc(o.tugas || '')}" placeholder="sopir, gudang" style="min-width:140px"></td><td style="vertical-align:middle"><input type="checkbox" data-i="${i}" data-k="aktif" ${o.aktif !== false ? 'checked' : ''} aria-label="Aktif"></td></tr>`).join('')}
-      <tr><td class="sel"><input id="nNama" placeholder="nama baru" style="min-width:140px"></td><td class="sel"><input id="nTugas" placeholder="sopir, gudang" style="min-width:140px"></td><td></td></tr></tbody></table></div>
-    ${belumAda.length ? `<div style="margin-top:12px"><span class="samar" style="font-size:12.5px">Nama dari laporan Excel, ketuk untuk menambahkan:</span><div class="pilih" style="margin-top:6px">${belumAda.map(n => `<button class="tab" data-usul="${esc(n)}">+ ${esc(n)}</button>`).join('')}</div></div>` : ''}
-    <div class="baris-aksi" style="margin-top:14px"><button class="tombol utama" id="bSimpanKry">Simpan daftar karyawan</button></div></div>`;
-
-  const ulang = () => opAbsensi(el, awal, hariIni);
-  const simpan = async (psn) => { try { await simpanNilai('karyawan', KRY); if (psn) pesan(psn); } catch (er) { pesan(er.message, true); } };
-  const simpanTunda = () => { clearTimeout(SIMPAN_ABSEN); SIMPAN_ABSEN = setTimeout(async () => { const st = $('#stAbsen');
-    try { await simpanNilai('karyawan', KRY); if (st) { st.hidden = false; st.textContent = 'tersimpan'; } } catch (er) { pesan(er.message, true); } }, 700); };
-  // ketik gaji harian: jumlah per hari, per orang, dan total pekan diperbarui tanpa menggambar ulang (supaya kursor tetap)
-  $$('[data-gaji]', el).forEach(i => i.oninput = () => { const t = i.dataset.t, id = i.dataset.gaji, n = Math.max(0, +i.value || 0), H = (KRY.harian ||= {})[t] ||= {};
-    if (n) H[id] = n; else delete H[id]; if (!Object.keys(H).length) delete KRY.harian[t];
-    const jh = orang.reduce((a, o) => a + gajiHari(t, o.id), 0); $(`[data-jmlhari="${t}"]`, el).textContent = jh ? rp(jh) : '-';
-    const cel = $(`[data-totorang="${id}"]`, el); if (cel) cel.textContent = rp(gajiPekan(KRY.orang.find(o => o.id === id), awal).gaji);
-    $('#totPekan', el).textContent = rp(orang.reduce((a, o) => a + gajiPekan(o, awal).gaji, 0));
-    simpanTunda(); });
-  // selesai mengetik satu kotak: simpan, gambar ulang rekap, lalu kursor dikembalikan ke kotak yang sedang dipilih
-  $$('[data-gaji]', el).forEach(i => i.onchange = () => { clearTimeout(SIMPAN_ABSEN);
-    simpanNilai('karyawan', KRY).then(() => { const a = document.activeElement, fok = a && a.dataset && a.dataset.gaji ? [a.dataset.gaji, a.dataset.t] : null; ulang();
-      if (fok) { const b = $(`[data-gaji="${fok[0]}"][data-t="${fok[1]}"]`, el); if (b) b.focus(); } }, er => pesan(er.message, true)); });
-  $$('[data-kepekan]', el).forEach(a => a.onclick = e => { e.preventDefault(); PEKAN_OP = a.dataset.kepekan; tampil(); });
-  $$('[data-bayar]', el).forEach(b => b.onclick = async () => { const o = KRY.orang.find(x => x.id === b.dataset.bayar), g = gajiPekan(o, awal);
-    const potong = Math.min(Math.max(0, +($(`[data-potong="${o.id}"]`, el) || {}).value || 0), Math.max(0, sisaPinjam(o.id)), g.gaji);
-    if (g.gaji <= 0) return pesan('Gaji pekan ini masih nol.', true);
-    const akhir = tambahHari(awal, 6);
-    KRY.bayar[awal + '|' + o.id] = { gaji: g.gaji, potong, jumlah: g.gaji - potong, tgl: hariIni >= awal && hariIni <= akhir ? hariIni : akhir };
-    await simpan(`Gaji ${o.nama} ${rp(g.gaji - potong)} ditandai dibayar${potong ? ', pinjaman berkurang ' + rp(potong) : ''}`); ulang(); });
-  $$('[data-batal]', el).forEach(b => b.onclick = async () => { if (!confirm('Batalkan tanda dibayar? Potongan pinjamannya ikut dibatalkan.')) return; delete KRY.bayar[awal + '|' + b.dataset.batal]; await simpan(); ulang(); });
-  if ($('#bPinjam', el)) $('#bPinjam', el).onclick = async () => { const jumlah = +$('#pjJumlah', el).value || 0, id = $('#pjOrang', el).value, jenis = $('#pjJenis', el).value;
-    if (jumlah <= 0) return pesan('Jumlah belum diisi.', true);
-    if (jenis === 'bayar' && jumlah > sisaPinjam(id)) return pesan('Lebih besar dari sisa pinjaman ' + nama(id) + ' (' + rp(sisaPinjam(id)) + ').', true);
-    KRY.pinjam = [...(KRY.pinjam || []), { id: idBaru(), orang: id, jenis, jumlah, tgl: $('#pjTgl', el).value || hariIni, ket: $('#pjKet', el).value.trim(), dibuat: new Date().toISOString() }];
-    await simpan(`${jenis === 'pinjam' ? 'Pinjaman' : 'Bayar pinjaman'} ${nama(id)} ${rp(jumlah)} dicatat, sisa ${rp(sisaPinjam(id))}`); ulang(); };
-  $$('[data-hapuspinjam]', el).forEach(b => b.onclick = async () => { if (!confirm('Hapus catatan pinjaman ini?')) return; KRY.pinjam = KRY.pinjam.filter(x => x.id !== b.dataset.hapuspinjam); await simpan('Catatan dihapus'); ulang(); });
-  $$('[data-usul]', el).forEach(b => b.onclick = () => { $('#nNama', el).value = b.dataset.usul; $('#nTugas', el).focus(); });
-  $('#bSimpanKry', el).onclick = async () => {
-    const ubah = KRY.orang.map(o => ({ ...o }));
-    $$('#tKry [data-i]', el).forEach(i => { const o = ubah[+i.dataset.i]; o[i.dataset.k] = i.type === 'checkbox' ? i.checked : i.value.trim(); });
-    const nm = $('#nNama', el).value.trim();
-    if (nm) ubah.push({ id: idBaru(), nama: nm, tugas: $('#nTugas', el).value.trim(), aktif: true });
-    if (ubah.some(o => !o.nama)) return pesan('Nama karyawan tidak boleh kosong.', true);
-    try { await simpanNilai('karyawan', { ...KRY, orang: ubah }); KRY.orang = ubah; pesan('Daftar karyawan tersimpan'); ulang(); } catch (er) { pesan(er.message, true); } };
+  <div class="kartu" style="margin-bottom:14px"><span class="label">Dicatat di aplikasi OFU</span>
+    <p class="ket" style="margin:8px 0 10px">Absensi dan gaji karyawan NTA diisi di aplikasi OFU (Oil for Us), lembar <b>NTA</b> tiap karyawan. Karyawan melihat gajinya sendiri di sana, termasuk kalau ia juga bekerja di minyak. Di sini angkanya hanya dibaca untuk laporan.${KRY.gagal ? ' <span class="pil merah">data OFU tidak termuat</span>' : kapan ? ` <span class="samar">Diperbarui ${esc(kapan)}.</span>` : ''}</p>
+    <div class="baris-aksi"><a class="tombol utama" href="${OFU_URL}" target="_blank" rel="noopener">Buka OFU untuk mengisi</a></div></div>
+  <div class="kartu"><span class="label">Gaji pekan ini (Minggu sampai Sabtu)</span>
+    <div class="tbl-bungkus" style="margin-top:8px"><table><thead><tr><th>Hari, tanggal</th>${orang.map(o => `<th class="angka">${esc(o.nama)}</th>`).join('')}<th class="angka">Jumlah</th></tr></thead>
+      <tbody>${hari.map(t => { const d = tglD(t), baris = orang.map(o => gajiHari(t, o.id)), j = baris.reduce((a, x) => a + x, 0);
+        return `<tr><td><b>${esc(d.toLocaleDateString('id-ID', { weekday: 'long' }))}</b> <span class="samar">${esc(tglP(t))}</span>${t === hariIni ? ' <span class="pil hijau" style="font-size:10.5px;padding:2px 8px">hari ini</span>' : ''}</td>${baris.map(x => `<td class="angka">${x ? esc(rp(x)) : '<span class="samar">-</span>'}</td>`).join('')}<td class="angka"><b>${j ? esc(rp(j)) : '-'}</td></tr>`; }).join('')}</tbody>
+      <tfoot><tr><td>Total pekan</td>${G.map(x => `<td class="angka">${esc(rp(x.gaji))}</td>`).join('')}<td class="angka">${esc(rp(tot))}</td></tr></tfoot></table></div>
+    ${orang.length ? '' : '<p class="samar" style="font-size:12.5px;margin:10px 0 0">Belum ada karyawan dengan lembar NTA di OFU.</p>'}</div>
+  ${pekanSet.length ? `<div class="kartu" style="margin-top:14px"><span class="label">Rekap gaji per pekan</span>
+    <div class="tbl-bungkus" style="margin-top:6px"><table><thead><tr><th>Pekan</th>${KRY.orang.map(o => `<th class="angka">${esc(o.nama)}</th>`).join('')}<th class="angka">Total</th></tr></thead>
+      <tbody>${pekanSet.map(a => { const per = KRY.orang.map(o => gajiPekan(o, a)); return `<tr><td><a href="#operasional" data-pekan="${a}" style="color:inherit">${esc(rentang(a, tambahHari(a, 6)))}</a></td>${per.map(x => `<td class="angka">${x.gaji ? esc(rp(x.gaji)) + ` <span class="samar">${x.m} hr</span>` : '-'}</td>`).join('')}<td class="angka"><b>${esc(rp(per.reduce((s, x) => s + x.gaji, 0)))}</b></td></tr>`; }).join('')}</tbody></table></div></div>` : ''}
+  ${KRY.pinjam.length ? `<div class="kartu" style="margin-top:14px"><span class="label">Pinjaman karyawan (dari OFU)</span><div class="daftar" style="margin-top:6px">${KRY.pinjam.slice().sort((a, b) => b.tgl.localeCompare(a.tgl)).map(x => `<div><span>${esc((KRY.orang.find(o => o.id === x.orang) || {}).nama || x.orang)} <span class="pil ${x.jenis === 'pinjam' ? 'kunyit' : 'hijau'}" style="font-size:11px;padding:2px 8px">${x.jenis}</span><div class="samar" style="font-size:12px">${esc(x.tgl ? tglP(x.tgl) : '')}${x.ket ? ' · ' + esc(x.ket) : ''}</div></span><span class="angka">${esc(rp(x.jumlah))}</span></div>`).join('')}</div></div>` : ''}`;
+  $$('[data-pekan]', el).forEach(a => a.onclick = ev => { ev.preventDefault(); PEKAN_OP = a.dataset.pekan; tampil(); });
 }
 function opBiaya(el, senin, hariIni) {
   const minggu = tambahHari(senin, 6), dalam = hariIni >= senin && hariIni <= minggu;
@@ -1647,7 +1573,7 @@ function editorInvoice(el) {
     if (jenis === 'fee' && !h.fee) return pesan('Fee belum diisi, jadi lembar fee mitra tidak dibuat.', true);
     v._tampil = jenis; segar();
     document.title = jenis === 'fee' ? `Fee mitra ${rekapInvoice(v, v._cakupan || 'minggu').noDok}` : `${jenis === 'sj' ? 'Surat jalan' : 'Nota'} ${nomorNota(v.nomor)} ${judulOutlet(v.outlet)}`;
-    addEventListener('afterprint', () => { document.title = 'MBG'; }, { once: true }); window.print(); };
+    addEventListener('afterprint', () => { document.title = 'NTA'; }, { once: true }); window.print(); };
   // PDF: lembar yang sama dengan pratinjau, dijadikan berkas A4. Invoice harus sudah disimpan supaya nomornya tercatat.
   const pdf = async (jenis, kirim) => {
     if (!v.id) return pesan('Simpan invoice dulu, supaya nomor nota tercatat dan masuk piutang.', true);
@@ -1733,7 +1659,7 @@ const XL = { garis: { style: 'thin', color: { argb: 'FF6B7A71' } }, kepala: { ty
 const kotakXL = () => ({ top: XL.garis, left: XL.garis, bottom: XL.garis, right: XL.garis });
 async function bukuExcel(judulLembar, lebar) {
   await muatSkrip('https://cdnjs.cloudflare.com/ajax/libs/exceljs/4.4.0/exceljs.min.js', () => window.ExcelJS, 'Pembuat Excel');
-  const wb = new ExcelJS.Workbook(); wb.creator = 'MBG';
+  const wb = new ExcelJS.Workbook(); wb.creator = 'NTA';
   const ws = wb.addWorksheet(judulLembar, { pageSetup: { paperSize: 9, orientation: 'portrait', fitToPage: true, fitToWidth: 1, fitToHeight: 0, margins: { left: 0.5, right: 0.5, top: 0.6, bottom: 0.6, header: 0.3, footer: 0.3 } } });
   ws.columns = lebar.map(w => ({ width: w }));
   return { wb, ws };
@@ -1962,7 +1888,7 @@ function vKabar(el) {
   el.innerHTML = `
   <section class="bagian" style="margin-top:6px">
     <h2>Catatan <span class="miring">pembaruan</span></h2>
-    <p class="ket">Laptop membaca laporan Excel MBG setiap kali berkas disimpan, lalu mengirim angkanya ke sini.</p>
+    <p class="ket">Laptop membaca laporan Excel setiap kali berkas disimpan, lalu mengirim angkanya ke sini.</p>
     ${CATATAN && CATATAN.teks ? `<div class="catatan-ai"><span class="label">Catatan pembukuan · ${esc(kapan(CATATAN.waktu))}</span><p>${esc(CATATAN.teks)}</p></div>` : ''}
     <div class="kartu" style="margin-top:14px"><div class="daftar">
       <div><span class="redup">Pembaruan terakhir</span><b>${esc(kapan(PEMBARUAN && PEMBARUAN.waktu))}</b></div>
@@ -1976,7 +1902,7 @@ function vKabar(el) {
 // ---------- MASUK
 function layarMasuk(pesan) {
   // Sengaja tanpa nama usaha atau keterangan: siapa pun yang membuka alamat ini hanya melihat kotak sandi.
-  document.title = 'MBG';
+  document.title = 'NTA';
   akar.innerHTML = `<div class="masuk"><div class="kotak muncul">
     <img src="ikon-any-192.png?v=1" alt="">
     <h1>Masuk</h1>

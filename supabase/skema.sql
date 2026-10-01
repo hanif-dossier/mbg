@@ -167,3 +167,19 @@ begin
 end $f$;
 grant execute on function public.mbg_invoice_sinkron(text) to anon, authenticated;
 notify pgrst, 'reload schema';
+
+-- =====================================================================================================
+-- GAJI NTA dari aplikasi OFU (1 Okt 2026): absensi & gaji karyawan NTA dicatat di OFU (minyak_karyawan, data.nta).
+-- Aplikasi NTA hanya membaca: nama, aktif, lembar NTA (minggu, hari), dan hutang/pinjaman yang berkaitan dengan NTA.
+-- =====================================================================================================
+create or replace function public.mbg_gaji_nta(p_token text) returns jsonb language plpgsql stable security definer
+set search_path = public, extensions as $f$
+begin
+  if not mbg__sah(p_token) then return jsonb_build_object('ok', false, 'pesan', 'Sesi habis. Masuk lagi.'); end if;
+  return jsonb_build_object('ok', true, 'karyawan', coalesce((select jsonb_agg(jsonb_build_object('kode', kode, 'nama', data->>'nama', 'aktif', coalesce((data->>'aktif')::boolean, true), 'nta', coalesce(data->'nta', '[]'::jsonb),
+      'hutang', coalesce((select jsonb_agg(h) from jsonb_array_elements(coalesce(data->'hutang', '[]'::jsonb)) h where h->>'ket' ilike '%NTA%' or h->>'usaha' = 'nta'), '[]'::jsonb)) order by kode)
+    from minyak_karyawan where jsonb_array_length(coalesce(data->'nta', '[]'::jsonb)) > 0), '[]'::jsonb),
+    'diubah', (select max(diubah) from minyak_karyawan));
+end $f$;
+grant execute on function public.mbg_gaji_nta(text) to anon, authenticated;
+notify pgrst, 'reload schema';
