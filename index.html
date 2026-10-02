@@ -1327,7 +1327,8 @@ const hitungInv = v => { const b = v.baris.filter(x => x.barang && +x.qty), jml 
   return { b, sub, disk, total: sub - disk, titip, omzet, fee, modal, laba: omzet - modal - fee }; };
 // Di nota ke dapur hanya baris yang seluruhnya titipan yang diberi tanda; titipan sebagian tetap tertulis utuh (mis. ayam 100 kg).
 const namaMitra = b => b.barang + (b.titip && !/titip/i.test(b.barang) ? ' (titipan mitra)' : '');
-const namaNota = x => x.barang + ((x.titip || (x.titipQty != null && qtyTitip(x) >= +x.qty && +x.qty > 0)) && !/titip/i.test(x.barang) ? ' (titipan)' : '');
+// 2 Okt 2026: kata "titipan" TIDAK ditulis di nota ke dapur (bisa disalahpahami); penandaan tetap ada di dalam aplikasi dan lembar mitra.
+const namaNota = x => String(x.barang || '').replace(/\s*\(\s*titipan[^)]*\)/ig, '').trim() || x.barang;
 const omzetInv = v => hitungInv(v).omzet;
 const rekeningInv = v => (D.rekening || [])[+v.rek] || null;
 
