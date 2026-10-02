@@ -90,6 +90,10 @@ main{padding-top:26px;padding-bottom:60px}
 .pil{display:inline-flex;align-items:center;gap:6px;font-size:12px;font-weight:600;padding:4px 11px;border-radius:99px;background:rgba(255,255,255,.06);color:var(--redup);white-space:nowrap}
 .pil.hijau{background:var(--hijau-bg);color:var(--hijau)} .pil.kunyit{background:var(--kunyit-bg);color:var(--kunyit)} .pil.merah{background:var(--merah-bg);color:var(--merah)}
 .pil-baris{display:flex;flex-wrap:wrap;gap:8px}
+.saring .pil{cursor:pointer;border:1px solid transparent;font:inherit;font-size:12px;font-weight:600}.saring .pil.aktif{border-color:var(--hijau);color:var(--hijau);background:var(--hijau-bg)}.saring .pil .samar{font-weight:600}.saring input{padding:9px 13px;border-radius:12px;border:1px solid var(--garis2);background:rgba(255,255,255,.04);color:var(--teks);font:inherit;font-size:14px}
+.kelompok-judul{display:flex;justify-content:space-between;align-items:baseline;gap:10px;margin:18px 4px 2px;flex-wrap:wrap}.kelompok-judul b{font-size:15px}.kelompok-judul .samar{font-size:12.5px}
+.baris-inv{display:flex;justify-content:space-between;gap:12px;padding:12px 14px;margin-top:8px;border-radius:14px;background:rgba(255,255,255,.04);border-left:3px solid transparent;text-decoration:none;color:inherit;align-items:center}.baris-inv:hover{background:rgba(255,255,255,.08)}.baris-inv.belum{border-left-color:var(--merah)}.baris-inv.lunas{border-left-color:var(--hijau)}.baris-inv .bi-kiri{display:flex;flex-direction:column;gap:3px;min-width:0}.baris-inv .bi-kiri .samar{font-size:12px}.baris-inv .bi-kanan{display:flex;flex-direction:column;align-items:flex-end;gap:5px;white-space:nowrap}
+@media (max-width:600px){.baris-inv{flex-direction:column;align-items:stretch}.baris-inv .bi-kanan{flex-direction:row;justify-content:space-between;align-items:center}}
 .tab-baris{display:flex;gap:6px;overflow-x:auto;padding-bottom:4px;scrollbar-width:none}
 .tab-baris::-webkit-scrollbar{display:none}
 .tab{border:1px solid var(--garis2);background:transparent;border-radius:99px;padding:8px 15px;font-size:13.5px;font-weight:600;color:var(--redup);white-space:nowrap}
@@ -1424,16 +1428,59 @@ function daftarInvoice(el) {
     ${DAPUR_T.length ? `<div class="kartu" style="margin-bottom:16px"><span class="label">Dapur yang ditambah di aplikasi</span><div class="daftar" style="margin-top:4px">${DAPUR_T.map(d => { const n = INVOICE.filter(v => v.outlet === d.outlet).length;
       return `<div><div><b>${esc(judulOutlet(d.outlet))}</b>${d.fee ? ' <span class="pil kunyit" style="font-size:10.5px;padding:2px 8px">fee</span>' : ''}<div class="samar" style="font-size:12px">${esc(d.toko)}${d.alamat ? ' · ' + esc(d.alamat) : ''} · ${n} invoice</div></div>${n ? '' : `<button class="tombol kecil bahaya" data-hapusdapur="${esc(d.outlet)}" style="padding:4px 11px;font-size:12px">hapus</button>`}</div>`; }).join('')}</div>
       <p class="samar" style="font-size:12px;margin:8px 0 0">Dapur yang sudah punya invoice tidak bisa dihapus.</p></div>` : ''}
-    ${INVOICE.length ? `<div class="grid g2">${INVOICE.map(v => { const h = hitungInv(v);
-      return `<a class="kartu" href="#invoice/${encodeURIComponent(v.id)}" style="text-decoration:none"><div style="display:flex;justify-content:space-between;gap:10px;align-items:baseline;flex-wrap:wrap"><b>${esc(judulOutlet(v.outlet))} · nota ${esc(nomorNota(v.nomor))}</b><span class="redup" style="font-size:13px">${esc((T => T.length > 1 ? `${tglP(T[0])} - ${tgl(T.at(-1), true)} · ${T.length} hari` : tgl(T[0] || v.tanggal, true))(tanggalInv(v)))}</span></div>
-        <div class="ubin"><div class="nilai kecil">${esc(rp(h.total))}</div></div><div class="pil-baris">${v.lunas ? `<span class="pil hijau">Lunas${v.tglLunas ? ' ' + esc(tglP(v.tglLunas)) : ''}</span>` : `<span class="pil merah">Belum lunas${sisaInv(v) < totalInv(v) ? ' · sisa ' + esc(rpS(sisaInv(v))) : ''}</span>`}<span class="pil">${h.b.length} barang</span>${h.fee ? `<span class="pil kunyit">fee ${esc(rp(h.fee))}${v.mitra ? ' · ' + esc(v.mitra) : ''}</span>` : ''}${h.modal ? `<span class="pil hijau">laba kotor ${esc(rpS(h.laba))}</span>` : ''}</div></a>`; }).join('')}</div>`
-      : `<div class="kartu kosong">Belum ada invoice yang dibuat di aplikasi.${akhir ? ` Nota terakhir di laporan: minggu ${akhir.minggu}, ${esc(rentang(akhir.awal, akhir.akhir))}.` : ''}</div>`}
+    <div id="invDaftar"></div>
   </section>`;
-  $('#bBaru', el).onclick = () => { INV = null; };
+  $('#bBaru', el).onclick = () => { INV = null; }; gambarDaftarInv(el);
   $$('[data-fee]', el).forEach(c => c.onchange = async () => { c.disabled = true; await aturFee(c.dataset.fee, c.checked); daftarInvoice(el); const f = $('#feeDapur', el); if (f) f.open = true; });
   $$('[data-hapusdapur]', el).forEach(b => b.onclick = async () => { if (!confirm('Hapus dapur ' + judulOutlet(b.dataset.hapusdapur) + ' dari daftar?')) return;
     const baru = DAPUR_T.filter(d => d.outlet !== b.dataset.hapusdapur);
     try { const lamaT = DAPUR_T; DAPUR_T = baru; delete FEE_ATUR[b.dataset.hapusdapur]; await simpanDapur().catch(e => { DAPUR_T = lamaT; throw e; }); OUTLET_FEE = hitungOutletFee(); pesan('Dapur dihapus'); daftarInvoice(el); } catch (er) { pesan(er.message, true); } });
+}
+// Daftar invoice dikelompokkan (2 Okt 2026, pemilik: "kalau gini kan bercampur"). Saringan: status, dapur, cari;
+// urutan terbaru di atas; dikelompokkan per tanggal pengantaran atau per dapur. Pilihan saringan diingat di HP ini.
+let SARING_INV = (() => { try { return JSON.parse(localStorage.getItem('nta-inv-saring') || '{}') || {}; } catch { return {}; } })();
+function gambarDaftarInv(el) {
+  const wadah = $('#invDaftar', el); if (!wadah) return;
+  const akhir = M.at(-1);
+  if (!INVOICE.length) { wadah.innerHTML = `<div class="kartu kosong">Belum ada invoice yang dibuat di aplikasi.${akhir ? ` Nota terakhir di laporan: minggu ${akhir.minggu}, ${esc(rentang(akhir.awal, akhir.akhir))}.` : ''}</div>`; return; }
+  const S = Object.assign({ mode: 'tanggal', status: 'semua', dapur: '', teks: '' }, SARING_INV);
+  const simpanS = () => { SARING_INV = S; try { localStorage.setItem('nta-inv-saring', JSON.stringify(S)); } catch {} };
+  const semua = [...INVOICE].sort((a, b) => String(b.tanggal || '').localeCompare(String(a.tanggal || '')) || (+b.nomor || 0) - (+a.nomor || 0));
+  const dapurAda = [...new Set(semua.map(v => v.outlet))].sort((a, b) => judulOutlet(a).localeCompare(judulOutlet(b)));
+  if (S.dapur && !dapurAda.includes(S.dapur)) S.dapur = '';
+  const belum = semua.filter(v => !v.lunas), sisaBelum = belum.reduce((a, v) => a + sisaInv(v), 0);
+  const bulan = new Date().toLocaleDateString('sv-SE').slice(0, 7), bulanIni = semua.filter(v => String(v.tanggal || '').startsWith(bulan));
+  const chip = (k, v, teks) => `<button type="button" class="pil ${S[k] === v ? 'aktif' : ''}" data-s="${k}" data-v="${esc(v)}">${teks}</button>`;
+  wadah.innerHTML = `
+    <div class="grid" style="grid-template-columns:repeat(auto-fit,minmax(150px,1fr));margin-bottom:14px">
+      <div class="kartu ubin"><span class="label">Belum lunas</span><div class="nilai kecil ${belum.length ? 'merah' : ''}">${esc(rp(sisaBelum))}</div><div class="samar" style="font-size:12.5px">${belum.length} invoice</div></div>
+      <div class="kartu ubin"><span class="label">Bulan ini</span><div class="nilai kecil">${esc(rp(bulanIni.reduce((a, v) => a + totalInv(v), 0)))}</div><div class="samar" style="font-size:12.5px">${bulanIni.length} invoice</div></div>
+      <div class="kartu ubin"><span class="label">Semua</span><div class="nilai kecil">${semua.length}</div><div class="samar" style="font-size:12.5px">invoice tersimpan</div></div>
+    </div>
+    <div class="kartu saring" style="margin-bottom:6px">
+      <div class="pil-baris" style="align-items:center">
+        <input id="invCari" type="search" placeholder="Cari dapur atau nomor nota" value="${esc(S.teks)}" style="flex:1;min-width:170px;margin:0">
+        <span class="pil-baris">${chip('status', 'semua', 'Semua')}${chip('status', 'belum', `Belum lunas <span class="samar">${belum.length}</span>`)}${chip('status', 'lunas', `Lunas <span class="samar">${semua.length - belum.length}</span>`)}</span>
+        <span class="pil-baris" style="margin-left:auto">${chip('mode', 'tanggal', 'Per tanggal')}${chip('mode', 'dapur', 'Per dapur')}</span>
+      </div>
+      <div class="pil-baris" style="margin-top:10px">${chip('dapur', '', 'Semua dapur')}${dapurAda.map(d => chip('dapur', d, `${esc(judulOutlet(d))} <span class="samar">${semua.filter(v => v.outlet === d).length}</span>`)).join('')}</div>
+    </div>
+    <div id="invKelompok"></div>`;
+  const kelompok = () => { const cocok = v => (S.status === 'semua' || (S.status === 'belum' ? !v.lunas : !!v.lunas)) && (!S.dapur || v.outlet === S.dapur)
+      && (!S.teks || `${judulOutlet(v.outlet)} nota ${nomorNota(v.nomor)} ${v.nomor} ${v.tanggal || ''}`.toLowerCase().includes(S.teks.trim().toLowerCase()));
+    const daftar = semua.filter(cocok), K = {};
+    for (const v of daftar) { const k = S.mode === 'tanggal' ? String(v.tanggal || '') : v.outlet; (K[k] ||= []).push(v); }
+    const kunci = Object.keys(K).sort((a, b) => S.mode === 'tanggal' ? b.localeCompare(a) : judulOutlet(a).localeCompare(judulOutlet(b)));
+    const baris = v => { const h = hitungInv(v), sisa = sisaInv(v), total = totalInv(v);
+      return `<a class="baris-inv ${v.lunas ? 'lunas' : 'belum'}" href="#invoice/${encodeURIComponent(v.id)}">
+        <div class="bi-kiri"><b>${S.mode === 'tanggal' ? esc(judulOutlet(v.outlet)) : esc(hariNama(v.tanggal) + ', ' + tgl(v.tanggal, true))}</b><span class="samar">nota ${esc(nomorNota(v.nomor))} · ${h.b.length} barang${h.fee ? ` · fee ${esc(rpS(h.fee))}${v.mitra ? ' (' + esc(v.mitra) + ')' : ''}` : ''}${h.modal ? ` · laba kotor ${esc(rpS(h.laba))}` : ''}</span></div>
+        <div class="bi-kanan"><b>${esc(rp(h.total))}</b>${v.lunas ? `<span class="pil hijau">Lunas${v.tglLunas ? ' ' + esc(tglP(v.tglLunas)) : ''}</span>` : `<span class="pil merah">Belum lunas${sisa < total ? ' · sisa ' + esc(rpS(sisa)) : ''}</span>`}</div></a>`; };
+    $('#invKelompok', el).innerHTML = kunci.length ? kunci.map(k => { const L = K[k], tot = L.reduce((a, v) => a + totalInv(v), 0), bl = L.filter(v => !v.lunas), sb = bl.reduce((a, v) => a + sisaInv(v), 0);
+      return `<div class="kelompok-judul"><b>${S.mode === 'tanggal' ? esc(hariNama(k) + ', ' + tgl(k, true)) : esc(judulOutlet(k))}</b><span class="samar">${L.length} invoice · ${esc(rp(tot))}${bl.length ? ` · <span class="merah">belum lunas ${esc(rpS(sb))}</span>` : ' · semua lunas'}</span></div>${L.map(baris).join('')}`; }).join('')
+      : `<div class="kartu kosong">Tidak ada invoice yang cocok dengan saringan.</div>`; };
+  kelompok();
+  $$('[data-s]', wadah).forEach(b => b.onclick = () => { S[b.dataset.s] = b.dataset.v; simpanS(); $$(`[data-s="${b.dataset.s}"]`, wadah).forEach(x => x.classList.toggle('aktif', x.dataset.v === b.dataset.v)); kelompok(); });
+  $('#invCari', wadah).oninput = e => { S.teks = e.target.value; simpanS(); kelompok(); };
 }
 function editorInvoice(el) {
   const v = INV, dp = daftarDapur(), adaFee = OUTLET_FEE.includes(v.outlet);
