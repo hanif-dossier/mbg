@@ -1321,10 +1321,11 @@ const tanggalInv = v => [...new Set(hitungInv(v).b.map(x => tglBaris(v, x)))].so
 // Jumlah titipan dalam satu baris: data lama (x.titip) = seluruh baris; isian baru x.titipQty = sebagian.
 const qtyTitip = x => x.titip ? +x.qty || 0 : Math.min(+x.qty || 0, Math.max(0, +x.titipQty || 0));
 const qtyMilik = x => (+x.qty || 0) - qtyTitip(x);
+const titipKeMitra = x => (x.titipDari || 'mitra') === 'mitra';
 const hitungInv = v => { const b = v.baris.filter(x => x.barang && +x.qty), jml = x => +x.qty * (+x.harga || 0);
-  const sub = b.reduce((a, x) => a + jml(x), 0), disk = Math.round(sub * (+v.diskon || 0) / 100), titip = b.reduce((a, x) => a + qtyTitip(x) * (+x.harga || 0), 0);
+  const sub = b.reduce((a, x) => a + jml(x), 0), disk = Math.round(sub * (+v.diskon || 0) / 100), titip = b.reduce((a, x) => a + qtyTitip(x) * (+x.harga || 0), 0), titipMitra = b.reduce((a, x) => a + (titipKeMitra(x) ? qtyTitip(x) * (+x.harga || 0) : 0), 0);
   const fee = b.reduce((a, x) => a + qtyMilik(x) * (+x.fee || 0), 0), modal = b.reduce((a, x) => a + qtyMilik(x) * (+x.modal || 0), 0), omzet = sub - disk - titip;
-  return { b, sub, disk, total: sub - disk, titip, omzet, fee, modal, laba: omzet - modal - fee }; };
+  return { b, sub, disk, total: sub - disk, titip, titipMitra, titipDapur: titip - titipMitra, omzet, fee, modal, laba: omzet - modal - fee }; };
 // Di nota ke dapur hanya baris yang seluruhnya titipan yang diberi tanda; titipan sebagian tetap tertulis utuh (mis. ayam 100 kg).
 const namaMitra = b => b.barang + (b.titip && !/titip/i.test(b.barang) ? ' (titipan mitra)' : '');
 // 2 Okt 2026: kata "titipan" TIDAK ditulis di nota ke dapur (bisa disalahpahami); penandaan tetap ada di dalam aplikasi dan lembar mitra.
@@ -1384,7 +1385,7 @@ const tambahHari = (t, n) => { const d = tglD(t); d.setDate(d.getDate() + n); re
 // Baris untuk lembar fee: barang ber-fee dan barang titipan (fee nol, tetap tampil supaya hitungannya utuh).
 const barisFee = u => hitungInv(u).b.flatMap(x => { const dasar = { outlet: u.outlet, tanggal: u.tanggal, nota: 'NOTA ' + nomorNota(u.nomor), barang: x.barang, satuan: x.satuan, harga: +x.harga || 0 }, out = [];
   if (qtyMilik(x) > 0 && +x.fee) out.push({ ...dasar, qty: qtyMilik(x), fee: +x.fee, titip: false });
-  if (qtyTitip(x) > 0) out.push({ ...dasar, qty: qtyTitip(x), fee: 0, titip: true });
+  if (qtyTitip(x) > 0 && titipKeMitra(x)) out.push({ ...dasar, qty: qtyTitip(x), fee: 0, titip: true });   // titipan dari dapur tidak masuk lembar mitra
   return out; });
 function rekapInvoice(v, cakupan = 'minggu') {
   const senin = seninDari(v.tanggal), minggu = tambahHari(senin, 6);
@@ -1465,7 +1466,7 @@ function editorInvoice(el) {
         <label style="display:flex;gap:8px;align-items:center;margin-top:10px;font-size:13.5px"><input type="checkbox" id="dbFee"> Dapur ini memakai fee mitra</label>
         <div class="baris-aksi" style="margin-top:12px"><button class="tombol utama kecil" id="dbSimpan">Simpan dapur</button><button class="tombol kecil" id="dbBatal">Batal</button></div>
       </div>
-      <div class="tbl-bungkus" style="margin-top:16px"><table class="ed"><thead><tr><th>No</th><th style="min-width:170px">Barang</th><th class="angka">Banyaknya</th><th>Satuan</th><th class="angka">Harga</th><th class="angka">Jumlah</th><th class="angka" title="Berapa dari banyaknya ini yang titipan mitra: ikut ditagih ke dapur, tapi bukan omzet, tanpa modal dan fee, dan nilainya masuk ke mitra">Titipan</th>${adaFee ? '<th class="angka">Fee/sat</th>' : ''}<th class="angka" title="Tidak dicetak">Modal/sat</th><th></th></tr></thead>
+      <div class="tbl-bungkus" style="margin-top:16px"><table class="ed"><thead><tr><th>No</th><th style="min-width:170px">Barang</th><th class="angka">Banyaknya</th><th>Satuan</th><th class="angka">Harga</th><th class="angka">Jumlah</th><th class="angka" title="Berapa dari banyaknya ini yang titipan: ikut ditagih ke dapur, tapi bukan omzet, tanpa modal dan fee. Pilih asalnya: dari dapur (tidak masuk ke mitra) atau ke mitra (nilainya masuk lembar mitra)">Titipan</th>${adaFee ? '<th class="angka">Fee/sat</th>' : ''}<th class="angka" title="Tidak dicetak">Modal/sat</th><th></th></tr></thead>
         <tbody id="tBaris">${v.baris.map((x, i) => barisEditor(x, i, adaFee)).join('')}</tbody></table></div>
       <datalist id="dlBarang">${namaBarang(v.outlet).map(n => `<option value="${esc(n)}">`).join('')}</datalist>
       <div class="baris-aksi" style="margin-top:12px;justify-content:space-between">
@@ -1502,7 +1503,7 @@ function editorInvoice(el) {
     $$('[data-cakupan]', el).forEach(b => b.onclick = () => { v._cakupan = b.dataset.cakupan; segar(); });
     $('#bCetakFee').hidden = !adaIsiFee; $('#bExcelFee').hidden = !adaIsiFee; $('#bPdfFee').hidden = !adaIsiFee;
     $('#cetak').innerHTML = adaIsiFee && v._tampil === 'fee' ? lembarMitraInvoice(v) : v._tampil === 'sj' ? lembarSuratJalan(v) : lembarInvoice(v);
-    $('#ringkasInv').innerHTML = `<span class="pil hijau">Total ${esc(rp(h.total))}</span>${h.titip ? `<span class="pil">Titipan mitra ${esc(rp(h.titip))}: ikut ditagih, masuk ke mitra, bukan omzet</span>` : ''}${adaFee ? `<span class="pil kunyit">Fee dapur ${esc(rp(h.fee))}</span>` : '<button type="button" class="pil" data-aktiffee style="cursor:pointer;border:1px dashed var(--kunyit)">Dapur ini tanpa fee · ketuk untuk aktifkan</button>'}${h.modal ? `<span class="pil">Modal ${esc(rp(h.modal))}</span><span class="pil ${h.laba >= 0 ? 'hijau' : 'merah'}">Laba kotor ${esc(rp(h.laba))} · ${esc(pc(h.laba, h.total))}</span>` : '<span class="pil">Isi modal untuk melihat laba</span>'}`;
+    $('#ringkasInv').innerHTML = `<span class="pil hijau">Total ${esc(rp(h.total))}</span>${h.titipMitra ? `<span class="pil">Titipan mitra ${esc(rp(h.titipMitra))}: ikut ditagih, masuk ke mitra, bukan omzet</span>` : ''}${h.titipDapur ? `<span class="pil">Titipan dapur ${esc(rp(h.titipDapur))}: ikut ditagih, bukan omzet, tidak masuk ke mitra</span>` : ''}${adaFee ? `<span class="pil kunyit">Fee dapur ${esc(rp(h.fee))}</span>` : '<button type="button" class="pil" data-aktiffee style="cursor:pointer;border:1px dashed var(--kunyit)">Dapur ini tanpa fee · ketuk untuk aktifkan</button>'}${h.modal ? `<span class="pil">Modal ${esc(rp(h.modal))}</span><span class="pil ${h.laba >= 0 ? 'hijau' : 'merah'}">Laba kotor ${esc(rp(h.laba))} · ${esc(pc(h.laba, h.total))}</span>` : '<span class="pil">Isi modal untuk melihat laba</span>'}`;
     $$('#tBaris tr').forEach((tr, i) => { const x = v.baris[i]; const j = tr.querySelector('[data-jumlah]'); if (j) j.textContent = x && +x.qty && +x.harga ? rp(+x.qty * +x.harga) : '-'; });
   };
   const ulang = () => editorInvoice(el);
@@ -1547,11 +1548,13 @@ function editorInvoice(el) {
   $('#bTambah').onclick = () => { v.baris.push(barisKosong()); ulang(); setTimeout(() => { const i = $$('#tBaris input[data-k="barang"]').pop(); if (i) i.focus(); }, 30); };
   v.baris.forEach(x => { if (x.titip) { x.titipQty = +x.qty || 0; delete x.titip; } });
   const tb = $('#tBaris');
-  tb.addEventListener('input', e => { const t = e.target, i = +t.dataset.i, k = t.dataset.k; if (k == null || !v.baris[i] || t.type === 'checkbox') return; v.baris[i][k] = k === 'barang' || k === 'satuan' ? t.value : t.value; segar(); });
+  tb.addEventListener('input', e => { const t = e.target, i = +t.dataset.i, k = t.dataset.k; if (k == null || !v.baris[i] || t.type === 'checkbox') return; v.baris[i][k] = t.value;
+    if (k === 'titipQty') { const x = v.baris[i]; if (+x.titipQty > 0 && !x.titipDari) x.titipDari = 'dapur'; const sel = t.parentElement.querySelector('select'); if ((+x.titipQty > 0) !== !!sel) { ulang(); return; } }
+    segar(); });
   tb.addEventListener('change', e => { const t = e.target, i = +t.dataset.i;
     if (t.dataset.k !== 'barang') return;
     // nama barang yang memuat kata "titip" langsung ditandai titipan
-    if (/titip/i.test(v.baris[i].barang) && !(+v.baris[i].titipQty) && +v.baris[i].qty) { v.baris[i].titipQty = +v.baris[i].qty; ulang(); return; }
+    if (/titip/i.test(v.baris[i].barang) && !(+v.baris[i].titipQty) && +v.baris[i].qty) { v.baris[i].titipQty = +v.baris[i].qty; v.baris[i].titipDari ||= 'dapur'; ulang(); return; }
     const x = v.baris[i], inf = infoBarang(v.outlet, x.barang); if (!inf) return;
     // hanya kotak yang masih kosong yang diisi, supaya ketikan pemilik tidak tertimpa
     if (!x.satuan) x.satuan = inf.satuan; if (!+x.harga) x.harga = inf.harga || ''; if (!+x.modal) x.modal = inf.modal || '';
@@ -1603,7 +1606,7 @@ function barisEditor(x, i, adaFee) {
   const tarifHint = x => { if (!INV || !x.barang) return ''; const inf = infoBarang(INV.outlet, x.barang); return inf && inf.fee ? String(inf.fee) : ''; };
   const inp = (k, lebar, jenis = 'text', kanan = false, extra = '') => `<td class="sel"><input data-i="${i}" data-k="${k}" type="${jenis}" value="${esc(x[k] ?? '')}" style="min-width:${lebar}px" ${kanan ? 'class="angka"' : ''} ${jenis === 'number' ? 'step="any" inputmode="decimal"' : ''} ${extra}></td>`;
   return `<tr><td class="samar">${i + 1}</td>${inp('barang', 170, 'text', false, 'list="dlBarang" autocomplete="off"')}${inp('qty', 76, 'number', true)}${inp('satuan', 70)}${inp('harga', 96, 'number', true)}
-    <td class="angka" data-jumlah style="padding-top:12px">-</td><td class="sel"><input data-i="${i}" data-k="titipQty" type="number" step="any" inputmode="decimal" min="0" class="angka" value="${esc(x.titip ? x.qty : (x.titipQty ?? ''))}" placeholder="0" title="Jumlah titipan mitra dalam baris ini" style="min-width:70px"></td>
+    <td class="angka" data-jumlah style="padding-top:12px">-</td><td class="sel"><input data-i="${i}" data-k="titipQty" type="number" step="any" inputmode="decimal" min="0" class="angka" value="${esc(x.titip ? x.qty : (x.titipQty ?? ''))}" placeholder="0" title="Jumlah titipan dalam baris ini" style="min-width:70px">${qtyTitip(x) > 0 ? `<select data-i="${i}" data-k="titipDari" title="Titipan ini dari siapa" style="margin-top:4px;min-width:70px;font-size:12px"><option value="dapur"${(x.titipDari || 'mitra') === 'dapur' ? ' selected' : ''}>dari dapur</option><option value="mitra"${(x.titipDari || 'mitra') === 'mitra' ? ' selected' : ''}>ke mitra</option></select>` : ''}</td>
     ${adaFee ? inp('fee', 78, 'number', true, `placeholder="${esc(tarifHint(x))}"`) : ''}${inp('modal', 90, 'number', true)}
     <td><button class="tombol-ikon" data-hapus="${i}" title="Hapus baris" aria-label="Hapus baris" style="width:32px;height:32px">×</button></td></tr>`;
 }
