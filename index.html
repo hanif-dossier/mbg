@@ -342,10 +342,35 @@ async function muat() {
 }
 
 // ---------- olahan data
+// Minggu dari aplikasi (3 Okt 2026, pemilik: "kok gak ada" minggu setelah Excel). Invoice, pengeluaran, dan gaji yang
+// dicatat di aplikasi setelah laporan Excel terakhir dikelompokkan Minggu sampai Sabtu dan disusun dalam bentuk yang
+// sama dengan laporan mingguan Excel, nomornya melanjutkan. Ditandai sumber 'aplikasi' supaya biayanya tidak dihitung
+// dua kali di halaman Operasional. Biaya operasional dibagi ke dapur sebanding laba kotor, seperti laporan Excel.
+const KAT_KELUAR = { Parkir: 'Transportasi', Bensin: 'Transportasi', 'Ongkos antar': 'Transportasi', Makan: 'Konsumsi', Perlengkapan: 'Perlengkapan & Perbaikan', Gaji: 'Gaji & Upah' };
+function mingguAplikasi(dasar) {
+  const akhirExcel = dasar.at(-1)?.akhir || '0000-00-00', per = {}, jml = (A, f) => A.reduce((a, x) => a + f(x), 0);
+  for (const v of INVOICE) if (v.tanggal && v.tanggal > akhirExcel) ((per[awalPekanKry(v.tanggal)] ||= { awal: awalPekanKry(v.tanggal), inv: [] }).inv.push(v));
+  for (const x of KELUAR.daftar || []) if (x.tgl && x.tgl > akhirExcel && x.terkait !== 'pribadi') per[awalPekanKry(x.tgl)] ||= { awal: awalPekanKry(x.tgl), inv: [] };
+  let no = +(dasar.at(-1)?.minggu || 0);
+  return Object.values(per).sort((a, b) => a.awal.localeCompare(b.awal)).map(g => { no++;
+    const akhir = tambahHari(g.awal, 6), out = {}, rincian = [], barang = {};
+    for (const v of g.inv) { const h = hitungInv(v), o = out[v.outlet] ||= { outlet: v.outlet, omzet: 0, modal: 0, fee: 0, pengeluaran: 0, labaKotor: 0, biayaOps: 0, labaBersih: 0, nota: 0, baris: 0, tanggal: [] };
+      o.omzet += h.omzet; o.modal += h.modal; o.fee += h.fee; o.nota++; o.baris += h.b.length; if (!o.tanggal.includes(v.tanggal)) o.tanggal.push(v.tanggal);
+      for (const x of h.b) { const q = qtyMilik(x), l = q * ((+x.harga || 0) - (+x.modal || 0) - (+x.fee || 0));
+        rincian.push({ t: v.tanggal, o: v.outlet, n: 'NOTA ' + nomorNota(v.nomor), b: x.barang, q: +x.qty || 0, s: x.satuan || '', h: +x.harga || 0, m: +x.modal || 0, f: +x.fee || 0, l });
+        const bb = barang[kunciB(x.barang)] ||= { barang: x.barang, qty: 0, omzet: 0, laba: 0, satuan: x.satuan || '' }; bb.qty += q; bb.omzet += q * (+x.harga || 0); bb.laba += l; } }
+    const biaya = (KELUAR.daftar || []).filter(x => x.tgl >= g.awal && x.tgl <= akhir).map(x => ({ tanggal: x.tgl, ket: [x.jenis || 'Lainnya', x.ket].filter(Boolean).join(' · '), kategori: x.terkait === 'pribadi' ? 'Pribadi' : KAT_KELUAR[x.jenis] || 'Lainnya', jumlah: +x.jumlah || 0, operasional: x.terkait !== 'pribadi' }));
+    for (const o of KRY.orang || []) { const gp = gajiPekan(o, g.awal); if (gp.gaji > 0) biaya.push({ tanggal: akhir, ket: 'Gaji ' + o.nama, kategori: 'Gaji & Upah', jumlah: gp.gaji, operasional: true }); }
+    const O = Object.values(out), omzet = jml(O, o => o.omzet), modal = jml(O, o => o.modal), fee = jml(O, o => o.fee), labaKotor = omzet - modal - fee;
+    const biayaOps = jml(biaya.filter(b => b.operasional), b => b.jumlah), nonOps = jml(biaya.filter(b => !b.operasional), b => b.jumlah);
+    for (const o of O) { o.labaKotor = o.omzet - o.modal - o.fee; o.biayaOps = labaKotor > 0 ? Math.round(biayaOps * o.labaKotor / labaKotor) : 0; o.labaBersih = o.labaKotor - o.biayaOps; o.tanggal.sort(); o.terakhir = o.tanggal.at(-1); }
+    return { minggu: no, sumber: 'aplikasi', berkas: 'Invoice aplikasi', awal: g.awal, akhir, total: { omzet, modal, fee, pengeluaran: 0, labaKotor, biayaOps, nonOps, labaBersih: labaKotor - biayaOps, nota: jml(O, o => o.nota), baris: jml(O, o => o.baris) },
+      outlet: O.sort((a, b) => b.omzet - a.omzet), biaya, barangTop: Object.values(barang).sort((a, b) => b.omzet - a.omzet), cek: [], rincian, cekOmzet: [],
+      catatan: ['Disusun dari invoice, pengeluaran, dan gaji yang dicatat di aplikasi untuk pekan Minggu sampai Sabtu ini, bukan dari berkas Excel.'] }; }); }
 let M = [], OUT = {}, BULAN = [], HARIAN = [];   // HARIAN = omzet harian Excel + invoice aplikasi
 function siapkan() {
   const pr = D.profil || {}; OUTLET_FEE = hitungOutletFee(); PENERBIT = { nama: pr.usaha || '', alamat: pr.alamat || '' };
-  M = D.mingguan || [];
+  M = [...(D.mingguan || []), ...mingguAplikasi(D.mingguan || [])];   // laporan Excel + minggu dari aplikasi (3 Okt 2026)
   // outlet: gabungan omzet harian (patokan, sejak Mei) dan laporan mingguan (laba)
   OUT = {};
   for (const x of D.omzetHarian || []) { const o = OUT[x.outlet] ||= { nama: x.outlet, harian: [], minggu: [] }; o.harian.push(x); }
@@ -541,7 +566,8 @@ function jenisDariKet(ket, kat) { const k = String(ket || '').toLowerCase();
   return /parkir/.test(k) ? 'Parkir' : /bensin|bbm/.test(k) ? 'Bensin' : /makan|minum/.test(k) ? 'Makan' : /antar|ongkos/.test(k) ? 'Ongkos antar' : /kardus|alat|baut|perlengkapan/.test(k) ? 'Perlengkapan' : 'Lainnya'; }
 function biayaLaporan(senin) {
   const minggu = tambahHari(senin, 6), out = [];
-  for (const w of M) for (const b of w.biaya || []) if (b.tanggal >= senin && b.tanggal <= minggu) out.push({ ...b, jenis: jenisDariKet(b.ket, b.kategori) });
+  for (const w of M) { if (w.sumber === 'aplikasi') continue;   // biaya minggu aplikasi sudah ada di KELUAR dan absensi, jangan dobel
+    for (const b of w.biaya || []) if (b.tanggal >= senin && b.tanggal <= minggu) out.push({ ...b, jenis: jenisDariKet(b.ket, b.kategori) }); }
   return out;
 }
 function keluarPekan(senin) {
@@ -706,7 +732,8 @@ function vMingguan(el, [no]) {
   const selisih = w.cekOmzet.filter(c => c.selisih);
   el.innerHTML = `
   <section class="bagian" style="margin-top:6px">
-    <div class="tab-baris" role="tablist">${M.map(x => `<a class="tab ${x === w ? 'aktif' : ''}" href="#mingguan/${x.minggu}" style="text-decoration:none">Minggu ${x.minggu}</a>`).join('')}</div>
+    <div class="tab-baris" role="tablist">${M.map(x => `<a class="tab ${x === w ? 'aktif' : ''}" href="#mingguan/${x.minggu}" style="text-decoration:none" title="${esc(rentang(x.awal, x.akhir))}">Minggu ${x.minggu}</a>`).join('')}</div>
+    ${w.sumber === 'aplikasi' ? '<p class="samar" style="margin:10px 0 0;font-size:12.5px">Minggu dari aplikasi: angkanya dari invoice, pengeluaran, dan gaji yang dicatat di sini, pekan Minggu sampai Sabtu.</p>' : ''}
     <h2 style="margin-top:18px">Laba rugi <span class="miring">minggu ${w.minggu}</span></h2>
     <p class="ket">${esc(rentang(w.awal, w.akhir))} ${esc((w.awal || '').slice(0, 4))} · ${w.outlet.length} dapur · ${t.nota} nota · ${t.baris} baris barang</p>
     <div class="grid g2">
