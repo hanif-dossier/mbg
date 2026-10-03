@@ -278,6 +278,9 @@ const rentang = (a, b) => { if (!a) return '-'; const A = tglD(a), B = tglD(b ||
 const kapan = iso => { if (!iso) return '-'; const d = new Date(iso);
   return d.toLocaleString('id-ID', { weekday: 'long', day: 'numeric', month: 'long', hour: '2-digit', minute: '2-digit' }).replace('pukul ', '').replace(/\./g, ':').replace(/:(\d\d)$/, '.$1'); };
 const judulOutlet = o => String(o || '').replace(/^MBG\s+/i, '').toLowerCase().replace(/\b\w/g, c => c.toUpperCase()).replace(/\bTpi\b/, 'TPI').replace(/\bPnk\b/, 'PNK').replace(/\bSpo\b/, 'SPO');
+let REK_T = [];   // rekening yang ditambah dari aplikasi (3 Okt 2026: rekening BRI pemilik belum ada di Excel); digabung di belakang rekening Excel
+const semuaRek = () => [...(D.rekening || []), ...REK_T];
+const simpanRek = () => simpanNilai('rekening', { tambahan: REK_T });
 let OUTLET_FEE = [], DAPUR_T = [], FEE_ATUR = {};   // FEE_ATUR: fee dinyalakan/dimatikan per dapur dari aplikasi (menimpa data Excel)   // DAPUR_T: dapur yang ditambah dari aplikasi (belum ada di berkas Excel)   // dapur yang kena fee: dari data (profil.outletFee), diisi di siapkan()
 // Dapur ber-fee = dari data Excel (profil.outletFee) + dapur tambahan yang ber-fee, lalu ditimpa tombol di aplikasi.
 function hitungOutletFee() { const pr = (D && D.profil) || {}, s = new Set([...(pr.outletFee || []), ...DAPUR_T.filter(d => d.fee).map(d => d.outlet)]);
@@ -329,11 +332,11 @@ let D = null, CATATAN = null, PEMBARUAN = null, TARIF = {}, INVOICE = [];
 async function muat() {
   const s = sesi.baca(); if (!s) return layarMasuk();
   const ambil = k => rpc('mbg_ambil_nilai', { p_token: s.token, p_kunci: k });
-  const [a, b, c, t, inv, kr, kl, pu, dt, st] = await Promise.all([ambil('data'), ambil('catatan'), ambil('pembaruan'), ambil('tarif-fee'), rpc('mbg_invoice_daftar', { p_token: s.token }), rpc('mbg_gaji_nta', { p_token: s.token }).catch(() => ({ ok: false })), ambil('pengeluaran'), ambil('piutang'), ambil('dapur'), ambil('stok')]);
+  const [a, b, c, t, inv, kr, kl, pu, dt, st, rkT] = await Promise.all([ambil('data'), ambil('catatan'), ambil('pembaruan'), ambil('tarif-fee'), rpc('mbg_invoice_daftar', { p_token: s.token }), rpc('mbg_gaji_nta', { p_token: s.token }).catch(() => ({ ok: false })), ambil('pengeluaran'), ambil('piutang'), ambil('dapur'), ambil('stok'), ambil('rekening')]);
   if (!a.ok) { sesi.hapus(); return layarMasuk(a.pesan); }
   D = a.nilai; CATATAN = b.ok ? b.nilai : null; PEMBARUAN = c.ok ? c.nilai : null;
   TARIF = (t.ok && t.nilai) || {}; INVOICE = inv.ok ? inv.invoice : [];
-  KRY = bangunKry(kr.ok ? kr.karyawan : []); KRY.diubah = kr.ok ? kr.diubah : null; KRY.gagal = !kr.ok; KELUAR = { daftar: [], ...((kl.ok && kl.nilai) || {}) }; PIU = { baru: [], bayar: [], ubah: {}, ...((pu.ok && pu.nilai) || {}) }; DAPUR_T = ((dt.ok && dt.nilai) || {}).tambahan || []; FEE_ATUR = ((dt.ok && dt.nilai) || {}).feeAtur || {}; STOK = { gerak: [], ubah: {}, baru: [], ...((st.ok && st.nilai) || {}) };
+  KRY = bangunKry(kr.ok ? kr.karyawan : []); KRY.diubah = kr.ok ? kr.diubah : null; KRY.gagal = !kr.ok; KELUAR = { daftar: [], ...((kl.ok && kl.nilai) || {}) }; PIU = { baru: [], bayar: [], ubah: {}, ...((pu.ok && pu.nilai) || {}) }; DAPUR_T = ((dt.ok && dt.nilai) || {}).tambahan || []; REK_T = ((rkT.ok && rkT.nilai) || {}).tambahan || []; FEE_ATUR = ((dt.ok && dt.nilai) || {}).feeAtur || {}; STOK = { gerak: [], ubah: {}, baru: [], ...((st.ok && st.nilai) || {}) };
   if (!D) { akar.innerHTML = `<div class="masuk"><div class="kotak"><h1>Belum ada data</h1><p>Data dikirim dari laptop setiap kali berkas Excel disimpan. Nyalakan laptop, lalu buka lagi.</p></div></div>`; return; }
   siapkan(); tampil();
 }
@@ -1125,7 +1128,7 @@ function barisCicilan(p) {
 }
 const namaPiutang = p => p.usaha ? (((daftarDapur().find(d => d.outlet === p.outlet) || {}).toko) || judulOutlet(p.outlet)) : p.pihak;
 function lembarCicilan(p, R) {
-  const tagih = R.reduce((a, r) => a + (r.tagih || 0), 0), bayar = R.reduce((a, r) => a + (r.bayar || 0), 0), rk = (D.rekening || []).find(r => r.usaha === (D.profil || {}).rekeningBawaan);
+  const tagih = R.reduce((a, r) => a + (r.tagih || 0), 0), bayar = R.reduce((a, r) => a + (r.bayar || 0), 0), rk = semuaRek().find(r => r.usaha === (D.profil || {}).rekeningBawaan);
   return `<div class="kop"><div><b>${esc(PENERBIT.nama)}</b><div class="kecil">${esc(PENERBIT.alamat)}</div>${rk ? `<div class="kecil">No. rek ${esc(rk.bank)} ${esc(rk.rekening)} a.n. ${esc(rk.atasNama)}</div>` : ''}</div>
     <div style="text-align:right"><div>Kepada: <b>${esc(namaPiutang(p))}</b></div><div class="kecil">Per ${esc(tgl(new Date().toLocaleDateString('sv-SE'), true))}</div></div></div>
   <h3>RINCIAN TAGIHAN DAN PEMBAYARAN</h3>
@@ -1278,7 +1281,7 @@ function vNeraca(el, [bln]) {
 
 // ---------- bantu: dapur, harga terakhir, terbilang, pesan singkat
 let PENERBIT = { nama: '', alamat: '' };   // kop nota: dari data (profil), diisi di siapkan()
-const namaTtd = () => ((D.rekening || []).find(r => r.usaha === (D.profil || {}).rekeningBawaan) || {}).atasNama || '................................';
+const namaTtd = () => (semuaRek().find(r => r.usaha === (D.profil || {}).rekeningBawaan) || {}).atasNama || '................................';
 const kunciB = s => String(s || '').trim().toLowerCase().replace(/\s+/g, ' ');
 const angkaID = n => (+n || 0).toLocaleString('id-ID', { maximumFractionDigits: 2 });
 const nomorNota = n => String(Math.max(0, +n || 0)).padStart(3, '0');
@@ -1347,7 +1350,7 @@ const namaMitra = b => b.barang + (b.titip && !/titip/i.test(b.barang) ? ' (titi
 // 2 Okt 2026: kata "titipan" TIDAK ditulis di nota ke dapur (bisa disalahpahami); penandaan tetap ada di dalam aplikasi dan lembar mitra.
 const namaNota = x => String(x.barang || '').replace(/\s*\(\s*titipan[^)]*\)/ig, '').trim() || x.barang;
 const omzetInv = v => hitungInv(v).omzet;
-const rekeningInv = v => (D.rekening || [])[+v.rek] || null;
+const rekeningInv = v => semuaRek()[+v.rek] || null;
 
 // ---------- lembar nota (tampil di layar dan dicetak)
 function lembarInvoice(v) {
@@ -1418,7 +1421,7 @@ const lembarMitraInvoice = v => { const r = rekapInvoice(v, v._cakupan || 'mingg
 let INV = null;
 function invoiceBaru() {
   const dp = daftarDapur().filter(d => d.aktif !== false), d = dp[0] || { outlet: '', toko: '', alamat: '', notaTerakhir: 0 };
-  const rek = (D.rekening || []).findIndex(r => r.usaha === (D.profil || {}).rekeningBawaan);
+  const rek = semuaRek().findIndex(r => r.usaha === (D.profil || {}).rekeningBawaan);
   return { id: '', nomor: (d.notaTerakhir || 0) + 1, tanggal: new Date().toLocaleDateString('sv-SE'), outlet: d.outlet, toko: d.toko, alamat: d.alamat || '', mitra: mitraTerakhir(d.outlet), rek: rek < 0 ? 0 : rek, diskon: 0, baris: [barisKosong(), barisKosong(), barisKosong()] };
 }
 function vInvoice(el, [id]) {
@@ -1516,6 +1519,26 @@ function dialogHubungStok(v, selesai) {
     if (!n) return el.remove();
     try { await simpanStok(baru); el.remove(); pesan(n + ' barang dihubungkan ke stok'); selesai && selesai(); } catch (er) { pesan(er.message, true); } };
 }
+// Tambah rekening dari aplikasi (3 Okt 2026). Disimpan ke kunci 'rekening' dan langsung bisa dipilih di nota; data Excel tidak diubah.
+function dialogRekening(selesai) {
+  const lama = $('#dialogRek'); if (lama) lama.remove();
+  const el = document.createElement('div'); el.id = 'dialogRek'; el.className = 'tirai-dialog';
+  const bawaan = (D.profil || {}).rekeningBawaan || (D.rekening || [])[0]?.usaha || '';
+  el.innerHTML = `<div class="kartu dialog"><h3 style="margin:0 0 4px">Tambah rekening</h3><p class="samar" style="margin:0 0 12px;font-size:13px">Rekening ini ikut tercetak di nota yang memilihnya. Tidak mengubah berkas Excel.</p>
+    <label class="isian">Bank<input id="rkBank" placeholder="BRI" autocomplete="off"></label>
+    <label class="isian" style="margin-top:8px">Nomor rekening<input id="rkNomor" inputmode="numeric" placeholder="mis. 0123 0100 1234 567" autocomplete="off"></label>
+    <label class="isian" style="margin-top:8px">Atas nama<input id="rkNama" placeholder="ABDULLAH HANIF" autocomplete="off"></label>
+    <label class="isian" style="margin-top:8px">Nama usaha di nota<input id="rkUsaha" value="${esc(bawaan)}" autocomplete="off"></label>
+    <div class="baris-aksi" style="margin-top:14px"><button class="tombol utama" id="rkSimpan">Simpan</button><button class="tombol" id="rkBatal">Batal</button></div></div>`;
+  document.body.appendChild(el); $('#rkBank', el).focus();
+  $('#rkBatal', el).onclick = () => el.remove();
+  $('#rkSimpan', el).onclick = async () => {
+    const r = { bank: $('#rkBank', el).value.trim().toUpperCase(), rekening: $('#rkNomor', el).value.replace(/[^0-9]/g, ''), atasNama: $('#rkNama', el).value.trim().toUpperCase(), usaha: $('#rkUsaha', el).value.trim() || bawaan };
+    if (!r.bank || !r.rekening || !r.atasNama) return pesan('Isi bank, nomor rekening, dan atas nama.', true);
+    if (semuaRek().some(x => x.rekening === r.rekening)) return pesan('Nomor rekening itu sudah ada di daftar.', true);
+    const sebelum = REK_T; REK_T = [...REK_T, r];
+    try { await simpanRek(); el.remove(); pesan(`Rekening ${r.bank} a.n. ${r.atasNama} ditambahkan`); selesai && selesai(semuaRek().length - 1); } catch (er) { REK_T = sebelum; pesan(er.message, true); } };
+}
 function editorInvoice(el) {
   const v = INV, dp = daftarDapur(), adaFee = OUTLET_FEE.includes(v.outlet);
   el.innerHTML = `
@@ -1535,7 +1558,7 @@ function editorInvoice(el) {
         <label class="isian">Nama dapur di nota<input id="iToko" value="${esc(v.toko)}"></label>
         <label class="isian">Alamat dapur<input id="iAlamat" value="${esc(v.alamat)}"></label>
         ${adaFee ? `<label class="isian">Mitra penerima fee<input id="iMitra" value="${esc(v.mitra || '')}" placeholder="nama mitra di dapur ini"></label>` : ''}
-        <label class="isian">Rekening di nota<select id="iRek">${(D.rekening || []).map((r, i) => `<option value="${i}" ${+v.rek === i ? 'selected' : ''}>${esc(r.usaha)} · ${esc(r.bank)} a.n. ${esc(r.atasNama)}</option>`).join('') || '<option value="0">-</option>'}</select></label>
+        <label class="isian">Rekening di nota <button type="button" class="pil" id="bRekBaru" style="margin-left:6px;cursor:pointer;font:inherit;font-size:12px">+ Tambah rekening</button><select id="iRek">${semuaRek().map((r, i) => `<option value="${i}" ${+v.rek === i ? 'selected' : ''}>${esc(r.usaha)} · ${esc(r.bank)} ${esc(r.rekening || '')} a.n. ${esc(r.atasNama)}${i >= (D.rekening || []).length ? ' (ditambah di aplikasi)' : ''}</option>`).join('') || '<option value="0">-</option>'}</select></label>
       </div>
       <div id="dapurBaru" hidden style="margin-top:14px;padding:14px;border:1px dashed var(--garis2);border-radius:14px">
         <span class="label">Dapur baru</span>
@@ -1625,6 +1648,7 @@ function editorInvoice(el) {
   $('#iToko').oninput = e => { v.toko = e.target.value; segar(); };
   $('#iAlamat').oninput = e => { v.alamat = e.target.value; segar(); };
   $('#iRek').onchange = e => { v.rek = +e.target.value; segar(); };
+  $('#bRekBaru').onclick = () => dialogRekening(async idx => { v.rek = idx; ulang(); });
   $('#iDiskon').oninput = e => { v.diskon = +e.target.value || 0; segar(); };
   $('#bTambah').onclick = () => { v.baris.push(barisKosong()); ulang(); setTimeout(() => { const i = $$('#tBaris input[data-k="barang"]').pop(); if (i) i.focus(); }, 30); };
   v.baris.forEach(x => { if (x.titip) { x.titipQty = +x.qty || 0; delete x.titip; } });
