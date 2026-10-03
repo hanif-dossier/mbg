@@ -768,9 +768,9 @@ function vOutlet(el, [nama]) {
   </section>`;
 }
 function vOutletSatu(el, o) {
-  // omzet per minggu kalender (Senin) dari catatan omzet harian
+  // omzet per minggu (Minggu sampai Sabtu, pemilik 3 Okt 2026) dari catatan omzet harian
   const perM = {};
-  for (const x of o.harian) { const d = tglD(x.tanggal); d.setDate(d.getDate() - ((d.getDay() + 6) % 7)); const k = d.toISOString().slice(0, 10); perM[k] = (perM[k] || 0) + x.omzet; }
+  for (const x of o.harian) { const k = awalPekanKry(x.tanggal); perM[k] = (perM[k] || 0) + x.omzet; }
   const seri = Object.entries(perM).sort().slice(-16).map(([k, v]) => ({ label: tglP(k).replace(' ', ' '), v }));
   const nota = {}; for (const w of M) for (const r of w.rincian.filter(r => r.o === o.nama)) { const k = w.minggu + '|' + r.n + '|' + r.t; (nota[k] ||= { minggu: w.minggu, nota: r.n, tanggal: r.t, baris: [] }).baris.push(r); }
   for (const v of INVOICE.filter(v => v.outlet === o.nama)) nota['inv|' + v.id] = { nota: 'Nota ' + nomorNota(v.nomor), tanggal: v.tanggal, inv: v.id, lunas: v.lunas,
@@ -788,7 +788,7 @@ function vOutletSatu(el, o) {
       <div class="kartu ubin"><span class="label">Piutang</span><div class="nilai">${esc(rpS(semuaPiutang().filter(p => !p.lunas && p.outlet === o.nama).reduce((a, p) => a + p.nominal, 0)))}</div><small>belum dibayar</small></div>
     </div>
   </section>
-  <section class="bagian kartu"><span class="label">Omzet per minggu (Senin sampai Minggu)</span><div style="margin-top:12px">${grafikBatang(seri)}</div></section>
+  <section class="bagian kartu"><span class="label">Omzet per minggu (Minggu sampai Sabtu)</span><div style="margin-top:12px">${grafikBatang(seri)}</div></section>
   ${o.minggu.length ? `<section class="bagian"><h2>Di laporan <span class="miring">mingguan</span></h2><div class="kartu"><div class="tbl-bungkus"><table><thead><tr><th>Minggu</th><th class="angka">Omzet</th><th class="angka">Laba kotor</th><th class="angka">Laba bersih</th><th class="angka">Margin</th></tr></thead>
     <tbody>${o.minggu.map(x => `<tr><td><a href="#mingguan/${x.minggu}">Minggu ${x.minggu}</a><div class="samar" style="font-size:12px">${esc(rentang(x.tanggal[0], x.tanggal.at(-1)))}</div></td><td class="angka">${esc(rp(x.omzet))}</td><td class="angka">${esc(rp(x.labaKotor))}</td><td class="angka">${esc(rp(x.labaBersih))}</td><td class="angka">${esc(pc(x.labaBersih, x.omzet))}</td></tr>`).join('')}</tbody></table></div></div></section>` : ''}
   ${daftarNota.length ? `<section class="bagian"><h2>Nota <span class="miring">terakhir</span></h2><div class="grid g2">${daftarNota.map(n => { const tot = n.baris.reduce((a, r) => a + r.q * r.h, 0), lb = n.baris.reduce((a, r) => a + r.l, 0);
@@ -1398,9 +1398,11 @@ function lembarMitra(p) {
 const mitraTerakhir = outlet => (INVOICE.find(x => x.outlet === outlet && x.mitra) || {}).mitra || '';
 const noDokFee = v => `FEE-${nomorNota(v.nomor)}/${judulOutlet(v.outlet).toUpperCase().replace(/\s+/g, '')}`;
 // Fee mitra dari satu invoice, dirinci per tanggal baris (bisa seminggu pengantaran).
-const seninDari = t => { const d = tglD(t); d.setDate(d.getDate() - ((d.getDay() + 6) % 7)); return d.toLocaleDateString('sv-SE'); };
+// Minggu kerja NTA berjalan Minggu sampai Sabtu (pemilik, 3 Okt 2026; Minyak Senin-Sabtu, MBG Minggu-Sabtu). Nama lama
+// seninDari dipertahankan sebagai alias supaya pemanggil lama tetap jalan, isinya kini awal pekan hari Minggu.
+const seninDari = t => awalPekanKry(t);
 const tambahHari = (t, n) => { const d = tglD(t); d.setDate(d.getDate() + n); return d.toLocaleDateString('sv-SE'); };
-// cakupan 'minggu': invoice dapur yang sama bertanggal Senin-Minggu minggu itu (yang sedang dibuka memakai isian terkini).
+// cakupan 'minggu': invoice dapur yang sama bertanggal Minggu-Sabtu pekan itu (yang sedang dibuka memakai isian terkini).
 // Baris untuk lembar fee: barang ber-fee dan barang titipan (fee nol, tetap tampil supaya hitungannya utuh).
 const barisFee = u => hitungInv(u).b.flatMap(x => { const dasar = { outlet: u.outlet, tanggal: u.tanggal, nota: 'NOTA ' + nomorNota(u.nomor), barang: x.barang, satuan: x.satuan, harga: +x.harga || 0 }, out = [];
   if (qtyMilik(x) > 0 && +x.fee) out.push({ ...dasar, qty: qtyMilik(x), fee: +x.fee, titip: false });
@@ -1602,7 +1604,7 @@ function editorInvoice(el) {
     $('#tabLembar').innerHTML = `<div class="tab-baris" role="tablist"><button class="tab ${!v._tampil || v._tampil === 'nota' ? 'aktif' : ''}" data-tampil="nota">Nota untuk dapur</button><button class="tab ${v._tampil === 'sj' ? 'aktif' : ''}" data-tampil="sj">Surat jalan</button>${adaIsiFee ? `<button class="tab ${v._tampil === 'fee' ? 'aktif' : ''}" data-tampil="fee">Fee untuk mitra</button>` : ''}</div>
       ${v._tampil === 'fee' ? (() => { const r = rekapInvoice(v, 'minggu'), n = Object.keys(r.o.hari).length;
         return `<div class="pil-baris" style="margin-top:10px"><button class="tab ${(v._cakupan || 'minggu') === 'minggu' ? 'aktif' : ''}" data-cakupan="minggu">Seminggu · ${esc(tglP(r.dari))} - ${esc(tglP(r.sampai))} (${n} hari)</button><button class="tab ${v._cakupan === 'nota' ? 'aktif' : ''}" data-cakupan="nota">Nota ini saja</button></div>
-        <p class="samar" style="font-size:12.5px;margin:8px 0 0">Seminggu mengumpulkan fee dari semua invoice ${esc(judulOutlet(v.outlet))} yang tersimpan pada Senin sampai Minggu itu, termasuk invoice ini. Untuk periode lain (pekan lalu, sebulan, tanggal bebas) pakai <a href="#fee/gabung/${encodeURIComponent(v.outlet)}">Fee mitra gabungan</a>.</p>`; })() : ''}`;
+        <p class="samar" style="font-size:12.5px;margin:8px 0 0">Seminggu mengumpulkan fee dari semua invoice ${esc(judulOutlet(v.outlet))} yang tersimpan pada Minggu sampai Sabtu pekan itu, termasuk invoice ini. Untuk periode lain (pekan lalu, sebulan, tanggal bebas) pakai <a href="#fee/gabung/${encodeURIComponent(v.outlet)}">Fee mitra gabungan</a>.</p>`; })() : ''}`;
     $$('[data-tampil]', el).forEach(b => b.onclick = () => { v._tampil = b.dataset.tampil; segar(); });
     $$('[data-cakupan]', el).forEach(b => b.onclick = () => { v._cakupan = b.dataset.cakupan; segar(); });
     $('#bCetakFee').hidden = !adaIsiFee; $('#bExcelFee').hidden = !adaIsiFee; $('#bPdfFee').hidden = !adaIsiFee;
