@@ -336,7 +336,7 @@ async function muat() {
   if (!a.ok) { sesi.hapus(); return layarMasuk(a.pesan); }
   D = a.nilai; CATATAN = b.ok ? b.nilai : null; PEMBARUAN = c.ok ? c.nilai : null;
   TARIF = (t.ok && t.nilai) || {}; INVOICE = inv.ok ? inv.invoice : [];
-  KRY = bangunKry(kr.ok ? kr.karyawan : []); KRY.diubah = kr.ok ? kr.diubah : null; KRY.gagal = !kr.ok; KELUAR = { daftar: [], ...((kl.ok && kl.nilai) || {}) }; PIU = { baru: [], bayar: [], ubah: {}, ...((pu.ok && pu.nilai) || {}) }; DAPUR_T = ((dt.ok && dt.nilai) || {}).tambahan || []; REK_T = ((rkT.ok && rkT.nilai) || {}).tambahan || []; FEE_ATUR = ((dt.ok && dt.nilai) || {}).feeAtur || {}; STOK = { gerak: [], ubah: {}, baru: [], ...((st.ok && st.nilai) || {}) };
+  KRY = bangunKry(kr.ok ? kr.karyawan : []); KRY.diubah = kr.ok ? kr.diubah : null; KRY.gagal = !kr.ok; KELUAR = { daftar: [], ...((kl.ok && kl.nilai) || {}) }; PIU = { baru: [], bayar: [], ubah: {}, ...((pu.ok && pu.nilai) || {}) }; DAPUR_T = ((dt.ok && dt.nilai) || {}).tambahan || []; REK_T = ((rkT.ok && rkT.nilai) || {}).tambahan || []; FEE_ATUR = ((dt.ok && dt.nilai) || {}).feeAtur || {}; STOK = { gerak: [], ubah: {}, baru: [], lewat: [], ...((st.ok && st.nilai) || {}) };
   if (!D) { akar.innerHTML = `<div class="masuk"><div class="kotak"><h1>Belum ada data</h1><p>Data dikirim dari laptop setiap kali berkas Excel disimpan. Nyalakan laptop, lalu buka lagi.</p></div></div>`; return; }
   siapkan(); tampil();
 }
@@ -826,7 +826,7 @@ function vOutletSatu(el, o) {
 
 // ---------- STOK
 // ---------- stok terkini = stok Excel + catatan aplikasi
-let STOK = { gerak: [], ubah: {}, baru: [] };
+let STOK = { gerak: [], ubah: {}, baru: [], lewat: [] };   // lewat = nama di invoice yang bukan barang stok (beli langsung dijual), 4 Okt 2026
 const namaInti = n => kunciB(String(n || '').replace(/\s*\(.*\)\s*$/, ''));
 // tanggal berkas stok Excel terakhir disimpan: catatan aplikasi sampai tanggal itu dianggap sudah ada di Excel
 const patokanStok = () => ((D.sumber || []).find(x => /stok barang/i.test(x.berkas)) || {}).diubah?.slice(0, 10) || '0000-00-00';
@@ -835,12 +835,40 @@ const patokanStok = () => ((D.sumber || []).find(x => /stok barang/i.test(x.berk
 // disimpan pemilik (alias, dipisah koma, di data barang stok), lalu awalan kata kalau hanya satu barang stok yang cocok.
 // Satuan tetap harus sama. Yang tidak ketemu tampil di editor invoice dengan tombol "Hubungkan ke stok".
 const aliasB = b => String(b.alias || '').split(',').map(kunciB).filter(Boolean);
-const awalanKata = (panjang, pendek) => pendek && (panjang === pendek || panjang.startsWith(pendek + ' '));
+// Satuan di invoice sering disingkat (btl, bks, rtng); disamakan dulu sebelum dibandingkan (4 Okt 2026).
+const SAT_SAMA = { btl: 'botol', bks: 'bungkus', bgks: 'bungkus', bkus: 'bungkus', rtng: 'renteng', rtg: 'renteng', rteng: 'renteng', pc: 'pcs', buah: 'pcs', bh: 'pcs', biji: 'pcs', bj: 'pcs', ltr: 'liter', lt: 'liter', l: 'liter', krg: 'karung', dos: 'dus', box: 'dus', kln: 'kaleng', klg: 'kaleng', ikt: 'ikat', btr: 'butir', kilo: 'kg', kilogram: 'kg', gr: 'gram', g: 'gram', sct: 'sachet', saset: 'sachet', pak: 'pack', pk: 'pack', ek: 'ekor', ppn: 'papan', 'papan panjang': 'papan' };
+const satuanKunci = s => { const k = kunciB(s).replace(/[.]+$/, ''); return SAT_SAMA[k] || k; };
+const satuanCocok = (a, b) => !satuanKunci(a) || !satuanKunci(b) || satuanKunci(a) === satuanKunci(b);
+// Kata dalam nama barang: isi kurung dibuang, ejaan umum disamakan (saus = saos, cabai = cabe), urutan tidak dipedulikan.
+const KATA_SAMA = { saus: 'saos', sambel: 'sambal', cabai: 'cabe', telor: 'telur', bombai: 'bombay' };
+const kataNama = n => [...new Set(kunciB(n).replace(/\(.*?\)/g, ' ').replace(/[^a-z0-9 ]+/g, ' ').split(' ').filter(Boolean).map(w => KATA_SAMA[w] || w))];
+const bukanStok = nama => (STOK.lewat || []).includes(kunciB(nama));
+// Urutan pencocokan: nama lain yang dipilih pemilik (berlaku apa pun satuannya), lalu di antara barang bersatuan sama:
+// nama persis, nama inti (tanpa kurung), nama invoice memuat semua kata nama stok ("beras cap belalang" untuk Beras,
+// "saori saos tiram" untuk Saos Tiram), atau sebaliknya ("kaldu jamur" untuk Totole / Kaldu Jamur). Kalau calonnya lebih
+// dari satu, tidak dipaksa; pemilik yang memilih lewat dialog hubungkan.
 function cocokStok(daftar, nama, satuan) {
-  const k = kunciB(nama); if (!k) return null; const sat = kunciB(satuan);
-  const S = daftar.filter(b => !sat || !kunciB(b.satuan) || kunciB(b.satuan) === sat);
-  return S.find(b => kunciB(b.nama) === k) || S.find(b => namaInti(b.nama) === k) || S.find(b => aliasB(b).includes(k))
-    || (c => c.length === 1 ? c[0] : null)(S.filter(b => awalanKata(k, namaInti(b.nama)) || awalanKata(k, kunciB(b.nama)))) || null; }
+  const k = kunciB(nama); if (!k) return null;
+  const alias = daftar.find(b => aliasB(b).includes(k)); if (alias) return alias;
+  const S = daftar.filter(b => satuanCocok(satuan, b.satuan));
+  const persis = S.find(b => kunciB(b.nama) === k) || S.find(b => namaInti(b.nama) === k); if (persis) return persis;
+  const W = kataNama(nama); if (!W.length) return null; const satu = c => c.length === 1 ? c[0] : null;
+  let c = S.map(b => ({ b, w: kataNama(namaInti(b.nama)) })).filter(x => x.w.length && x.w.every(w => W.includes(w)) && (x.w.length > 1 || x.w[0] === W[0]));   // satu kata harus kata pertama: "tepung beras" bukan Beras
+  if (c.length) { const m = Math.max(...c.map(x => x.w.length)); return satu(c.filter(x => x.w.length === m).map(x => x.b)); }
+  return satu(S.filter(b => { const w = kataNama(namaInti(b.nama)); return w.length && W.every(x => w.includes(x)); })); }
+// Petunjuk di dialog hubungkan: barang stok yang berbagi kata (minimal 4 huruf) dengan nama invoice, paling banyak tiga. Hanya
+// ditampilkan sebagai teks; pemilik yang memutuskan, supaya "tepung beras" tidak otomatis dianggap Tepung Terigu.
+function saranStok(daftar, nama, satuan) {
+  const W = kataNama(nama).filter(w => w.length >= 4); if (!W.length) return [];
+  return daftar.map(b => { const w = kataNama(b.nama), n = w.filter(x => W.includes(x)).length; return { b, n, depan: w[0] === W[0], sat: satuanCocok(satuan, b.satuan) }; })
+    .filter(x => x.n >= 2 || (x.n === 1 && x.depan)).sort((a, b) => (b.sat - a.sat) || (b.n - a.n)).slice(0, 3).map(x => x.b); }
+// Semua nama di invoice yang belum terhubung ke stok dan belum ditandai bukan barang stok, digabung per nama + satuan.
+function lepasInvoice(daftar, invoice = INVOICE) {
+  const peta = {};
+  for (const v of invoice) for (const x of hitungInv(v).b) { if (!(qtyMilik(x) > 0) || bukanStok(x.barang) || cocokStok(daftar, x.barang, x.satuan)) continue;
+    const k = kunciB(x.barang) + '|' + satuanKunci(x.satuan), e = peta[k] ||= { barang: x.barang, satuan: x.satuan || '', modal: +x.modal || 0, qty: 0, nota: 0, terakhir: '' };
+    e.qty += qtyMilik(x); e.nota++; if ((v.tanggal || '') > e.terakhir) e.terakhir = v.tanggal; if (+x.modal) e.modal = +x.modal; }
+  return Object.values(peta).sort((a, b) => b.nota - a.nota || a.barang.localeCompare(b.barang)); }
 function keluarInvoice(daftar) {
   const out = [];
   for (const v of INVOICE) for (const x of hitungInv(v).b.filter(x => qtyMilik(x) > 0)) {
@@ -866,7 +894,8 @@ function stokKini() {
   return { barang: daftar, gerak, patokan: pat, nilai: daftar.reduce((a, b) => a + b.nilai, 0), habis: daftar.filter(b => b.status === 'HABIS').length, menipis: daftar.filter(b => b.status === 'MENIPIS').length };
 }
 const barangStok = (nama, satuan) => cocokStok(stokKini().barang, nama, satuan);
-async function simpanStok(baru) { await simpanNilai('stok', baru); STOK = baru; }
+async function simpanStok(baru) { baru.lewat ||= []; await simpanNilai('stok', baru); STOK = baru; }
+const salinStok = () => ({ gerak: [...STOK.gerak], ubah: { ...STOK.ubah }, baru: STOK.baru.map(b => ({ ...b })), lewat: [...(STOK.lewat || [])] });
 const angkaStok = n => (+n || 0).toLocaleString('id-ID', { maximumFractionDigits: 2 });
 
 function vStok(el) {
@@ -904,7 +933,7 @@ function vStok(el) {
   el.innerHTML = `
   <section class="bagian" style="margin-top:6px">
     <h2>Stok <span class="miring">gudang</span></h2>
-    <p class="ket">Stok dari berkas Excel (sampai ${esc(tgl(S.patokan, true))}) ditambah belanja, barang keluar, dan hitungan ulang yang dicatat di sini. Invoice ke dapur ikut mengurangi stok kalau nama barangnya sama, diawali nama barang di sini (misalnya "beras cap belalang" untuk Beras), atau tercantum sebagai nama lain di data barang; satuannya harus sama. Barang invoice yang belum terhubung bisa dihubungkan dari editor invoice. Nilai memakai harga modal; setiap belanja memperbarui harga modal barang itu.</p>
+    <p class="ket">Stok dari berkas Excel (sampai ${esc(tgl(S.patokan, true))}) ditambah belanja, barang keluar, dan hitungan ulang yang dicatat di sini. Invoice ke dapur ikut mengurangi stok kalau nama barangnya sama atau memuat nama barang di sini (misalnya "beras cap belalang" untuk Beras), atau tercantum sebagai nama lain di data barang. Singkatan satuan seperti btl, bks, dan rtng dikenali. Nilai memakai harga modal; setiap belanja memperbarui harga modal barang itu.</p>
     <div class="grid g4">
       <div class="kartu ubin"><span class="label">Nilai stok</span><div class="nilai">${esc(rpS(S.nilai))}</div><small>${S.barang.length} jenis barang</small></div>
       <div class="kartu ubin"><span class="label">Habis</span><div class="nilai merah">${S.habis}</div><small>perlu segera dibeli</small></div>
@@ -912,6 +941,11 @@ function vStok(el) {
       <div class="kartu ubin"><span class="label">Aman</span><div class="nilai hijau">${S.barang.length - S.habis - S.menipis}</div><small>di atas stok minimum</small></div>
     </div>
   </section>
+  ${(() => { const lepas = lepasInvoice(S.barang), lewat = (STOK.lewat || []).slice().sort(); if (!lepas.length && !lewat.length) return '';
+    return `<section class="bagian kartu" id="bagianLepas"><div style="display:flex;justify-content:space-between;gap:10px;align-items:center;flex-wrap:wrap"><span class="label">Nama di invoice yang belum terhubung ke stok</span>${lepas.length ? `<button class="tombol kecil utama" id="bHubungSemua">Hubungkan ${lepas.length} nama</button>` : ''}</div>
+      ${lepas.length ? `<p class="samar" style="font-size:13px;margin:6px 0 10px">Barang ini ada di invoice tapi tidak dikenali sebagai barang stok. Hubungkan ke barang stok supaya stoknya berkurang, atau tandai bukan barang stok kalau barangnya dibeli lalu langsung dijual.</p>
+      <div class="pil-baris">${lepas.map(x => `<span class="pil" title="${esc(x.nota)} nota, terakhir ${esc(tgl(x.terakhir))}">${esc(x.barang)} <span class="samar">${esc(angkaStok(x.qty))} ${esc(x.satuan)}${x.nota > 1 ? ' · ' + x.nota + ' nota' : ''}</span></span>`).join('')}</div>` : '<p class="samar" style="font-size:13px;margin:6px 0 0">Semua nama di invoice sudah terhubung atau ditandai bukan barang stok.</p>'}
+      ${lewat.length ? `<details style="margin-top:12px"><summary class="samar" style="cursor:pointer;font-size:13px">${lewat.length} nama ditandai bukan barang stok (beli langsung dijual)</summary><div class="pil-baris" style="margin-top:8px">${lewat.map(k => `<span class="pil">${esc(k)} <button type="button" class="samar" data-kembalistok="${esc(k)}" style="background:none;border:0;cursor:pointer;font:inherit;font-size:12px;text-decoration:underline;padding:0 0 0 4px">kembalikan</button></span>`).join('')}</div></details>` : ''}</section>`; })()}
   <section class="bagian kartu">
     <span class="label">Catat belanja barang</span>
     <div class="grid g3" style="margin-top:12px">
@@ -951,6 +985,9 @@ function vStok(el) {
   <section class="bagian"><h2>Belanja <span class="miring">terakhir</span></h2><div class="kartu"><div class="daftar">${[...beliApp, ...beliExcel].sort((a, b) => b.tgl.localeCompare(a.tgl)).slice(0, 20).map(p => `<div><div><b>${esc(p.nama)}</b><div class="samar" style="font-size:12px">${esc(tgl(p.tgl))} · ${esc(angkaStok(p.jumlah))} × ${esc(rp(p.harga))}${p.tempat ? ' · ' + esc(p.tempat) : ''}${p.ket ? ' · ' + esc(p.ket) : ''}${p.app ? '' : ' · dari Excel'}</div></div><span class="angka">${esc(rp(p.jumlah * p.harga))}</span></div>`).join('') || '<div class="kosong">Belum ada belanja.</div>'}</div></div></section>`;
 
   const ulang = () => vStok(el);
+  const bHub = $('#bHubungSemua', el); if (bHub) bHub.onclick = () => dialogHubungStok(lepasInvoice(S.barang), ulang);
+  $$('[data-kembalistok]', el).forEach(b => b.onclick = async () => { const baru = salinStok(); baru.lewat = baru.lewat.filter(k => k !== b.dataset.kembalistok);
+    try { await simpanStok(baru); pesan(`"${b.dataset.kembalistok}" kembali ditanyakan saat ada di invoice`); ulang(); } catch (er) { pesan(er.message, true); } });
   // ----- form belanja
   // nama yang diketik dicocokkan ke daftar stok (tanpa beda huruf besar/kecil); kalau tidak ada = barang baru
   const pilih = () => { const n = kunciB($('#bBarang', el).value); if (!n) return ''; const b = S.barang.find(x => kunciB(x.nama) === n); return b ? b.kode : '__baru'; };
@@ -1528,25 +1565,35 @@ function gambarDaftarInv(el) {
 }
 // Dialog menghubungkan nama barang di invoice ke barang stok: pilihannya disimpan sebagai "nama lain" barang stok itu,
 // jadi berlaku untuk semua invoice (lama dan baru) dan stoknya langsung berkurang. Bisa juga membuat barang stok baru.
-function dialogHubungStok(v, selesai) {
-  const S = stokKini(), B = S.barang, h = hitungInv(v), lepas = [...new Map(h.b.filter(x => qtyMilik(x) > 0 && !cocokStok(B, x.barang, x.satuan)).map(x => [kunciB(x.barang) + '|' + kunciB(x.satuan), x])).values()];
+// Tiap nama bisa: dihubungkan ke barang stok (nama invoice jadi nama lain barang itu), ditandai bukan barang stok (barang
+// yang dibeli lalu langsung dijual, tidak pernah disimpan di gudang), atau dibuatkan barang stok baru. Dipanggil dari
+// editor invoice (nama di invoice itu saja) dan dari halaman Stok (semua invoice sekaligus). 4 Okt 2026.
+function dialogHubungStok(lepas, selesai) {
+  if (!Array.isArray(lepas)) lepas = lepasInvoice(stokKini().barang, [lepas]);
+  const B = stokKini().barang;
   if (!lepas.length) return pesan('Semua barang sudah terhubung ke stok.');
   const lama = $('#dialogStok'); if (lama) lama.remove();
   const el = document.createElement('div'); el.id = 'dialogStok'; el.className = 'tirai-dialog';
-  el.innerHTML = `<div class="kartu dialog"><h3 style="margin:0 0 4px">Hubungkan ke stok</h3><p class="samar" style="margin:0 0 12px;font-size:13px">Pilih barang stok untuk tiap nama di invoice. Nama invoice disimpan sebagai nama lain barang itu, jadi invoice berikutnya langsung mengurangi stok yang sama.</p>
-    ${lepas.map((x, i) => `<label class="isian" style="margin-top:8px"><b>${esc(x.barang)}</b> <span class="samar">(${esc(x.satuan || 'tanpa satuan')})</span>
-      <select data-hub="${i}"><option value="">Lewati</option>${B.filter(b => !kunciB(x.satuan) || !kunciB(b.satuan) || kunciB(b.satuan) === kunciB(x.satuan)).map(b => `<option value="${esc(b.kode)}">${esc(b.nama)} · ${esc(b.satuan)} · stok ${esc(angkaStok(b.stok))}</option>`).join('')}<option value="__baru">+ Buat barang stok baru bernama ini</option></select></label>`).join('')}
-    <div class="baris-aksi" style="margin-top:14px"><button class="tombol utama" id="hubSimpan">Simpan</button><button class="tombol" id="hubBatal">Batal</button></div></div>`;
+  const opsi = (x, sama) => B.filter(b => satuanCocok(x.satuan, b.satuan) === sama).sort((a, b) => a.nama.localeCompare(b.nama)).map(b => `<option value="${esc(b.kode)}">${esc(b.nama)} · ${esc(b.satuan)} · stok ${esc(angkaStok(b.stok))}</option>`).join('');
+  const petunjuk = x => { const s = saranStok(B, x.barang, x.satuan); return s.length ? `<div class="samar" style="font-size:12px;margin-top:3px">Mungkin: ${s.map(b => esc(b.nama) + (/\(/.test(b.nama) ? '' : ' (' + esc(b.satuan) + ')')).join(', ')}</div>` : ''; };
+  el.innerHTML = `<div class="kartu dialog" style="max-height:88vh;overflow:auto"><h3 style="margin:0 0 4px">Hubungkan ke stok</h3><p class="samar" style="margin:0 0 12px;font-size:13px">${lepas.length} nama di invoice belum terhubung. Pilih barang stoknya, atau tandai <b>bukan barang stok</b> untuk barang yang dibeli lalu langsung dijual tanpa disimpan. Pilihan berlaku untuk semua invoice, lama dan baru.</p>
+    ${lepas.map((x, i) => `<label class="isian" style="margin-top:8px"><b>${esc(x.barang)}</b> <span class="samar">(${esc(x.satuan || 'tanpa satuan')}${x.nota > 1 ? ` · ${x.nota} nota` : ''})</span>
+      <select data-hub="${i}"><option value="">Tanya lagi nanti</option><option value="__lewat">Bukan barang stok, beli langsung dijual</option><option value="__baru">+ Buat barang stok baru bernama ini</option>
+        <optgroup label="Barang stok, satuan sama">${opsi(x, true) || '<option disabled>tidak ada</option>'}</optgroup><optgroup label="Barang stok, satuan beda">${opsi(x, false)}</optgroup></select>${petunjuk(x)}</label>`).join('')}
+    <div class="baris-aksi" style="margin-top:14px;flex-wrap:wrap"><button class="tombol utama" id="hubSimpan">Simpan</button><button class="tombol" id="hubSisa" title="Semua yang masih 'Tanya lagi nanti' ditandai bukan barang stok">Sisanya bukan barang stok</button><button class="tombol" id="hubBatal">Batal</button></div></div>`;
   document.body.appendChild(el);
   $('#hubBatal', el).onclick = () => el.remove();
+  $('#hubSisa', el).onclick = () => $$('[data-hub]', el).forEach(s => { if (!s.value) s.value = '__lewat'; });
   $('#hubSimpan', el).onclick = async () => {
-    const baru = { gerak: [...STOK.gerak], ubah: { ...STOK.ubah }, baru: STOK.baru.map(b => ({ ...b })) }; let n = 0;
-    lepas.forEach((x, i) => { const kode = $(`[data-hub="${i}"]`, el).value; if (!kode) return; n++;
+    const baru = salinStok(); let n = 0, nLewat = 0;
+    lepas.forEach((x, i) => { const kode = $(`[data-hub="${i}"]`, el).value; if (!kode) return;
+      if (kode === '__lewat') { if (!baru.lewat.includes(kunciB(x.barang))) baru.lewat.push(kunciB(x.barang)); nLewat++; return; } n++;
       if (kode === '__baru') { baru.baru.push({ kode: 'APP-' + idBaru(), nama: x.barang.trim().replace(/\s+/g, ' '), kategori: 'Lainnya', satuan: x.satuan || 'kg', minimum: 0, harga: +x.modal || 0 }); return; }
-      const b = B.find(b => b.kode === kode), alias = [...aliasB(b), kunciB(x.barang)].filter((a, j, arr) => arr.indexOf(a) === j).join(', ');
+      const b = B.find(b => b.kode === kode), kini = b.dariExcel ? (baru.ubah[kode]?.alias !== undefined ? baru.ubah[kode] : b) : (baru.baru.find(y => y.kode === kode) || b);
+      const alias = [...aliasB(kini), kunciB(x.barang)].filter((a, j, arr) => arr.indexOf(a) === j).join(', ');
       if (b.dariExcel) baru.ubah[kode] = { ...(baru.ubah[kode] || {}), alias }; else baru.baru = baru.baru.map(y => y.kode === kode ? { ...y, alias } : y); });
-    if (!n) return el.remove();
-    try { await simpanStok(baru); el.remove(); pesan(n + ' barang dihubungkan ke stok'); selesai && selesai(); } catch (er) { pesan(er.message, true); } };
+    if (!n && !nLewat) return el.remove();
+    try { await simpanStok(baru); el.remove(); pesan([n ? n + ' barang dihubungkan ke stok' : '', nLewat ? nLewat + ' nama ditandai bukan barang stok' : ''].filter(Boolean).join(', ')); selesai && selesai(); } catch (er) { pesan(er.message, true); } };
 }
 // Tambah rekening dari aplikasi (3 Okt 2026). Disimpan ke kunci 'rekening' dan langsung bisa dipilih di nota; data Excel tidak diubah.
 function dialogRekening(selesai) {
@@ -1636,7 +1683,8 @@ function editorInvoice(el) {
     $$('[data-cakupan]', el).forEach(b => b.onclick = () => { v._cakupan = b.dataset.cakupan; segar(); });
     $('#bCetakFee').hidden = !adaIsiFee; $('#bExcelFee').hidden = !adaIsiFee; $('#bPdfFee').hidden = !adaIsiFee;
     $('#cetak').innerHTML = adaIsiFee && v._tampil === 'fee' ? lembarMitraInvoice(v) : v._tampil === 'sj' ? lembarSuratJalan(v) : lembarInvoice(v);
-    $('#ringkasInv').innerHTML = `<span class="pil hijau">Total ${esc(rp(h.total))}</span>${h.titipMitra ? `<span class="pil">Titipan mitra ${esc(rp(h.titipMitra))}: ikut ditagih, masuk ke mitra, bukan omzet</span>` : ''}${h.titipDapur ? `<span class="pil">Titipan dapur ${esc(rp(h.titipDapur))}: ikut ditagih, bukan omzet, tidak masuk ke mitra</span>` : ''}${adaFee ? `<span class="pil kunyit">Fee dapur ${esc(rp(h.fee))}</span>` : '<button type="button" class="pil" data-aktiffee style="cursor:pointer;border:1px dashed var(--kunyit)">Dapur ini tanpa fee · ketuk untuk aktifkan</button>'}${(() => { const B = stokKini().barang, lepas = h.b.filter(x => qtyMilik(x) > 0 && !cocokStok(B, x.barang, x.satuan)); return lepas.length ? `<button type="button" class="pil" data-hubungstok style="cursor:pointer;border:1px dashed var(--merah);color:var(--merah)">${lepas.length} barang belum terhubung ke stok · ketuk untuk hubungkan</button>` : `<span class="pil">Stok ikut berkurang</span>`; })()}${h.modal ? `<span class="pil">Modal ${esc(rp(h.modal))}</span><span class="pil ${h.laba >= 0 ? 'hijau' : 'merah'}">Laba kotor ${esc(rp(h.laba))} · ${esc(pc(h.laba, h.total))}</span>` : '<span class="pil">Isi modal untuk melihat laba</span>'}`;
+    $('#ringkasInv').innerHTML = `<span class="pil hijau">Total ${esc(rp(h.total))}</span>${h.titipMitra ? `<span class="pil">Titipan mitra ${esc(rp(h.titipMitra))}: ikut ditagih, masuk ke mitra, bukan omzet</span>` : ''}${h.titipDapur ? `<span class="pil">Titipan dapur ${esc(rp(h.titipDapur))}: ikut ditagih, bukan omzet, tidak masuk ke mitra</span>` : ''}${adaFee ? `<span class="pil kunyit">Fee dapur ${esc(rp(h.fee))}</span>` : '<button type="button" class="pil" data-aktiffee style="cursor:pointer;border:1px dashed var(--kunyit)">Dapur ini tanpa fee · ketuk untuk aktifkan</button>'}${(() => { const B = stokKini().barang, lepas = lepasInvoice(B, [v]), nLewat = h.b.filter(x => qtyMilik(x) > 0 && bukanStok(x.barang)).length, nStok = h.b.filter(x => qtyMilik(x) > 0 && !bukanStok(x.barang) && cocokStok(B, x.barang, x.satuan)).length;
+        return lepas.length ? `<button type="button" class="pil" data-hubungstok style="cursor:pointer;border:1px dashed var(--merah);color:var(--merah)">${lepas.length} barang belum terhubung ke stok · ketuk untuk hubungkan</button>` : `<span class="pil">${nStok ? `${nStok} barang mengurangi stok` : 'Tidak ada barang stok'}${nLewat ? ` · ${nLewat} bukan barang stok` : ''}</span>`; })()}${h.modal ? `<span class="pil">Modal ${esc(rp(h.modal))}</span><span class="pil ${h.laba >= 0 ? 'hijau' : 'merah'}">Laba kotor ${esc(rp(h.laba))} · ${esc(pc(h.laba, h.total))}</span>` : '<span class="pil">Isi modal untuk melihat laba</span>'}`;
     $$('#tBaris tr').forEach((tr, i) => { const x = v.baris[i]; const j = tr.querySelector('[data-jumlah]'); if (j) j.textContent = x && +x.qty && +x.harga ? rp(+x.qty * +x.harga) : '-'; });
   };
   const ulang = () => editorInvoice(el);
