@@ -1054,9 +1054,12 @@ let PIU = { baru: [], bayar: [], ubah: {}, dana: [] };
 // dapur yang masih kita pegang (kewajiban); kalau dananya habis, sisa invoice tetap jadi piutang biasa.
 function danaDapur() {
   const per = {};
-  for (const d of PIU.dana || []) (per[d.outlet] ||= { outlet: d.outlet, setoran: [], pakai: [], masuk: 0, dipakai: 0, sisa: 0 }).setoran.push(d);
+  // entri jenis 'pakai' = pengantaran yang tidak lewat invoice aplikasi (misalnya baris dari rincian hutang Excel); selain itu dana masuk
+  for (const d of PIU.dana || []) { const o = per[d.outlet] ||= { outlet: d.outlet, setoran: [], pakaiLuar: [], pakai: [], masuk: 0, dipakai: 0, sisa: 0 }; (d.jenis === 'pakai' ? o.pakaiLuar : o.setoran).push(d); }
   for (const o of Object.values(per)) {
-    o.setoran.sort((a, b) => a.tgl.localeCompare(b.tgl)); o.masuk = o.setoran.reduce((a, d) => a + (+d.jumlah || 0), 0); let sisa = o.masuk; const awal = o.setoran[0].tgl;
+    o.setoran.sort((a, b) => a.tgl.localeCompare(b.tgl)); o.pakaiLuar.sort((a, b) => a.tgl.localeCompare(b.tgl));
+    o.masuk = o.setoran.reduce((a, d) => a + (+d.jumlah || 0), 0); let sisa = o.masuk - o.pakaiLuar.reduce((a, d) => a + (+d.jumlah || 0), 0);
+    const awal = [...o.setoran, ...o.pakaiLuar].map(d => d.tgl).sort()[0] || '0000-00-00';
     const inv = INVOICE.filter(v => v.outlet === o.outlet && !v.lunas && totalInv(v) > 0 && (v.tanggal || '') >= awal).sort((a, b) => String(a.tanggal).localeCompare(String(b.tanggal)) || (+a.nomor || 0) - (+b.nomor || 0));
     for (const v of inv) { if (sisa <= 0) break; const lain = PIU.bayar.filter(b => b.ref === 'i:' + v.id).reduce((a, b) => a + b.jumlah, 0), butuh = totalInv(v) - lain; if (butuh <= 0) continue;
       const j = Math.min(sisa, butuh); o.pakai.push({ inv: v.id, nomor: v.nomor, tgl: v.tanggal, jumlah: j, total: totalInv(v), penuh: j >= butuh }); sisa -= j; }
@@ -1064,7 +1067,7 @@ function danaDapur() {
   return per;
 }
 const potonganDana = v => { const o = danaDapur()[v.outlet], x = o && o.pakai.find(p => p.inv === v.id); return x ? x.jumlah : 0; };
-const totalDanaDapur = () => Object.values(danaDapur()).reduce((a, o) => a + o.sisa, 0);
+const totalDanaDapur = () => Object.values(danaDapur()).reduce((a, o) => a + Math.max(0, o.sisa), 0);
 async function simpanDana(dana) { await simpanPiutang({ ...PIU, dana }); }
 // Kunci satu baris buku Excel. Kalau baris itu diubah di Excel (nominal atau tanggal), pembayaran lama dari aplikasi
 // tidak lagi menempel, supaya tidak terhitung dua kali.
@@ -1155,7 +1158,7 @@ function vPiutang(el, a = []) {
       <label class="isian" style="grid-column:span 3">Keterangan<input id="dnKet" placeholder="misalnya kelebihan transfer per rincian hutang sampai 18 Agustus"></label></div>
       <div class="baris-aksi" style="margin-top:12px"><button class="tombol utama kecil" id="bDanaSimpan">Simpan dana lebih</button></div>` : ''}
     ${DANA.length ? `<div class="daftar" style="margin-top:10px">${DANA.map(o => `<div style="flex-wrap:wrap"><div style="flex:1;min-width:0"><b>${esc(judulOutlet(o.outlet))}</b>
-        <div class="samar" style="font-size:12px">masuk ${esc(rp(o.masuk))} · dipakai ${esc(rp(o.dipakai))} untuk ${o.pakai.length} nota${o.pakai.length ? ': ' + esc(o.pakai.map(x => 'nota ' + nomorNota(x.nomor) + ' ' + tglP(x.tgl) + ' ' + rpS(x.jumlah) + (x.penuh ? '' : ' (sebagian)')).join(', ')) : ''}</div>
+        <div class="samar" style="font-size:12px">${o.setoran.length} transfer ${esc(rp(o.masuk))} · ${o.pakaiLuar.length + o.pakai.length} pengantaran ${esc(rp(o.dipakai))}${o.pakai.length ? ' · dari aplikasi: ' + esc(o.pakai.map(x => 'nota ' + nomorNota(x.nomor) + ' ' + tglP(x.tgl) + ' ' + rpS(x.jumlah) + (x.penuh ? '' : ' (sebagian)')).join(', ')) : ''}</div>
         <div class="baris-aksi" style="margin-top:8px"><a class="tombol kecil" href="#piutang/dana/${encodeURIComponent(o.outlet)}">Rincian & tabel</a></div></div>
         <span class="angka ${o.sisa > 0 ? 'kunyit' : ''}">${esc(rp(o.sisa))}<div class="samar" style="font-size:11.5px">sisa dana</div></span></div>`).join('')}</div>` : ''}
   </section>
@@ -1220,8 +1223,9 @@ function vPiutang(el, a = []) {
 // ---------- RINCIAN DANA LEBIH satu dapur (4 Okt 2026): tabel dana masuk, pengantaran yang dipotong, dan sisa berjalan
 function barisDana(o) {
   const R = [...o.setoran.map(d => ({ tgl: d.tgl, ket: d.ket ? 'Dana masuk, ' + d.ket : 'Dana masuk', masuk: +d.jumlah || 0, id: d.id })),
+    ...o.pakaiLuar.map(d => ({ tgl: d.tgl, ket: d.ket || 'Pengantaran', pakai: +d.jumlah || 0, id: d.id })),
     ...o.pakai.map(x => ({ tgl: x.tgl, ket: `Pengantaran nota ${nomorNota(x.nomor)}${x.penuh ? '' : ` (sebagian dari ${rp(x.total)})`}`, pakai: x.jumlah, inv: x.inv }))];
-  R.sort((a, b) => (a.tgl || '').localeCompare(b.tgl || '') || (a.masuk ? -1 : 1));
+  R.sort((a, b) => (a.tgl || '').localeCompare(b.tgl || '') || (a.pakai ? -1 : 1));   // tanggal sama: pengantaran dulu, lalu transfernya
   let sisa = 0; for (const r of R) { sisa += (r.masuk || 0) - (r.pakai || 0); r.sisa = sisa; }
   return R;
 }
@@ -1244,14 +1248,14 @@ function vPiutangDana(el, outlet) {
   <section class="bagian" style="margin-top:6px">
     <a href="#piutang" class="pil" style="text-decoration:none">← Piutang</a>
     <h2 style="margin-top:14px">${esc(judulOutlet(outlet))} <span class="miring">dana lebih</span></h2>
-    <p class="ket">Uang ${esc(judulOutlet(outlet))} yang sudah masuk melebihi tagihannya. Setiap invoice untuk dapur ini sejak ${esc(tgl(o.setoran[0].tgl, true))} otomatis dipotong dari sini, nota tertua dulu, sampai dananya habis. Sisa dana adalah uang dapur yang masih kita pegang.</p>
+    <p class="ket">Semua transfer ${esc(judulOutlet(outlet))} dan pengantaran untuk dapur ini, urut tanggal. Pengantaran lama dari catatan Excel dicatat sebagai baris pengantaran; invoice dari aplikasi masuk otomatis, nota tertua dulu, sampai dananya habis. Sisa dana adalah uang dapur yang masih kita pegang.</p>
     <div class="grid g3">
-      <div class="kartu ubin"><span class="label">Dana masuk</span><div class="nilai kecil">${esc(rp(o.masuk))}</div><small>${o.setoran.length} kali</small></div>
-      <div class="kartu ubin"><span class="label">Dipakai untuk pengantaran</span><div class="nilai kecil hijau">${esc(rp(o.dipakai))}</div><small>${o.pakai.length} nota</small></div>
-      <div class="kartu ubin"><span class="label">Sisa dana</span><div class="nilai kecil ${o.sisa > 0 ? 'kunyit' : ''}">${esc(rp(o.sisa))}</div><small>${o.sisa > 0 ? 'bisa dipakai pesanan berikutnya' : 'sudah habis, pesanan berikutnya ditagih'}</small></div>
+      <div class="kartu ubin"><span class="label">Dana masuk</span><div class="nilai kecil">${esc(rp(o.masuk))}</div><small>${o.setoran.length} kali transfer</small></div>
+      <div class="kartu ubin"><span class="label">Dipakai untuk pengantaran</span><div class="nilai kecil hijau">${esc(rp(o.dipakai))}</div><small>${o.pakaiLuar.length + o.pakai.length} pengantaran</small></div>
+      <div class="kartu ubin"><span class="label">Sisa dana</span><div class="nilai kecil ${o.sisa > 0 ? 'kunyit' : o.sisa < 0 ? 'merah' : ''}">${esc(rp(o.sisa))}</div><small>${o.sisa > 0 ? 'bisa dipakai pesanan berikutnya' : o.sisa < 0 ? 'dapur masih kurang bayar' : 'sudah habis, pesanan berikutnya ditagih'}</small></div>
     </div>
     <div class="baris-aksi aksi-lekat" style="margin-top:14px">
-      <button class="tombol utama" id="dTambah">+ Catat dana masuk</button>
+      <button class="tombol utama" id="dTambah">+ Catat</button>
       <button class="tombol" id="dPdf">${ik('unduh', 16)} PDF tabel</button>
       ${navigator.canShare ? `<button class="tombol" id="dKirim">${ik('kirim', 16)} Kirim</button>` : ''}
     </div>
@@ -1267,13 +1271,13 @@ function vPiutangDana(el, outlet) {
   <section class="bagian"><span class="label">Tampilan untuk dapur (PDF)</span><div class="lembar" id="dLembar" style="margin-top:10px">${lembarDana(o, R)}</div></section>`;
   const ulang = () => vPiutangDana(el, outlet);
   const jalan = async (tombol, kerja) => { const t = tombol.innerHTML; tombol.disabled = true; tombol.textContent = 'Menyiapkan...'; try { await kerja(); } catch (er) { pesan(er.message, true); } finally { tombol.disabled = false; tombol.innerHTML = t; } };
-  $('#dTambah', el).onclick = () => { $('#dForm', el).innerHTML = `<div class="kartu" style="margin-top:12px"><span class="label">Catat dana masuk</span>
-      <div class="grid g3" style="margin-top:10px"><label class="isian">Jumlah<input type="number" id="dfJml" inputmode="numeric" min="1" placeholder="0"></label><label class="isian">Tanggal<input type="date" id="dfTgl" value="${hIni}"></label><label class="isian">Keterangan<input id="dfKet" placeholder="transfer lebih, uang muka"></label></div>
+  $('#dTambah', el).onclick = () => { $('#dForm', el).innerHTML = `<div class="kartu" style="margin-top:12px"><span class="label">Catat dana masuk atau pengantaran</span>
+      <div class="grid g3" style="margin-top:10px"><label class="isian">Jenis<select id="dfJenis"><option value="masuk">Dana masuk (transfer dapur)</option><option value="pakai">Pengantaran tanpa invoice aplikasi</option></select></label><label class="isian">Jumlah<input type="number" id="dfJml" inputmode="numeric" min="1" placeholder="0"></label><label class="isian">Tanggal<input type="date" id="dfTgl" value="${hIni}"></label><label class="isian" style="grid-column:span 3">Keterangan<input id="dfKet" placeholder="transfer lebih, uang muka, atau barang yang diantar"></label></div>
       <div class="baris-aksi" style="margin-top:10px"><button class="tombol utama kecil" id="dfSimpan">Simpan</button><button class="tombol kecil" id="dfBatal">Batal</button></div></div>`;
     $('#dfJml', el).focus(); $('#dfBatal', el).onclick = ulang;
     $('#dfSimpan', el).onclick = async () => { const jumlah = +$('#dfJml', el).value || 0, t = $('#dfTgl', el).value; if (jumlah <= 0) return pesan('Jumlah belum diisi.', true); if (!t) return pesan('Tanggal belum diisi.', true);
-      try { await simpanDana([...(PIU.dana || []), { id: idBaru(), outlet, tgl: t, jumlah, ket: $('#dfKet', el).value.trim() }]); pesan('Dana masuk ' + rp(jumlah) + ' dicatat'); ulang(); } catch (er) { pesan(er.message, true); } }; };
-  $$('[data-hapusdana]', el).forEach(b => b.onclick = async () => { const d = (PIU.dana || []).find(x => x.id === b.dataset.hapusdana); if (!confirm(`Hapus dana masuk ${rp(d.jumlah)} tanggal ${tgl(d.tgl)}? Invoice yang tadinya dipotong kembali jadi piutang.`)) return;
+      const jenis = $('#dfJenis', el).value; try { await simpanDana([...(PIU.dana || []), { id: idBaru(), outlet, jenis, tgl: t, jumlah, ket: $('#dfKet', el).value.trim() }]); pesan((jenis === 'pakai' ? 'Pengantaran ' : 'Dana masuk ') + rp(jumlah) + ' dicatat'); ulang(); } catch (er) { pesan(er.message, true); } }; };
+  $$('[data-hapusdana]', el).forEach(b => b.onclick = async () => { const d = (PIU.dana || []).find(x => x.id === b.dataset.hapusdana); if (!confirm(`Hapus baris ${d.jenis === 'pakai' ? 'pengantaran' : 'dana masuk'} ${rp(d.jumlah)} tanggal ${tgl(d.tgl)}?`)) return;
     try { await simpanDana((PIU.dana || []).filter(x => x.id !== d.id)); pesan('Dana masuk dihapus'); if (danaDapur()[outlet]) ulang(); else location.hash = 'piutang'; } catch (er) { pesan(er.message, true); } });
   $('#dPdf', el).onclick = () => jalan($('#dPdf', el), async () => { unduhBlob(await pdfLembar(lembarDana(o, R)), namaBerkas + '.pdf'); pesan('PDF diunduh: ' + namaBerkas + '.pdf'); });
   if ($('#dKirim', el)) $('#dKirim', el).onclick = () => jalan($('#dKirim', el), async () => { const blob = await pdfLembar(lembarDana(o, R)), berkas = new File([blob], namaBerkas + '.pdf', { type: 'application/pdf' });
