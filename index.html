@@ -840,7 +840,7 @@ const SAT_SAMA = { btl: 'botol', bks: 'bungkus', bgks: 'bungkus', bkus: 'bungkus
 const satuanKunci = s => { const k = kunciB(s).replace(/[.]+$/, ''); return SAT_SAMA[k] || k; };
 const satuanCocok = (a, b) => !satuanKunci(a) || !satuanKunci(b) || satuanKunci(a) === satuanKunci(b);
 // Kata dalam nama barang: isi kurung dibuang, ejaan umum disamakan (saus = saos, cabai = cabe), urutan tidak dipedulikan.
-const KATA_SAMA = { saus: 'saos', sambel: 'sambal', cabai: 'cabe', telor: 'telur', bombai: 'bombay' };
+const KATA_SAMA = { saus: 'saos', saori: 'saos', sambel: 'sambal', cabai: 'cabe', telor: 'telur', bombai: 'bombay' };   // Saori = merek saos tiram/teriyaki
 const kataNama = n => [...new Set(kunciB(n).replace(/\(.*?\)/g, ' ').replace(/[^a-z0-9 ]+/g, ' ').split(' ').filter(Boolean).map(w => KATA_SAMA[w] || w))];
 const bukanStok = nama => (STOK.lewat || []).includes(kunciB(nama));
 // Urutan pencocokan: nama lain yang dipilih pemilik (berlaku apa pun satuannya), lalu di antara barang bersatuan sama:
@@ -860,7 +860,7 @@ function cocokStok(daftar, nama, satuan) {
 // ditampilkan sebagai teks; pemilik yang memutuskan, supaya "tepung beras" tidak otomatis dianggap Tepung Terigu.
 function saranStok(daftar, nama, satuan) {
   const W = kataNama(nama).filter(w => w.length >= 4); if (!W.length) return [];
-  return daftar.map(b => { const w = kataNama(b.nama), n = w.filter(x => W.includes(x)).length; return { b, n, depan: w[0] === W[0], sat: satuanCocok(satuan, b.satuan) }; })
+  return daftar.map(b => { const w = kataNama(b.nama), n = w.filter(x => W.includes(x)).length; return { b, n, depan: W.includes(w[0]) || w.includes(W[0]), sat: satuanCocok(satuan, b.satuan) }; })   // kata pertama salah satunya ikut cocok
     .filter(x => x.n >= 2 || (x.n === 1 && x.depan)).sort((a, b) => (b.sat - a.sat) || (b.n - a.n)).slice(0, 3).map(x => x.b); }
 // Semua nama di invoice yang belum terhubung ke stok dan belum ditandai bukan barang stok, digabung per nama + satuan.
 function lepasInvoice(daftar, invoice = INVOICE) {
