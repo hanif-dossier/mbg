@@ -250,12 +250,13 @@ table.gaji-harian tr.hari-ini td{background:rgba(95,208,143,.07)} table.gaji-har
   #cetak table{min-width:0!important}
   /* Printer dot matrix (Epson LX-310): abu-abu dan garis titik dicetak putus-putus, jadi semuanya hitam pekat dan garis tegas. */
   #cetak,#cetak *{color:#000!important;background:#fff!important;text-shadow:none!important}
-  #cetak{font-family:Verdana,Tahoma,Arial,sans-serif!important;font-size:17px!important;line-height:1.5!important;padding:10mm 12mm!important}
-  #cetak .kop>div:first-child b{font-size:26px!important;font-family:Verdana,Arial,sans-serif!important}#cetak .kop{border-bottom:3px solid #000!important;padding-bottom:12px!important}
-  #cetak h3{font-size:24px!important;letter-spacing:.1em!important}#cetak .kecil{font-size:15px!important}
-  #cetak table{font-size:17px!important}#cetak th,#cetak td{border:2px solid #000!important;padding:8px 10px!important}
-  #cetak th{font-size:15px!important;font-weight:700!important}#cetak tbody td,#cetak tfoot td{font-weight:700!important}
-  #cetak .ttd{font-size:16px!important}#cetak .ttd .garis-ttd{border-top:2px solid #000!important;margin-top:60px!important;font-size:17px!important}
+  html,body{height:auto!important;min-height:0!important;overflow:visible!important}
+  #cetak{font-family:Verdana,Tahoma,Arial,sans-serif!important;font-size:15px!important;line-height:1.4!important;padding:6mm 10mm!important}
+  #cetak .kop>div:first-child b{font-size:22px!important;font-family:Verdana,Arial,sans-serif!important}#cetak .kop{border-bottom:3px solid #000!important;padding-bottom:8px!important}
+  #cetak h3{font-size:21px!important;letter-spacing:.1em!important;margin:10px 0 6px!important}#cetak .kecil{font-size:13.5px!important}
+  #cetak table{font-size:15px!important}#cetak th,#cetak td{border:2px solid #000!important;padding:5px 8px!important}
+  #cetak th{font-size:13px!important;font-weight:700!important}#cetak tbody td,#cetak tfoot td{font-weight:700!important}
+  #cetak .ttd{font-size:14px!important}#cetak .ttd .garis-ttd{border-top:2px solid #000!important;margin-top:44px!important;font-size:15px!important}
   .lembar .mitra-info{grid-template-columns:repeat(3,minmax(0,1fr))!important}
 }
 @media (prefers-reduced-motion:no-preference){ .muncul{animation:muncul .45s ease both} @keyframes muncul{from{opacity:.001;transform:translateY(8px)}to{opacity:1;transform:none}} }
