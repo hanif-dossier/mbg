@@ -1240,17 +1240,22 @@ function susunDana(o) {
   const kiri = [];
   o.pakaiLuar.forEach(d => { const B = d.baris && d.baris.length ? d.baris : [{ barang: d.ket || 'Pengantaran', qty: '', satuan: '', harga: '', jumlah: +d.jumlah || 0 }];
     B.forEach((b, j) => kiri.push({ no: j ? '' : kiri.filter(x => x.awal).length + 1, tgl: j ? '' : d.tgl, barang: b.barang, qty: b.qty, satuan: b.satuan || '', harga: b.harga, jumlah: +b.jumlah || 0, id: j ? null : d.id, awal: !j })); });
-  const antarInv = o.pakai.map(x => { const v = INVOICE.find(i => i.id === x.inv); if (!v) return { x, B: [{ barang: 'Pengantaran nota ' + nomorNota(x.nomor), qty: '', satuan: '', harga: '', jumlah: x.total }] };
+  // semua invoice dapur ini sejak awal rincian, juga yang sudah melewati dana lebih (6 Okt: nota 027 tidak muncul karena dana habis);
+  // invoice lunas hanya ikut kalau pembayarannya tercatat, supaya tidak tampil sebagai hutang tanpa transfernya
+  const awal = [...o.setoran, ...o.pakaiLuar].map(d => d.tgl).sort()[0] || '0000-00-00';
+  const semuaInv = INVOICE.filter(v => v.outlet === o.outlet && totalInv(v) > 0 && (v.tanggal || '') >= awal && (!v.lunas || PIU.bayar.some(b => b.ref === 'i:' + v.id)))
+    .sort((a, b) => String(a.tanggal).localeCompare(String(b.tanggal)) || (+a.nomor || 0) - (+b.nomor || 0)).map(v => ({ inv: v.id, nomor: v.nomor, tgl: v.tanggal, total: totalInv(v) }));
+  const antarInv = semuaInv.map(x => { const v = INVOICE.find(i => i.id === x.inv); if (!v) return { x, B: [{ barang: 'Pengantaran nota ' + nomorNota(x.nomor), qty: '', satuan: '', harga: '', jumlah: x.total }] };
     const h = hitungInv(v), B = h.b.map(b => ({ barang: namaNota(b), qty: +b.qty, satuan: b.satuan || '', harga: +b.harga || 0, jumlah: +b.qty * (+b.harga || 0) }));
     if (h.disk) B.push({ barang: `Diskon ${angkaQ(+v.diskon)}%`, qty: '', satuan: '', harga: '', jumlah: -h.disk });
     return { x, B }; });
   antarInv.forEach(({ x, B }) => B.forEach((b, j) => kiri.push({ no: j ? '' : kiri.filter(k => k.awal).length + 1, tgl: j ? '' : x.tgl, nota: j ? '' : nomorNota(x.nomor), inv: j ? null : x.inv, barang: b.barang, qty: b.qty, satuan: b.satuan, harga: b.harga, jumlah: b.jumlah, awal: !j, baru: true })));
   const kanan = [...o.setoran.map(d => ({ tgl: d.tgl, jumlah: +d.jumlah || 0, id: d.id, ket: d.ket || '' })),
-    ...o.pakai.flatMap(x => PIU.bayar.filter(b => b.ref === 'i:' + x.inv).map(b => ({ tgl: b.tgl, jumlah: +b.jumlah || 0, ket: 'bayar nota ' + nomorNota(x.nomor) })))].sort((a, b) => a.tgl.localeCompare(b.tgl));
+    ...semuaInv.flatMap(x => PIU.bayar.filter(b => b.ref === 'i:' + x.inv).map(b => ({ tgl: b.tgl, jumlah: +b.jumlah || 0, ket: 'bayar nota ' + nomorNota(x.nomor) })))].sort((a, b) => a.tgl.localeCompare(b.tgl));
   const R = []; for (let i = 0; i < Math.max(kiri.length, kanan.length); i++) R.push({ ...(kiri[i] || {}), tf: kanan[i] || null });
-  const antarLama = o.pakaiLuar.reduce((a, d) => a + (+d.jumlah || 0), 0), antarBaru = o.pakai.reduce((a, x) => a + x.total, 0);
+  const antarLama = o.pakaiLuar.reduce((a, d) => a + (+d.jumlah || 0), 0), antarBaru = semuaInv.reduce((a, x) => a + x.total, 0);
   const totalAntar = antarLama + antarBaru, totalTf = kanan.reduce((a, d) => a + d.jumlah, 0), selisih = totalTf - totalAntar;
-  return { R, totalAntar, antarLama, antarBaru, nBaru: o.pakai.length, totalTf, nTf: kanan.length, selisih, posisi: selisih };
+  return { R, totalAntar, antarLama, antarBaru, nBaru: semuaInv.length, totalTf, nTf: kanan.length, selisih, posisi: selisih };
 }
 const teksPosisi = n => n > 0 ? 'dana dapur lebih, kita berutang ke dapur' : n < 0 ? 'piutang, dapur kurang bayar' : 'impas';
 const labelPosisi = n => n > 0 ? 'Dana dapur lebih' : n < 0 ? 'Piutang' : 'Impas';
