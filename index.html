@@ -1984,8 +1984,12 @@ function posisiLK(k) { const t = akhirLK(k), base = [...(D.neraca || [])].filter
   const LP = { supl: sk ? sk.utang : v('C1'), dana: jmlLK(dana, o => o.sisa), titip: v('C2'), gaji: v('C3'), pinj: v('C4'), lain: v('C5') }, LJ = { pinj: v('D1') };
   const bln = BULAN.filter(x => x.bulan >= base.bulan && x.bulan <= k);
   const E = { modal: v('E1'), setor: v('E2'), saldo: jmlLK(bln.filter(x => x.bulan < k), x => x.labaBersih), laba: (bln.find(x => x.bulan === k) || {}).labaBersih || 0, prive: -(v('E4') + jmlLK(bln.filter(x => x.bulan > base.bulan), x => x.nonOps)) };
-  const S = o => jmlLK(Object.values(o)), TAL = S(L), TAT = S(T), TLP = S(LP), TLJ = S(LJ), TE = S(E);
-  return { t, base, sama, P, stok, dana, L, T, LP, LJ, E, TAL, TAT, TA: TAL + TAT, TLP, TLJ, TL: TLP + TLJ, TE, selisih: Math.round(TAL + TAT - TLP - TLJ - TE), belum: [['A1', 'kas'], ['A2', 'saldo bank'], ['E1', 'modal awal']].filter(([x]) => !v(x)).map(x => x[1]) }; }
+  const S = o => jmlLK(Object.values(o)), TAL = S(L), TAT = S(T), TLP = S(LP), TLJ = S(LJ); let TE = S(E);
+  // Opname tiap Sabtu (10 Okt 2026, pemilik: "opnamenya setiap Sabtu, tinggal kurangi dan hitung piutangnya"): kalau saldo
+  // bank dan tunai sudah diisi di Arus kas, posisi = hasil opname. Beda dengan catatan transaksi masuk ekuitas sebagai
+  // koreksi opname, jadi neraca selalu seimbang dan bedanya tetap terlihat.
+  let selisih = Math.round(TAL + TAT - TLP - TLJ - TE); if (sk && selisih) { E.koreksi = selisih; TE += selisih; selisih = 0; }
+  return { t, base, sama, P, stok, dana, L, T, LP, LJ, E, TAL, TAT, TA: TAL + TAT, TLP, TLJ, TL: TLP + TLJ, TE, selisih, opname: sk ? sk.tgl : null, belum: [['A1', 'kas'], ['A2', 'saldo bank'], ['E1', 'modal awal']].filter(([x]) => !v(x)).map(x => x[1]) }; }
 
 // Kartu aset di Beranda (10 Okt 2026): posisi harta hari ini dan pintu ke laporan bulanan dan tahunan.
 function kartuAset() { const akhir = BULAN.at(-1); if (!akhir) return ''; const N = posisiLK(akhir.bulan); if (!N) return '';
@@ -2046,7 +2050,7 @@ function vNeraca(el, [bln]) {
       { t: 'jumlah', l: 'Jumlah liabilitas', v: dua(x => x.TL) },
       { t: 'sub', l: 'Ekuitas', v: ['', ''] },
       p('Modal disetor', '', x => x.E.modal, { wajib: 1 }), p('Tambahan setoran modal', '', x => x.E.setor), p('Saldo laba bulan-bulan sebelumnya', '', x => x.E.saldo),
-      p(T ? 'Laba bersih ' + namaBln(b.bulan) : 'Laba bersih periode berjalan', 7, x => x.E.laba, { wajib: 1, ...(T ? { ket: 'laba bulan-bulan sebelum berkas neraca terakhir sudah ada di modal' } : {}) }), p('Prive (pengambilan pribadi pemilik)', 9, x => x.E.prive),
+      p(T ? 'Laba bersih ' + namaBln(b.bulan) : 'Laba bersih periode berjalan', 7, x => x.E.laba, { wajib: 1, ...(T ? { ket: 'laba bulan-bulan sebelum berkas neraca terakhir sudah ada di modal' } : {}) }), p('Prive (pengambilan pribadi pemilik)', 9, x => x.E.prive), p('Koreksi hasil opname Sabtu', 11, x => x.E.koreksi || 0, { ket: 'beda antara saldo, piutang, dan stok hasil opname dengan catatan transaksi' }),
       { t: 'jumlah', l: 'Jumlah ekuitas', v: dua(x => x.TE) },
       { t: 'total', l: 'Jumlah liabilitas dan ekuitas', v: dua(x => x.TL + x.TE) },
       ...(ada(dua(x => x.selisih)) ? [{ t: 'memo', l: 'Selisih yang belum tercatat', c: 1, v: dua(x => x.selisih) }] : [])])); }
@@ -2147,6 +2151,7 @@ function vNeraca(el, [bln]) {
     nb(9, 'Pengeluaran pribadi (prive)', R.pribadi.length ? tKecil(['Keterangan', 'Jumlah'], R.pribadi.map(x => [String(x.ket || 'Pribadi'), x.jumlah || 0]), ['Jumlah', R.nonOps]) + '<p style="margin-top:6px">Uang usaha yang dipakai untuk keperluan pribadi. Tidak dihitung beban, tetapi mengurangi ekuitas.</p>' : `<p>Tidak ada pengeluaran pribadi ${T ? 'tahun' : 'bulan'} ini.</p>`),
     nb(10, 'Barang dengan penjualan terbesar', Object.keys(R.barang).length ? tKecil(['Barang', 'Jumlah', 'Penjualan', 'Laba'], Object.values(R.barang).sort((x, y) => y.omzet - x.omzet).slice(0, 10).map(x => [x.barang, (+x.qty).toLocaleString('id-ID', { maximumFractionDigits: 2 }) + ' ' + x.satuan, x.omzet, x.laba])) : '<p>Belum ada rincian barang.</p>'),
     nb(11, 'Perubahan ekuitas dan arus kas', `<p>Laporan arus kas disusun dengan metode tidak langsung: laba bersih disesuaikan dengan perubahan piutang, persediaan, dan utang antara neraca awal dan akhir periode, sehingga terlihat ke mana laba berubah menjadi uang. Kenaikan piutang atau stok berarti laba masih tertahan di dapur atau gudang, belum menjadi uang di bank.</p>
+      <p>Neraca disusun dari opname tiap Sabtu: saldo bank dan uang tunai diisi di Arus kas, piutang dan stok dihitung aplikasi. Beda kecil antara hasil opname dan catatan transaksi (misalnya setoran atau biaya yang belum dicatat) masuk ekuitas sebagai "Koreksi hasil opname Sabtu".</p>
       <p>Baris penyesuaian ekuitas dan selisih kas muncul kalau saldo kas dan bank di awal periode belum pernah diisi, atau modal dan stok dicatat ulang (hitung gudang dan modal penyeimbang 10 Oktober 2026). Begitu saldo bank dan kas diisi setiap akhir bulan, kedua baris itu menjadi nol dan arus kas menjelaskan seluruh perubahan uang.</p>`)].join('');
 
   el.innerHTML = `${tabKas(T ? 'tahunan' : 'bulanan')}
