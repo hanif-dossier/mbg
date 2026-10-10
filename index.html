@@ -912,8 +912,17 @@ function teksStok(b, q = b.stok) {
   if (sisa > 0 || !bag.length) bag.push(angkaStok(sisa) + ' ' + b.satuan);
   return bag.join(' ') + (bag.length > 1 || K.some(k => bag[0].endsWith(' ' + k.satuan)) ? ` (${angkaStok(q)} ${b.satuan})` : ''); }
 // barang beli-langsung-jual yang terdaftar: dicocokkan dengan nama atau nama lainnya saja, apa pun satuannya
+// Selain nama persis dan nama lain, nama yang memuat semua kata nama terdaftar (minimal dua kata) juga dikenali:
+// "minyak sovia 18L" dan "minyak sovia @18L" jadi Minyak Sovia. Nama satu kata hanya dicocokkan persis, dan calon
+// lebih dari satu tidak ditebak, supaya merek lain ("minyak goreng fortune") tetap didaftarkan sendiri oleh pemilik.
+const ingatLangsung = { dasar: null, peta: new Map() };
 function cocokLangsung(nama) { const I = INDUK(), k = kunciB(nama); if (!I || !k) return null;
-  return I.barang.find(b => b.jenis === 'langsung' && (kunciB(b.nama) === k || namaInti(b.nama) === k || aliasB(b).includes(k))) || null; }
+  if (ingatLangsung.dasar !== STOK) { ingatLangsung.dasar = STOK; ingatLangsung.peta = new Map(); } if (ingatLangsung.peta.has(k)) return ingatLangsung.peta.get(k);
+  const L = I.barang.filter(b => b.jenis === 'langsung'); let hasil = L.find(b => kunciB(b.nama) === k || namaInti(b.nama) === k || aliasB(b).includes(k)) || null;
+  if (!hasil) { const W = kataNama(nama), c = L.flatMap(b => [b.nama, ...aliasB(b)].map(n => ({ b, w: kataNama(namaInti(n)) }))).filter(x => x.w.length > 1 && x.w.every(w => W.includes(w)));
+    if (c.length) { const m = Math.max(...c.map(x => x.w.length)), t = [...new Set(c.filter(x => x.w.length === m).map(x => x.b))]; if (t.length === 1) hasil = t[0]; }
+    else if (W.length > 1) { const r = L.filter(b => { const w = kataNama(namaInti(b.nama)); return W.every(x => w.includes(x)); }); if (r.length === 1) hasil = r[0]; } }   // "saus sambal" untuk Saos Sambal ABC
+  ingatLangsung.peta.set(k, hasil); return hasil; }
 const bukanStok = nama => (STOK.lewat || []).includes(kunciB(nama)) || !!cocokLangsung(nama);
 // Urutan pencocokan: nama lain yang dipilih pemilik (berlaku apa pun satuannya), lalu di antara barang bersatuan sama:
 // nama persis, nama inti (tanpa kurung), nama invoice memuat semua kata nama stok ("beras cap belalang" untuk Beras,
@@ -2208,21 +2217,36 @@ function daftarDapur() {
   return Object.values(peta).sort((a, b) => (b.aktif !== false) - (a.aktif !== false) || (b.tanggalTerakhir || '').localeCompare(a.tanggalTerakhir || ''));
 }
 // Harga, satuan, modal, dan fee terakhir sebuah barang untuk dapur tertentu.
-function infoBarang(outlet, barang) {
+// satuan (boleh kosong): kalau baris invoice sudah bersatuan (liter atau dus), harga dan modal diambil dari riwayat bersatuan sama
+function infoBarang(outlet, barang, satuan) {
   const k = kunciB(barang); if (!k) return null;
-  const kat = (D.katalog || []).filter(x => kunciB(x.barang) === k).sort((a, b) => (b.tanggal || '').localeCompare(a.tanggal || ''));
+  const reg = INDUK() ? namaTerdaftarIngat(barang) : null, sama = n => kunciB(n) === k || (reg && namaTerdaftarIngat(n) === reg);
+  const sat = satuanKunci(satuan), satSama = x => !sat || satuanKunci(x) === sat;
+  let kat = (D.katalog || []).filter(x => sama(x.barang)); if (sat && kat.some(x => satSama(x.satuan))) kat = kat.filter(x => satSama(x.satuan));
+  kat.sort((a, b) => (b.tanggal || '').localeCompare(a.tanggal || ''));
   const diDapur = kat.find(x => x.outlet === outlet), umum = kat[0];
-  let modal = 0, fee = null, lap = null;
-  for (const w of M) for (const r of w.rincian) if (kunciB(r.b) === k) { if (r.m) modal = r.m; if (r.o === outlet) { fee = r.f; lap = r; } }
-  const tarif = (TARIF[outlet] || {})[k];
-  const sb = barangStok(barang); const satInv = (diDapur || umum || lap || {}).satuan || (lap || {}).s || '';
+  let modal = 0, fee = null, lap = null, R = [];
+  for (const w of M) for (const r of w.rincian) if (sama(r.b)) R.push(r); if (sat && R.some(r => satSama(r.s))) R = R.filter(r => satSama(r.s));
+  for (const r of R) { if (r.m) modal = r.m; if (r.o === outlet) { fee = r.f; lap = r; } }
+  const tarif = (TARIF[outlet] || {})[k] ?? (reg ? (TARIF[outlet] || {})[kunciB(reg)] : undefined);
+  const dariLap = lap && (!diDapur || (lap.t || '') >= (diDapur.tanggal || '')), satSaran = (dariLap ? lap.s : (diDapur || umum || {}).satuan) || (umum || {}).satuan || '';
+  const sb = barangStok(barang); const satInv = sat ? satuan : satSaran;
+  if (!sat && satuanKunci(satInv)) { const Rm = R.filter(r => satuanKunci(r.s) === satuanKunci(satInv)); if (Rm.length) modal = (Rm.filter(r => r.m).at(-1) || {}).m || modal; }   // modal sesatuan dengan saran satuan
   if (sb && sb.belanjaApp && (!satInv || kunciB(satInv) === kunciB(sb.satuan))) modal = sb.harga;
   if (sb && sb.induk && +sb.harga) { const f = faktorB(sb, satInv || sb.satuan); if (f != null) modal = Math.round(sb.harga * f); }
-  const dariLap = lap && (!diDapur || (lap.t || '') >= (diDapur.tanggal || ''));
-  return { satuan: (dariLap ? lap.s : (diDapur || umum || {}).satuan) || (umum || {}).satuan || '', harga: dariLap ? lap.h : (diDapur || umum || {}).harga || 0,
+  return { satuan: satSaran, harga: dariLap ? lap.h : (diDapur || umum || {}).harga || 0,
     modal, fee: OUTLET_FEE.includes(outlet) ? (tarif ?? fee ?? 0) : 0 };
 }
+// Satu barang satu nama (10 Okt 2026, pemilik: "minyak sovia ya minyak sovia aja, gak ada liter apa segala macam,
+// barang lain juga"). Kalau daftar barang induk sudah ada, saran nama di invoice hanya nama terdaftar, dan nama lama atau
+// singkatan yang diketik langsung diganti ke nama terdaftarnya. Dus atau liter dipilih di kolom satuan.
+function namaTerdaftar(nama, satuan) { const I = INDUK(), k = kunciB(nama); if (!I || !k) return null;
+  const persis = I.barang.find(b => kunciB(b.nama) === k); if (persis) return persis.nama;
+  const l = cocokLangsung(nama); if (l) return l.nama;
+  const b = cocokStok(stokKini().barang, nama, satuan); return b ? b.nama : null; }
+const namaTerdaftarIngat = (() => { let dasar = null, peta = new Map(); return n => { if (dasar !== STOK) { dasar = STOK; peta = new Map(); } const k = kunciB(n); if (!peta.has(k)) peta.set(k, namaTerdaftar(n)); return peta.get(k); }; })();
 function namaBarang(outlet) {
+  if (INDUK()) return INDUK().barang.map(b => b.nama).sort((a, b) => a.localeCompare(b));
   const lihat = new Map();
   const tambah = n => { const k = kunciB(n); if (k && !lihat.has(k)) lihat.set(k, String(n).trim()); };
   if (INDUK()) INDUK().barang.slice().sort((a, b) => a.nama.localeCompare(b.nama)).forEach(b => tambah(b.nama));
@@ -2566,18 +2590,18 @@ function editorInvoice(el) {
     if (!v.mitra || v.mitra === mitraLama) v.mitra = mitraTerakhir(d.outlet);
     if (!OUTLET_FEE.includes(d.outlet)) v._tampil = 'nota';
     // harga dan fee barang yang sudah diketik disesuaikan dengan dapur baru
-    v.baris.forEach(x => { const inf = infoBarang(v.outlet, x.barang); if (inf) x.harga = inf.harga || x.harga; if (!OUTLET_FEE.includes(v.outlet)) x.fee = ''; });
+    v.baris.forEach(x => { const inf = infoBarang(v.outlet, x.barang, x.satuan); if (inf) x.harga = inf.harga || x.harga; if (!OUTLET_FEE.includes(v.outlet)) x.fee = ''; });
     ulang(); };
   const gantiFee = async tombol => { if (tombol) tombol.disabled = true; const nyala = !OUTLET_FEE.includes(v.outlet);
     if (!(await aturFee(v.outlet, nyala))) { if (tombol) tombol.disabled = false; return; }
-    if (!nyala) { v._tampil = 'nota'; v.baris.forEach(x => { x.fee = ''; }); } else v.baris.forEach(x => { if (x.barang && (x.fee === '' || x.fee == null)) { const inf = infoBarang(v.outlet, x.barang); if (inf && inf.fee) x.fee = inf.fee; } });
+    if (!nyala) { v._tampil = 'nota'; v.baris.forEach(x => { x.fee = ''; }); } else v.baris.forEach(x => { if (x.barang && (x.fee === '' || x.fee == null)) { const inf = infoBarang(v.outlet, x.barang, x.satuan); if (inf && inf.fee) x.fee = inf.fee; } });
     ulang(); };
   $('#iFee').onclick = e => gantiFee(e.currentTarget);
   $('#ringkasInv').addEventListener('click', e => { const t = e.target.closest('[data-aktiffee]'); if (t) gantiFee(t); if (e.target.closest('[data-hubungstok]')) dialogHubungStok(v, segar); });   // #ringkasInv dibuat baru tiap kali editor digambar
   $('#iTgl').oninput = e => { v.tanggal = e.target.value; v.baris.forEach(x => { delete x.tgl; }); segar(); };
   if ($('#iMitra')) $('#iMitra').oninput = e => { v.mitra = e.target.value; segar(); };
   if ($('#bTarif')) $('#bTarif').onclick = () => { let n = 0;
-    v.baris.forEach((x, i) => { if (!x.barang || (x.fee !== '' && x.fee != null)) return; const inf = infoBarang(v.outlet, x.barang); if (inf && inf.fee) { x.fee = inf.fee; n++; const inp = $(`#tBaris [data-i="${i}"][data-k="fee"]`); if (inp) inp.value = inf.fee; } });
+    v.baris.forEach((x, i) => { if (!x.barang || (x.fee !== '' && x.fee != null)) return; const inf = infoBarang(v.outlet, x.barang, x.satuan); if (inf && inf.fee) { x.fee = inf.fee; n++; const inp = $(`#tBaris [data-i="${i}"][data-k="fee"]`); if (inp) inp.value = inf.fee; } });
     pesan(n ? `${n} kolom fee diisi dari tarif` : 'Tidak ada kolom fee kosong yang punya tarif'); segar(); };
   $('#iNomor').oninput = e => { v.nomor = +e.target.value || 0; segar(); };
   $('#iToko').oninput = e => { v.toko = e.target.value; segar(); };
@@ -2595,7 +2619,8 @@ function editorInvoice(el) {
     if (t.dataset.k !== 'barang') return;
     // nama barang yang memuat kata "titip" langsung ditandai titipan
     if (/titip/i.test(v.baris[i].barang) && !(+v.baris[i].titipQty) && +v.baris[i].qty) { v.baris[i].titipQty = +v.baris[i].qty; v.baris[i].titipDari ||= 'dapur'; ulang(); return; }
-    const x = v.baris[i], inf = infoBarang(v.outlet, x.barang); if (!inf) return;
+    const resmi = namaTerdaftar(v.baris[i].barang, v.baris[i].satuan); if (resmi && resmi !== v.baris[i].barang) { v.baris[i].barang = resmi; t.value = resmi; }
+    const x = v.baris[i], inf = infoBarang(v.outlet, x.barang, x.satuan); if (!inf) return;
     // hanya kotak yang masih kosong yang diisi, supaya ketikan pemilik tidak tertimpa
     if (!x.satuan) x.satuan = inf.satuan; if (!+x.harga) x.harga = inf.harga || ''; if (!+x.modal) x.modal = inf.modal || '';
     const tr = t.closest('tr'); const fp = tr.querySelector('[data-k="fee"]'); if (fp) fp.placeholder = inf.fee ? String(inf.fee) : ''; for (const k of ['satuan', 'harga', 'modal']) { const inp = tr.querySelector(`[data-k="${k}"]`); if (inp) inp.value = x[k] ?? ''; }
@@ -2615,6 +2640,7 @@ function editorInvoice(el) {
     if (jadi && !confirm('Tandai invoice ini sudah lunas? Invoice akan hilang dari daftar piutang.')) return;
     try { await setLunasInvoice(v.id, jadi); pesan(jadi ? 'Invoice ditandai lunas' : 'Invoice kembali belum lunas'); ulang(); } catch (er) { pesan(er.message, true); } };
   $('#bSimpan').onclick = async () => {
+    if (INDUK()) v.baris.forEach(x => { if (x.barang && !/titip/i.test(x.barang)) { const r = namaTerdaftar(x.barang, x.satuan); if (r) x.barang = r; } });   // nama lama jadi nama terdaftar
     const h = hitungInv(v); if (!h.b.length) return pesan('Isi minimal satu barang dengan banyaknya.', true);
     if (INDUK()) { const lepas = lepasInvoice(stokKini().barang, [v]);   // nama barang wajib terdaftar (10 Okt 2026)
       if (lepas.length) { pesan(`${lepas.length} nama barang belum terdaftar. Daftarkan dulu, lalu invoice tersimpan.`, true);
@@ -2656,7 +2682,7 @@ function editorInvoice(el) {
   segar();
 }
 function barisEditor(x, i, adaFee) {
-  const tarifHint = x => { if (!INV || !x.barang) return ''; const inf = infoBarang(INV.outlet, x.barang); return inf && inf.fee ? String(inf.fee) : ''; };
+  const tarifHint = x => { if (!INV || !x.barang) return ''; const inf = infoBarang(INV.outlet, x.barang, x.satuan); return inf && inf.fee ? String(inf.fee) : ''; };
   const inp = (k, lebar, jenis = 'text', kanan = false, extra = '') => `<td class="sel"><input data-i="${i}" data-k="${k}" type="${jenis}" value="${esc(x[k] ?? '')}" style="min-width:${lebar}px" ${kanan ? 'class="angka"' : ''} ${jenis === 'number' ? 'step="any" inputmode="decimal"' : ''} ${extra}></td>`;
   return `<tr><td class="samar">${i + 1}</td>${inp('barang', 170, 'text', false, 'list="dlBarang" autocomplete="off"')}${inp('qty', 76, 'number', true)}${inp('satuan', 70)}${inp('harga', 96, 'number', true)}
     <td class="angka" data-jumlah style="padding-top:12px">-</td><td class="sel"><input data-i="${i}" data-k="titipQty" type="number" step="any" inputmode="decimal" min="0" class="angka" value="${esc(x.titip ? x.qty : (x.titipQty ?? ''))}" placeholder="0" title="Jumlah titipan dalam baris ini" style="min-width:70px">${qtyTitip(x) > 0 ? `<select data-i="${i}" data-k="titipDari" title="Titipan ini dari siapa" style="margin-top:4px;min-width:70px;font-size:12px"><option value="dapur"${(x.titipDari || 'mitra') === 'dapur' ? ' selected' : ''}>dari dapur</option><option value="mitra"${(x.titipDari || 'mitra') === 'mitra' ? ' selected' : ''}>ke mitra</option></select>` : ''}</td>
