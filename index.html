@@ -537,6 +537,7 @@ function vBeranda(el) {
       <div><span class="ik">${ik('minggu')}</span><span><b>${esc(ramai ? ramai.n : '-')}</b><small>hari paling ramai, rata-rata ${esc(ramai ? rpS(ramai.rata) : '-')}</small></span></div>
     </div>
   </section>
+  ${kartuAset()}
 
   <section class="bagian grid g2" style="align-items:start">
     <div class="kartu"><span class="label">Omzet per bulan</span>
@@ -1731,13 +1732,39 @@ function posisiLK(k) { const t = akhirLK(k), base = [...(D.neraca || [])].filter
   const S = o => jmlLK(Object.values(o)), TAL = S(L), TAT = S(T), TLP = S(LP), TLJ = S(LJ), TE = S(E);
   return { t, base, sama, P, stok, dana, L, T, LP, LJ, E, TAL, TAT, TA: TAL + TAT, TLP, TLJ, TL: TLP + TLJ, TE, selisih: Math.round(TAL + TAT - TLP - TLJ - TE), belum: [['A1', 'kas'], ['A2', 'saldo bank'], ['E1', 'modal awal']].filter(([x]) => !v(x)).map(x => x[1]) }; }
 
+// Kartu aset di Beranda (10 Okt 2026): posisi harta hari ini dan pintu ke laporan bulanan dan tahunan.
+function kartuAset() { const akhir = BULAN.at(-1); if (!akhir) return ''; const N = posisiLK(akhir.bulan); if (!N) return '';
+  const namaB = k => BLN[+k.slice(5, 7) - 1] + ' ' + k.slice(0, 4), lalu = BULAN.at(-2), th = akhir.bulan.slice(0, 4);
+  const hariBaru = +hariIniISO().slice(8, 10) <= 7 && lalu;   // minggu pertama bulan: laporan bulan lalu baru saja lengkap
+  return `<section class="bagian kartu" id="kartuAset"><div style="display:flex;justify-content:space-between;gap:10px;flex-wrap:wrap;align-items:center"><span class="label">Aset usaha per ${esc(tgl(N.t, true))}</span><a class="tombol kecil" href="#neraca/${esc(akhir.bulan)}">Lihat neraca lengkap</a></div>
+    <div class="grid g4" style="margin-top:12px">
+      <div class="kartu ubin"><span class="label">Jumlah aset</span><div class="nilai">${esc(rpS(N.TA))}</div><small>bank ${esc(rpS(N.L.bank + N.L.kas + N.L.ew))} · piutang ${esc(rpS(N.L.piuU + N.L.piuL))} · stok ${esc(rpS(N.L.stok))}</small></div>
+      <div class="kartu ubin"><span class="label">Utang</span><div class="nilai kunyit">${esc(rpS(N.TL))}</div><small>liabilitas yang belum dibayar</small></div>
+      <div class="kartu ubin"><span class="label">Kekayaan bersih</span><div class="nilai hijau">${esc(rpS(N.TE))}</div><small>aset dikurangi utang (ekuitas)</small></div>
+      <div class="kartu ubin"><span class="label">Laba bersih ${esc(BLN[+akhir.bulan.slice(5, 7) - 1])}</span><div class="nilai">${esc(rpS(akhir.labaBersih))}</div><small>bulan berjalan</small></div>
+    </div>
+    ${N.selisih ? `<p class="samar" style="font-size:12.5px;margin:10px 0 0">Neraca belum seimbang ${esc(rp(Math.abs(N.selisih)))}: kas atau saldo bank akhir bulan belum diperbarui.</p>` : ''}
+    <div class="pil-baris" style="margin-top:12px">
+      ${hariBaru ? `<a class="pil hijau" href="#neraca/${esc(lalu.bulan)}" style="text-decoration:none">Laporan ${esc(namaB(lalu.bulan))} sudah lengkap · buka</a>` : ''}
+      <a class="pil" href="#neraca/${esc(akhir.bulan)}" style="text-decoration:none">Laporan bulanan ${esc(namaB(akhir.bulan))}</a>
+      ${!hariBaru && lalu ? `<a class="pil" href="#neraca/${esc(lalu.bulan)}" style="text-decoration:none">Laporan ${esc(namaB(lalu.bulan))}</a>` : ''}
+      <a class="pil" href="#neraca/tahun-${esc(th)}" style="text-decoration:none">Laporan tahunan ${esc(th)}</a>
+    </div></section>`; }
+// Laporan tahunan (10 Okt 2026): #neraca/tahun-2026 memakai susunan yang sama dengan laporan bulanan. Laba rugi
+// menjumlah semua bulan tahun itu, neraca per akhir tahun (atau hari ini selama tahun berjalan) dibandingkan akhir tahun
+// lalu, ditambah tabel perkembangan per bulan. Laporan bulan dan tahun lengkap sendiri begitu periodenya selesai.
+function gabungTahun(th) { const B = BULAN.filter(x => x.bulan.startsWith(th + '-')); if (!B.length) return null;
+  const o = { tahun: th, bulan: B.at(-1).bulan, mulai: B[0].bulan + '-01', bulanIsi: B, minggu: B.flatMap(x => x.minggu) };
+  for (const f of ['omzet', 'modal', 'fee', 'pengeluaran', 'labaKotor', 'biayaOps', 'nonOps', 'labaBersih']) o[f] = jmlLK(B, x => x[f]); return o; }
 function vNeraca(el, [bln]) {
   const namaBln = k => k ? BLN[+k.slice(5, 7) - 1] + ' ' + k.slice(0, 4) : '-';
-  const b = BULAN.find(x => x.bulan === bln) || BULAN.at(-1);
+  const T = /^tahun-(\d{4})$/.exec(bln || ''), tahun = T ? T[1] : null;
+  const b = T ? gabungTahun(tahun) : BULAN.find(x => x.bulan === bln) || BULAN.at(-1);
   if (!b) { el.innerHTML = '<div class="kosong">Belum ada laporan.</div>'; return; }
-  const iB = BULAN.indexOf(b), bl = BULAN[iB - 1], R = rekapLK(b), RL = rekapLK(bl), N = posisiLK(b.bulan), NL = bl ? posisiLK(bl.bulan) : null;
-  const berjalan = akhirLK(b.bulan) < new Date(+b.bulan.slice(0, 4), +b.bulan.slice(5, 7), 0).toLocaleDateString('sv-SE');
-  const kolomN = [tglPendek(akhirLK(b.bulan)), bl ? tglPendek(akhirLK(bl.bulan)) : '-'], kolomR = [BLN3[+b.bulan.slice(5, 7) - 1] + ' ' + b.bulan.slice(0, 4) + (berjalan ? '*' : ''), bl ? BLN3[+bl.bulan.slice(5, 7) - 1] + ' ' + bl.bulan.slice(0, 4) : '-'];
+  const iB = BULAN.indexOf(b), bl = T ? gabungTahun(String(+tahun - 1)) : BULAN[iB - 1], R = rekapLK(b), RL = rekapLK(bl), N = posisiLK(b.bulan), NL = bl ? posisiLK(bl.bulan) : null;
+  const berjalan = T ? akhirLK(b.bulan) < tahun + '-12-31' : akhirLK(b.bulan) < new Date(+b.bulan.slice(0, 4), +b.bulan.slice(5, 7), 0).toLocaleDateString('sv-SE');
+  const judulP = T ? 'Tahun ' + tahun : namaBln(b.bulan), judulL = bl ? (T ? 'Tahun ' + bl.tahun : namaBln(bl.bulan)) : '-', lamaP = T ? 'setahun' : 'sebulan';
+  const kolomN = [tglPendek(akhirLK(b.bulan)), bl ? tglPendek(akhirLK(bl.bulan)) : '-'], kolomR = T ? [tahun + (berjalan ? '*' : ''), bl ? bl.tahun : '-'] : [BLN3[+b.bulan.slice(5, 7) - 1] + ' ' + b.bulan.slice(0, 4) + (berjalan ? '*' : ''), bl ? BLN3[+bl.bulan.slice(5, 7) - 1] + ' ' + bl.bulan.slice(0, 4) : '-'];
   const dua = (f, g = f) => [N ? f(N) : null, NL ? g(NL) : null], duaR = f => [f(R), RL ? f(RL) : null];
   const ada = arr => arr.some(x => x != null && Math.round(x) !== 0);
   const saring = rows => rows.filter(r => !(r.t === 'pos' || r.t === 'pos2') || r.wajib || ada(r.v));
@@ -1764,7 +1791,7 @@ function vNeraca(el, [bln]) {
       { t: 'jumlah', l: 'Jumlah liabilitas', v: dua(x => x.TL) },
       { t: 'sub', l: 'Ekuitas', v: ['', ''] },
       p('Modal disetor', '', x => x.E.modal, { wajib: 1 }), p('Tambahan setoran modal', '', x => x.E.setor), p('Saldo laba bulan-bulan sebelumnya', '', x => x.E.saldo),
-      p('Laba bersih periode berjalan', 7, x => x.E.laba, { wajib: 1 }), p('Prive (pengambilan pribadi pemilik)', 9, x => x.E.prive),
+      p(T ? 'Laba bersih ' + namaBln(b.bulan) : 'Laba bersih periode berjalan', 7, x => x.E.laba, { wajib: 1, ...(T ? { ket: 'laba bulan-bulan sebelum berkas neraca terakhir sudah ada di modal' } : {}) }), p('Prive (pengambilan pribadi pemilik)', 9, x => x.E.prive),
       { t: 'jumlah', l: 'Jumlah ekuitas', v: dua(x => x.TE) },
       { t: 'total', l: 'Jumlah liabilitas dan ekuitas', v: dua(x => x.TL + x.TE) },
       ...(ada(dua(x => x.selisih)) ? [{ t: 'memo', l: 'Selisih yang belum tercatat', c: 1, v: dua(x => x.selisih) }] : [])])); }
@@ -1790,7 +1817,7 @@ function vNeraca(el, [bln]) {
     { t: 'memo', l: 'Pengeluaran pribadi (tidak memotong laba usaha)', c: 9, v: duaR(x => x.nonOps) }]));
 
   // ----- 3. rasio
-  const hariP = x => x ? Math.max(1, Math.round((tglD(akhirLK(x.bulan)) - tglD(x.bulan + '-01')) / 864e5) + 1) : 1;
+  const hariP = x => x ? Math.max(1, Math.round((tglD(akhirLK(x.bulan)) - tglD(x.mulai || x.bulan + '-01')) / 864e5) + 1) : 1;
   const persen = (a, c) => c ? (a / c * 100).toLocaleString('id-ID', { minimumFractionDigits: 1, maximumFractionDigits: 1 }) + '%' : '-';
   const kali = (a, c) => c ? (a / c).toLocaleString('id-ID', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + 'x' : '-';
   const rasio = tabelLK(kolomR, [
@@ -1809,7 +1836,7 @@ function vNeraca(el, [bln]) {
   const piuPer = {}; if (N) for (const p of N.P) { const k = (p.usaha ? '' : '~') + (p.usaha ? judulOutlet(p.outlet) : p.pihak || p.outlet); const g = piuPer[k] ||= { nama: (p.usaha ? '' : 'Lain-lain: ') + (p.usaha ? judulOutlet(p.outlet) : p.pihak || p.outlet), sisa: 0, tertua: p.tanggal || '' }; g.sisa += p.sisa; if (p.tanggal && (!g.tertua || p.tanggal < g.tertua)) g.tertua = p.tanggal; }
   const umur = t => t && N ? Math.max(0, Math.round((tglD(N.t) - tglD(t)) / 864e5)) + ' hari' : 'saldo lama';
   const catatan = [
-    nb(1, 'Dasar penyusunan', `<p>Laporan ini mencakup ${esc(namaBln(b.bulan))}${berjalan ? ' sampai ' + esc(tglPanjang(akhirLK(b.bulan))) + ' (bulan berjalan, ditandai *)' : ''}, dari laporan minggu ${esc(b.minggu.join(', '))}${R.awalP ? ' (' + esc(tglPanjang(R.awalP)) + ' sampai ' + esc(tglPanjang(R.akhirP)) + ')' : ''}. Satu minggu masuk ke bulan tanggal mulainya. Semua angka dalam Rupiah; angka dalam kurung adalah pengurang.</p>
+    nb(1, 'Dasar penyusunan', `<p>Laporan ini mencakup ${esc(judulP)}${berjalan ? ' sampai ' + esc(tglPanjang(akhirLK(b.bulan))) + (T ? ' (tahun berjalan, ditandai *)' : ' (bulan berjalan, ditandai *)') : ''}, dari ${T ? esc(b.minggu.length + ' laporan mingguan, ' + namaBln(b.bulanIsi[0].bulan) + ' sampai ' + namaBln(b.bulan)) : 'laporan minggu ' + esc(b.minggu.join(', '))}${R.awalP ? ' (' + esc(tglPanjang(R.awalP)) + ' sampai ' + esc(tglPanjang(R.akhirP)) + ')' : ''}. Satu minggu masuk ke bulan tanggal mulainya. Semua angka dalam Rupiah; angka dalam kurung adalah pengurang.</p>
       ${N ? `<p>Kas, saldo bank, aset tetap, utang, dan modal diambil dari berkas neraca ${esc(namaBln(N.base.bulan))}. Piutang, persediaan, dan dana lebih dapur dihitung dari aplikasi pada ${esc(tglPanjang(N.t))}. Laba bersih bulan-bulan sesudah ${esc(namaBln(N.base.bulan))} ditambahkan ke ekuitas.</p>` : ''}
       ${N && N.selisih ? `<p>Selisih ${esc(rp(Math.abs(N.selisih)))} terjadi karena ${N.sama ? 'ada isian berkas neraca yang belum lengkap' : 'kas dan saldo bank belum diperbarui sejak ' + esc(namaBln(N.base.bulan)) + ', sementara laba, belanja stok, dan pembayaran dapur sudah mengubah uang yang ada'}. Selisih hilang setelah kas dan saldo bank akhir bulan diisi di berkas neraca.</p>` : ''}
       ${Math.round(R.selisihKotor) ? `<p>Penyesuaian laporan mingguan ${esc(rp(Math.abs(R.selisihKotor)))} adalah beda antara laba kotor di laporan mingguan dan hitungan pendapatan dikurangi modal dan fee.</p>` : ''}`),
@@ -1819,34 +1846,36 @@ function vNeraca(el, [bln]) {
     ...(N && N.TAT ? [nb(5, 'Aset tetap', tKecil(['Aset', 'Harga perolehan', 'Akumulasi penyusutan', 'Nilai buku'], [['Kendaraan', N.T.kend, N.T.akKend, N.T.kend + N.T.akKend], ['Peralatan', N.T.alat, N.T.akAlat, N.T.alat + N.T.akAlat], ['Renovasi gudang', N.T.renov, N.T.akRenov, N.T.renov + N.T.akRenov]].filter(r => r[1]), ['Jumlah', N.T.kend + N.T.alat + N.T.renov, N.T.akKend + N.T.akAlat + N.T.akRenov, N.TAT]))] : [nb(5, 'Aset tetap', '<p>Belum ada aset tetap di berkas neraca.</p>')]),
     nb(6, 'Liabilitas', N ? tKecil(['Pos', kolomN[0]], [['Utang usaha ke pemasok', N.LP.supl], ...N.dana.map(o => ['Dana lebih ' + judulOutlet(o.outlet), o.sisa]), ['Utang barang titipan', N.LP.titip], ['Gaji yang masih harus dibayar', N.LP.gaji], ['Pinjaman jangka pendek', N.LP.pinj], ['Utang lain-lain', N.LP.lain], ['Pinjaman jangka panjang', N.LJ.pinj]].filter(r => Math.round(r[1])), ['Jumlah', N.TL]) : '<p>Belum ada isian.</p>'),
     nb(7, 'Pendapatan dan beban pokok per dapur', tKecil(['Dapur', 'Nota', 'Pendapatan', 'Modal', 'Fee', 'Laba bruto', 'Margin'], Object.entries(R.dapur).sort((x, y) => y[1].omzet - x[1].omzet).map(([n, d]) => [judulOutlet(n), String(d.nota), d.omzet, -d.modal, -d.fee, d.labaKotor, persen(d.labaKotor, d.omzet)]), ['Jumlah', String(jmlLK(Object.values(R.dapur), d => d.nota)), R.omzet, -R.modal, -R.fee, jmlLK(Object.values(R.dapur), d => d.labaKotor), persen(jmlLK(Object.values(R.dapur), d => d.labaKotor), R.omzet)])),
-    nb(8, 'Beban usaha', katNama.filter(k => R.beban[k]).length ? tKecil(['Jenis', 'Jumlah'], katNama.filter(k => R.beban[k]).flatMap(k => [[k, R.beban[k]], ...Object.entries(R.rinciBeban[k] || {}).sort((x, y) => y[1] - x[1]).slice(0, 8).map(([n, j]) => ['   ' + n, j])]).concat(Math.round(R.bebanLain) ? [['Beban lain tanpa rincian', R.bebanLain]] : []), ['Jumlah beban usaha', R.biayaOps]) + '<p style="margin-top:6px">Baris menjorok adalah rincian terbesar tiap jenis, digabung selama sebulan.</p>' : '<p>Tidak ada beban usaha.</p>'),
-    nb(9, 'Pengeluaran pribadi (prive)', R.pribadi.length ? tKecil(['Keterangan', 'Jumlah'], R.pribadi.map(x => [String(x.ket || 'Pribadi'), x.jumlah || 0]), ['Jumlah', R.nonOps]) + '<p style="margin-top:6px">Uang usaha yang dipakai untuk keperluan pribadi. Tidak dihitung beban, tetapi mengurangi ekuitas.</p>' : '<p>Tidak ada pengeluaran pribadi bulan ini.</p>'),
+    nb(8, 'Beban usaha', katNama.filter(k => R.beban[k]).length ? tKecil(['Jenis', 'Jumlah'], katNama.filter(k => R.beban[k]).flatMap(k => [[k, R.beban[k]], ...Object.entries(R.rinciBeban[k] || {}).sort((x, y) => y[1] - x[1]).slice(0, 8).map(([n, j]) => ['   ' + n, j])]).concat(Math.round(R.bebanLain) ? [['Beban lain tanpa rincian', R.bebanLain]] : []), ['Jumlah beban usaha', R.biayaOps]) + '<p style="margin-top:6px">Baris menjorok adalah rincian terbesar tiap jenis, digabung selama ${lamaP}.</p>' : '<p>Tidak ada beban usaha.</p>'),
+    nb(9, 'Pengeluaran pribadi (prive)', R.pribadi.length ? tKecil(['Keterangan', 'Jumlah'], R.pribadi.map(x => [String(x.ket || 'Pribadi'), x.jumlah || 0]), ['Jumlah', R.nonOps]) + '<p style="margin-top:6px">Uang usaha yang dipakai untuk keperluan pribadi. Tidak dihitung beban, tetapi mengurangi ekuitas.</p>' : `<p>Tidak ada pengeluaran pribadi ${T ? 'tahun' : 'bulan'} ini.</p>`),
     nb(10, 'Barang dengan penjualan terbesar', Object.keys(R.barang).length ? tKecil(['Barang', 'Jumlah', 'Penjualan', 'Laba'], Object.values(R.barang).sort((x, y) => y.omzet - x.omzet).slice(0, 10).map(x => [x.barang, (+x.qty).toLocaleString('id-ID', { maximumFractionDigits: 2 }) + ' ' + x.satuan, x.omzet, x.laba])) : '<p>Belum ada rincian barang.</p>')].join('');
 
   el.innerHTML = `
   <section class="bagian" style="margin-top:6px">
-    <div class="tab-baris">${BULAN.map(x => `<a class="tab ${x === b ? 'aktif' : ''}" href="#neraca/${x.bulan}" style="text-decoration:none">${esc(namaBln(x.bulan))}</a>`).join('')}</div>
+    <div class="tab-baris">${BULAN.map(x => `<a class="tab ${x === b ? 'aktif' : ''}" href="#neraca/${x.bulan}" style="text-decoration:none">${esc(namaBln(x.bulan))}</a>`).join('')}${[...new Set(BULAN.map(x => x.bulan.slice(0, 4)))].map(th => `<a class="tab ${th === tahun ? 'aktif' : ''}" href="#neraca/tahun-${th}" style="text-decoration:none"><b>Tahunan ${esc(th)}</b></a>`).join('')}</div>
     <div class="baris-aksi" style="margin:14px 0"><button class="tombol utama kecil" id="bCetakLK">Cetak atau simpan PDF</button><span class="samar" style="font-size:12.5px">Susunannya mengikuti laporan keuangan publikasi bank: neraca, laba rugi, rasio, dan catatan rinci.</span></div>
     <article class="lembar lk" id="cetak">
-      <div class="kop-lk"><div><span class="jenis">Laporan keuangan bulanan</span><b>${esc(PENERBIT.nama || 'NTA')}</b></div>
-        <div class="kanan-kop"><strong>${esc(namaBln(b.bulan))}${berjalan ? ' (berjalan)' : ''}</strong>dibandingkan ${esc(bl ? namaBln(bl.bulan) : '-')}<br>dalam Rupiah</div></div>
+      <div class="kop-lk"><div><span class="jenis">Laporan keuangan ${T ? 'tahunan' : 'bulanan'}</span><b>${esc(PENERBIT.nama || 'NTA')}</b></div>
+        <div class="kanan-kop"><strong>${esc(judulP)}${berjalan ? ' (berjalan)' : ''}</strong>dibandingkan ${esc(judulL)}<br>dalam Rupiah</div></div>
       <h3 class="lk-judul">Laporan posisi keuangan <span>(neraca) per ${esc(tglPanjang(akhirLK(b.bulan)))}</span></h3>
       <p class="lk-ket">Foto harta usaha pada satu tanggal: apa yang dimiliki (aset) di atas, dari mana asalnya (utang dan modal) di bawah. Jumlah keduanya harus sama.</p>
       ${posisi}
-      <h3 class="lk-judul">Laporan laba rugi <span>${esc(namaBln(b.bulan))}</span></h3>
-      <p class="lk-ket">Hasil usaha selama sebulan: pendapatan dikurangi modal barang menjadi laba bruto, lalu dikurangi beban usaha menjadi laba bersih.</p>
+      <h3 class="lk-judul">Laporan laba rugi <span>${esc(judulP)}</span></h3>
+      <p class="lk-ket">Hasil usaha selama ${lamaP}: pendapatan dikurangi modal barang menjadi laba bruto, lalu dikurangi beban usaha menjadi laba bersih.</p>
       ${labaRugi}
       <h3 class="lk-judul">Rasio keuangan</h3>
       <p class="lk-ket">Ukuran kesehatan usaha yang biasa dicantumkan bank di laporan publikasinya.</p>
       ${rasio}
+      ${T ? `<h3 class="lk-judul">Perkembangan per bulan</h3><p class="lk-ket">Hasil usaha tiap bulan dan posisi neraca pada akhir bulannya. Neraca bulan yang kas dan saldo bank belum diisi bisa berselisih; rinciannya di laporan bulan itu.</p>
+        ${tKecil(['Bulan', 'Pendapatan', 'Laba bruto', 'Laba bersih', 'Jumlah aset', 'Liabilitas', 'Ekuitas'], b.bulanIsi.map(x => { const n = posisiLK(x.bulan); return [namaBln(x.bulan), x.omzet, x.labaKotor, x.labaBersih, n ? n.TA : '-', n ? n.TL : '-', n ? n.TE : '-']; }), ['Tahun ' + tahun, b.omzet, b.labaKotor, b.labaBersih, N ? N.TA : '-', N ? N.TL : '-', N ? N.TE : '-'])}` : ''}
       <h3 class="lk-judul">Catatan atas laporan keuangan</h3>
       ${catatan}
-      <div class="kaki-lk">Disusun otomatis dari laporan mingguan, invoice, piutang, stok, dan pengeluaran di aplikasi NTA pada ${esc(tglPanjang(hariIniISO()))}.${berjalan ? ' * Bulan berjalan: angkanya masih akan bertambah sampai akhir bulan.' : ''}</div>
+      <div class="kaki-lk">Disusun otomatis dari laporan mingguan, invoice, piutang, stok, dan pengeluaran di aplikasi NTA pada ${esc(tglPanjang(hariIniISO()))}.${berjalan ? (T ? ' * Tahun berjalan: angkanya masih bertambah sampai 31 Desember, dan laporan ini lengkap sendiri setelah tahun berakhir.' : ' * Bulan berjalan: angkanya masih akan bertambah sampai akhir bulan.') : ''}</div>
     </article>
   </section>
-  <section class="bagian"><div class="kartu"><span class="label">Laba per minggu ${esc(namaBln(b.bulan))}</span><div style="margin-top:12px">${grafikBatang(M.filter(w => b.minggu.includes(w.minggu)).map(w => ({ label: 'M' + w.minggu, k: w.total.labaKotor, l: w.total.labaBersih })), { seri: [{ k: 'k', warna: 'rgba(95,208,143,.35)' }, { k: 'l', warna: 'var(--hijau)' }] })}</div>
+  <section class="bagian"><div class="kartu"><span class="label">Laba per ${T ? 'bulan' : 'minggu'} ${esc(judulP)}</span><div style="margin-top:12px">${grafikBatang(T ? b.bulanIsi.map(x => ({ label: BLN3[+x.bulan.slice(5, 7) - 1], k: x.labaKotor, l: x.labaBersih })) : M.filter(w => b.minggu.includes(w.minggu)).map(w => ({ label: 'M' + w.minggu, k: w.total.labaKotor, l: w.total.labaBersih })), { seri: [{ k: 'k', warna: 'rgba(95,208,143,.35)' }, { k: 'l', warna: 'var(--hijau)' }] })}</div>
     <div class="legenda"><span><i style="background:rgba(95,208,143,.35)"></i>Laba bruto</span><span><i style="background:var(--hijau)"></i>Laba bersih</span></div></div></section>`;
-  document.getElementById('bCetakLK').onclick = () => { document.title = `Laporan keuangan ${namaBln(b.bulan)}`; addEventListener('afterprint', () => { document.title = 'NTA'; }, { once: true }); window.print(); };
+  document.getElementById('bCetakLK').onclick = () => { document.title = `Laporan keuangan ${judulP}`; addEventListener('afterprint', () => { document.title = 'NTA'; }, { once: true }); window.print(); };
 }
 
 // ---------- bantu: dapur, harga terakhir, terbilang, pesan singkat
