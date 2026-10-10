@@ -381,6 +381,7 @@ async function muat() {
   const s = sesi.baca(); if (!s) return layarMasuk();
   const ambil = k => rpc('mbg_ambil_nilai', { p_token: s.token, p_kunci: k });
   const [a, b, c, t, inv, kr, kl, pu, dt, st, rkT] = await Promise.all([ambil('data'), ambil('catatan'), ambil('pembaruan'), ambil('tarif-fee'), rpc('mbg_invoice_daftar', { p_token: s.token }), rpc('mbg_gaji_nta', { p_token: s.token }).catch(() => ({ ok: false })), ambil('pengeluaran'), ambil('piutang'), ambil('dapur'), ambil('stok'), ambil('rekening')]);
+  try { const ks = await ambil('kas'); KAS = { minggu: {}, ...((ks.ok && ks.nilai) || {}) }; } catch { KAS = { minggu: {} }; }
   if (!a.ok) { sesi.hapus(); return layarMasuk(a.pesan); }
   D = a.nilai; CATATAN = b.ok ? b.nilai : null; PEMBARUAN = c.ok ? c.nilai : null;
   TARIF = (t.ok && t.nilai) || {}; INVOICE = inv.ok ? inv.invoice : [];
@@ -442,12 +443,12 @@ function siapkan() {
 }
 
 // ---------- rangka halaman
-const MENU = [['beranda', 'Beranda', 'rumah'], ['ringkasan', 'Ringkasan', 'ringkas'], ['mingguan', 'Laba rugi', 'minggu'], ['invoice', 'Invoice', 'nota'], ['operasional', 'Operasional', 'orang'], ['outlet', 'Outlet', 'outlet'], ['stok', 'Stok', 'stok'], ['laku', 'Barang laku', 'laku'], ['piutang', 'Piutang', 'piutang'], ['neraca', 'Neraca', 'neraca']];
+const MENU = [['beranda', 'Beranda', 'rumah'], ['ringkasan', 'Ringkasan', 'ringkas'], ['kas', 'Arus kas', 'neraca'], ['invoice', 'Invoice', 'nota'], ['operasional', 'Operasional', 'orang'], ['outlet', 'Outlet', 'outlet'], ['stok', 'Stok', 'stok'], ['laku', 'Barang laku', 'laku'], ['piutang', 'Piutang', 'piutang']];
 // Di HP bilah bawah hanya muat lima: empat yang paling sering dipakai + "Lainnya".
 const MENU_HP = [['beranda', 'Beranda', 'rumah'], ['invoice', 'Invoice', 'nota'], ['operasional', 'Operasional', 'orang'], ['outlet', 'Outlet', 'outlet'], ['lainnya', 'Lainnya', 'lain']];
 function rute() { const [h, ...a] = (location.hash.slice(1) || 'beranda').split('/'); // #fee hanya untuk tarif fee (menu Fee dihapus 26 Sep 2026); alamat lama #fee dibawa ke Invoice.
   if (h === 'fee' && a[0] !== 'tarif' && a[0] !== 'gabung') return { h: 'invoice', a: [] };
-  return { h: MENU.some(m => m[0] === h) || ['kabar', 'lainnya', 'fee'].includes(h) ? h : 'beranda', a: a.map(decodeURIComponent) }; }
+  return { h: MENU.some(m => m[0] === h) || ['kabar', 'lainnya', 'fee', 'mingguan', 'neraca'].includes(h) ? h : 'beranda', a: a.map(decodeURIComponent) }; }
 function tampil() {
   siapkan();   // hitung ulang supaya invoice yang baru disimpan langsung ikut di Outlet dan Beranda
   const { h, a } = rute();
@@ -455,18 +456,18 @@ function tampil() {
   akar.innerHTML = `
   <header class="kepala"><div class="bungkus">
     <a class="merek" href="#beranda"><img src="ikon-any-192.png?v=1" alt=""><span><b>NTA</b><small>${esc((D.profil || {}).singkat || 'Needs that Arise')}</small></span></a>
-    <nav class="menu-atas" aria-label="Menu">${MENU.map(m => `<a href="#${m[0]}" class="${h === m[0] || (h === 'fee' && m[0] === 'invoice') ? 'aktif' : ''}">${m[1]}</a>`).join('')}</nav>
+    <nav class="menu-atas" aria-label="Menu">${MENU.map(m => `<a href="#${m[0]}" class="${h === m[0] || (h === 'fee' && m[0] === 'invoice') || (m[0] === 'kas' && ['neraca', 'mingguan'].includes(h)) ? 'aktif' : ''}">${m[1]}</a>`).join('')}</nav>
     <div class="kanan-kepala">
       <a class="pil-hijau" href="#kabar" title="Catatan pembaruan"><span class="titik"></span>${upd ? 'Diperbarui ' + esc(tglP(upd.slice(0, 10))) : 'Belum diperbarui'}</a>
       <button class="tombol-ikon" id="bPasang" title="Pasang sebagai aplikasi" aria-label="Pasang sebagai aplikasi" ${TAWARAN_PASANG ? '' : 'hidden'}>${ik('unduh', 17)}</button>
       <button class="tombol-ikon" id="bKeluar" title="Keluar" aria-label="Keluar">${ik('keluar', 17)}</button>
     </div></div></header>
   <main class="bungkus" id="isi"></main>
-  <nav class="menu-bawah" aria-label="Menu">${MENU_HP.map(m => `<a href="#${m[0]}" class="${h === m[0] || (m[0] === 'lainnya' && ['ringkasan', 'mingguan', 'stok', 'laku', 'piutang', 'neraca', 'kabar'].includes(h)) || (m[0] === 'invoice' && h === 'fee') ? 'aktif' : ''}">${ik(m[2], 20)}<span>${m[1]}</span></a>`).join('')}</nav>`;
+  <nav class="menu-bawah" aria-label="Menu">${MENU_HP.map(m => `<a href="#${m[0]}" class="${h === m[0] || (m[0] === 'lainnya' && ['ringkasan', 'kas', 'mingguan', 'stok', 'laku', 'piutang', 'neraca', 'kabar'].includes(h)) || (m[0] === 'invoice' && h === 'fee') ? 'aktif' : ''}">${ik(m[2], 20)}<span>${m[1]}</span></a>`).join('')}</nav>`;
   $('#bPasang').onclick = pasangAplikasi;
   $('#bKeluar').onclick = async () => { if (!confirm('Keluar dari aplikasi MBG di HP ini?')) return; const s = sesi.baca(); sesi.hapus(); try { await rpc('mbg_keluar', { p_token: s.token }); } catch {} layarMasuk(); };
   const isi = $('#isi');
-  ({ beranda: vBeranda, operasional: vOperasional, ringkasan: vRingkasan, mingguan: vMingguan, invoice: vInvoice, fee: vFee, outlet: vOutlet, stok: vStok, laku: vLaku, piutang: vPiutang, neraca: vNeraca, kabar: vKabar, lainnya: vLainnya })[h](isi, a);
+  ({ beranda: vBeranda, operasional: vOperasional, ringkasan: vRingkasan, mingguan: vMingguan, invoice: vInvoice, fee: vFee, outlet: vOutlet, stok: vStok, laku: vLaku, kas: vKas, piutang: vPiutang, neraca: vNeraca, kabar: vKabar, lainnya: vLainnya })[h](isi, a);
   isi.insertAdjacentHTML('beforeend', `<footer class="kaki"><span>Angka dibaca otomatis dari laporan Excel di laptop setiap kali berkas disimpan.</span><span>Diperbarui ${esc(kapan(upd))}</span></footer>`);
   isi.classList.add('muncul');
   $$('.tab-baris .aktif', isi).forEach(t => t.scrollIntoView({ block: 'nearest', inline: 'center' }));
@@ -779,7 +780,7 @@ function vMingguan(el, [no]) {
   const w = M.find(x => String(x.minggu) === no) || M.at(-1), t = w.total;
   const kat = {}; for (const b of w.biaya.filter(b => b.operasional)) kat[b.kategori || 'Lainnya'] = (kat[b.kategori || 'Lainnya'] || 0) + b.jumlah;
   const selisih = w.cekOmzet.filter(c => c.selisih);
-  el.innerHTML = `
+  el.innerHTML = `${tabKas('rincian')}
   <section class="bagian" style="margin-top:6px">
     <div class="tab-baris" role="tablist">${M.map(x => `<a class="tab ${x === w ? 'aktif' : ''}" href="#mingguan/${x.minggu}" style="text-decoration:none" title="${esc(rentang(x.awal, x.akhir))}">Minggu ${x.minggu}</a>`).join('')}</div>
     ${w.sumber === 'aplikasi' ? '<p class="samar" style="margin:10px 0 0;font-size:12.5px">Minggu dari aplikasi: angkanya dari invoice, pengeluaran, dan gaji yang dicatat di sini, pekan Minggu sampai Sabtu.</p>' : ''}
@@ -1362,6 +1363,115 @@ function vLaku(el) {
   ['#aL', '#aR', '#aZ'].forEach(id => $(id, el).onchange = atur);
 }
 
+// ---------- ARUS KAS (10 Okt 2026). Pemilik: "laporan kas per minggu, menu neraca dan laba rugi digabung dan disusun
+// rapi, namanya Arus kas, laporan asetnya per minggu ditampilkan di Arus kas". Satu menu: Per minggu (laporan kas, laba
+// rugi minggu itu, aset akhir minggu, perkembangan aset), lalu tab Bulanan, Tahunan, dan rincian laba rugi mingguan.
+// Saldo bank, uang tunai, dan utang ke pemasok diisi pemilik tiap akhir minggu (kunci 'kas'); neraca bulanan memakai
+// isian terbaru itu. Uang masuk dan keluar lainnya dihitung dari catatan aplikasi.
+let KAS = { minggu: {} };
+const BANK_KAS = ['Mandiri', 'BRI', 'Bank lain'];
+function saldoPer(t, sejak = '0000-00-00') { const k = Object.keys(KAS.minggu || {}).filter(x => x <= t && x >= sejak).sort().at(-1); if (!k) return null;
+  const e = KAS.minggu[k]; return { ...e, tgl: k, bankJml: BANK_KAS.reduce((a, b) => a + (+(e.bank || {})[b] || 0), 0), tunai: +e.tunai || 0, utang: +e.utang || 0 }; }
+const tabKas = aktif => `<div class="tab-baris" style="margin:6px 0 4px">${[['minggu', '#kas', 'Per minggu'], ['bulanan', '#neraca', 'Bulanan'], ['tahunan', '#neraca/tahun-' + (BULAN.at(-1) || { bulan: hariIniISO() }).bulan.slice(0, 4), 'Tahunan'], ['rincian', '#mingguan', 'Rincian laba rugi mingguan']].map(([k, h, l]) => `<a class="tab ${k === aktif ? 'aktif' : ''}" href="${h}" style="text-decoration:none">${l}</a>`).join('')}</div>`;
+// uang masuk dan keluar satu minggu (a..z) dari catatan aplikasi
+function arusMinggu(w) { const a = w.awal, z = w.akhir, dalam = t => t && t >= a && t <= z, P = semuaPiutang(), usahaRef = Object.fromEntries(P.map(p => [p.ref, !!p.usaha]));
+  const bayar = (PIU.bayar || []).filter(b => dalam(b.tgl)), dapur = jmlLK(bayar.filter(b => usahaRef[b.ref] !== false), b => +b.jumlah), lain = jmlLK(bayar.filter(b => usahaRef[b.ref] === false), b => +b.jumlah);
+  const lunasTanpaCatat = jmlLK(INVOICE.filter(v => v.lunas && dalam(v.tglLunas)), v => Math.max(0, totalInv(v) - jmlLK((PIU.bayar || []).filter(b => b.ref === 'i:' + v.id), b => +b.jumlah) - potonganDana(v)));
+  const dana = jmlLK((PIU.dana || []).filter(d => d.jenis !== 'pakai' && dalam(d.tgl)), d => +d.jumlah);
+  const daftar = stokKini().barang, beliStok = jmlLK((STOK.gerak || []).filter(x => x.jenis === 'beli' && dalam(x.tgl)), x => x.jumlah * (+x.harga || 0));
+  const beliLangsung = jmlLK(w.rincian.filter(r => !cocokStok(daftar, r.b, r.s)), r => (+r.q || 0) * (+r.m || 0));
+  const ops = jmlLK(w.biaya.filter(b => b.operasional), b => b.jumlah), prive = jmlLK(w.biaya.filter(b => !b.operasional), b => b.jumlah), gaji = jmlLK(w.biaya.filter(b => b.operasional && /gaji/i.test(b.kategori || '')), b => b.jumlah);
+  const masuk = dapur + lunasTanpaCatat + dana + lain, keluar = beliStok + beliLangsung + (w.total.fee || 0) + ops + prive;
+  return { dapur, lunasTanpaCatat, dana, lain, masuk, beliStok, beliLangsung, fee: w.total.fee || 0, gaji, ops, opsLain: ops - gaji, prive, keluar }; }
+// posisi aset pada tanggal t (akhir minggu)
+function asetPer(t) { const sk = saldoPer(t), P = piutangPer(t), st = stokPer(t), dana = jmlLK(danaPer(t), o => o.sisa);
+  const piuU = jmlLK(P.filter(p => p.usaha), p => p.sisa), piuL = jmlLK(P.filter(p => !p.usaha), p => p.sisa), stok = st ? st.nilai : null;
+  const TA = sk && stok != null ? sk.tunai + sk.bankJml + piuU + piuL + stok : null, TL = sk ? sk.utang + dana : null;
+  return { sk, piuU, piuL, stok, dana, TA, TL, TE: TA != null && TL != null ? TA - TL : null }; }
+function vKas(el, [no]) {
+  const W = M.filter(w => w.rincian.length || w.biaya.length), w = W.find(x => String(x.minggu) === no) || W.at(-1);
+  if (!w) { el.innerHTML = tabKas('minggu') + '<div class="kosong">Belum ada laporan mingguan.</div>'; return; }
+  const iW = W.indexOf(w), wl = W[iW - 1], t = w.akhir > hariIniISO() ? hariIniISO() : w.akhir, A = arusMinggu(w), R = w.total, S = asetPer(t);
+  const skAwal = saldoPer(tambahHari(w.awal, -1)), skAkhir = KAS.minggu[w.akhir] ? saldoPer(w.akhir, w.akhir) : null;
+  const dUtang = skAwal && skAkhir ? skAkhir.utang - skAwal.utang : 0, bersih = A.masuk - A.keluar + dUtang;
+  const awalKas = skAwal ? skAwal.tunai + skAwal.bankJml : null, akhirCatat = awalKas != null ? awalKas + bersih : null, akhirNyata = skAkhir ? skAkhir.tunai + skAkhir.bankJml : null;
+  const kol = [tglPendek(t)];
+  const baris = (l, v, o = {}) => ({ t: 'pos', l, v: [v], ...o });
+  const kas = tabelLK(['Minggu ' + w.minggu], [
+    { t: 'judul', l: 'Uang masuk' },
+    baris('Pembayaran dari dapur', A.dapur, { ket: 'setoran dan transfer yang dicatat di Piutang' }), baris('Nota ditandai lunas tanpa catatan setoran', A.lunasTanpaCatat),
+    baris('Transfer dana lebih dari dapur', A.dana), baris('Piutang lain-lain yang dibayar', A.lain),
+    { t: 'jumlah', l: 'Jumlah uang masuk', v: [A.masuk] },
+    { t: 'judul', l: 'Uang keluar' },
+    baris('Belanja stok gudang', -A.beliStok, { ket: 'belanja yang dicatat di menu Stok' }), baris('Belanja barang beli langsung jual', -A.beliLangsung, { ket: 'modal barang di nota yang tidak disimpan di gudang' }),
+    baris('Fee mitra dapur', -A.fee), baris('Gaji karyawan', -A.gaji), baris('Biaya operasional lain', -A.opsLain), baris('Pengambilan pribadi (prive)', -A.prive),
+    { t: 'jumlah', l: 'Jumlah uang keluar', v: [-A.keluar] },
+    ...(dUtang ? [baris(dUtang > 0 ? 'Belanja yang belum dibayar (utang bertambah)' : 'Pembayaran utang ke pemasok', dUtang)] : []),
+    { t: 'total', l: 'Kenaikan (penurunan) uang minggu ini', v: [bersih] },
+    { t: 'judul', l: 'Saldo uang (tunai dan bank)' },
+    baris('Saldo awal minggu', awalKas != null ? awalKas : '-', { ket: skAwal ? 'isian ' + tglPanjang(skAwal.tgl) : 'belum diisi' }),
+    baris('Saldo akhir menurut catatan', akhirCatat != null ? akhirCatat : '-'), baris('Saldo akhir sebenarnya', akhirNyata != null ? akhirNyata : '-', { ket: skAkhir ? 'isian ' + tglPanjang(w.akhir) : 'isi di bawah' }),
+    ...(akhirCatat != null && akhirNyata != null ? [{ t: 'memo', l: 'Selisih yang belum tercatat', v: [akhirNyata - akhirCatat] }] : [])]);
+  const kat = {}; for (const b of w.biaya.filter(b => b.operasional)) kat[b.kategori || 'Lainnya'] = (kat[b.kategori || 'Lainnya'] || 0) + b.jumlah;
+  const lr = tabelLK(['Minggu ' + w.minggu], [
+    baris('Pendapatan (penjualan ke dapur)', R.omzet), baris('Modal barang terjual', -R.modal), baris('Fee mitra dapur', -R.fee), ...(R.pengeluaran ? [baris('Pengeluaran di nota', -R.pengeluaran)] : []),
+    { t: 'jumlah', l: 'Laba kotor', v: [R.labaKotor] },
+    ...Object.entries(kat).sort((x, y) => y[1] - x[1]).map(([k, j]) => baris(k, -j)),
+    { t: 'total', l: 'Laba bersih', v: [R.labaBersih] }, { t: 'memo', l: 'Pengambilan pribadi (tidak memotong laba)', v: [R.nonOps || 0] }]);
+  const aset = tabelLK(kol, [
+    { t: 'judul', l: 'Aset' }, baris('Uang tunai', S.sk ? S.sk.tunai : '-'), ...BANK_KAS.filter(b => S.sk && +(S.sk.bank || {})[b]).map(b => baris('Saldo ' + b, +(S.sk.bank || {})[b])),
+    ...(S.sk ? [] : [baris('Saldo bank', '-', { ket: 'belum diisi' })]),
+    baris('Piutang dapur', S.piuU), baris('Piutang lain-lain', S.piuL), baris('Stok gudang', S.stok != null ? S.stok : '-'),
+    { t: 'jumlah', l: 'Jumlah aset', v: [S.TA != null ? S.TA : '-'] },
+    { t: 'judul', l: 'Utang' }, baris('Utang ke pemasok', S.sk ? S.sk.utang : '-'), baris('Dana lebih dapur', S.dana, { ket: 'uang dapur yang dititipkan' }),
+    { t: 'jumlah', l: 'Jumlah utang', v: [S.TL != null ? S.TL : '-'] },
+    { t: 'total', l: 'Kekayaan bersih (aset dikurangi utang)', v: [S.TE != null ? S.TE : '-'] }]);
+  const riwayat = W.slice().reverse().map(x => { const tt = x.akhir > hariIniISO() ? hariIniISO() : x.akhir, s = asetPer(tt); return [`M${x.minggu} · ${tglP(x.awal)}`, s.sk ? s.sk.tunai + s.sk.bankJml : '-', s.piuU + s.piuL, s.stok != null ? s.stok : '-', s.TL != null ? s.TL : '-', s.TE != null ? s.TE : '-', x.total.labaBersih]; });
+  const isi = KAS.minggu[w.akhir] || saldoPer(w.akhir) || {};
+  el.innerHTML = `${tabKas('minggu')}
+  <section class="bagian" style="margin-top:6px">
+    <h2>Arus kas <span class="miring">minggu ${esc(w.minggu)}</span></h2>
+    <p class="ket">${esc(tglPanjang(w.awal))} sampai ${esc(tglPanjang(w.akhir))}${w.akhir > hariIniISO() ? ' (minggu berjalan)' : ''}. Uang masuk dan keluar dihitung dari catatan aplikasi; saldo bank, uang tunai, dan utang diisi tiap akhir minggu di bawah.</p>
+    <div class="baris-aksi" style="margin:0 0 12px"><button class="tombol utama kecil" id="bKirimKas">${ik('kirim', 15)} Kirim laporan minggu ini</button><button class="tombol kecil" id="bPdfKas">${ik('unduh', 15)} Unduh PDF</button></div>
+    <div class="tab-baris">${W.map(x => `<a class="tab ${x === w ? 'aktif' : ''}" href="#kas/${x.minggu}" style="text-decoration:none" title="${esc(rentang(x.awal, x.akhir))}">Minggu ${x.minggu}</a>`).join('')}</div>
+    <div class="grid g4" style="margin-top:12px">
+      <div class="kartu ubin"><span class="label">Uang masuk</span><div class="nilai hijau">${esc(rpS(A.masuk))}</div><small>pembayaran dapur dan transfer</small></div>
+      <div class="kartu ubin"><span class="label">Uang keluar</span><div class="nilai kunyit">${esc(rpS(A.keluar))}</div><small>belanja, fee, gaji, biaya, prive</small></div>
+      <div class="kartu ubin"><span class="label">Laba bersih</span><div class="nilai">${esc(rpS(R.labaBersih))}</div><small>penjualan ${esc(rpS(R.omzet))}</small></div>
+      <div class="kartu ubin"><span class="label">Kekayaan bersih</span><div class="nilai">${S.TE != null ? esc(rpS(S.TE)) : '-'}</div><small>per ${esc(tglPanjang(t))}</small></div>
+    </div>
+  </section>
+  <section class="bagian"><div class="grid g2" style="align-items:start">
+    <article class="lembar lk" style="margin:0"><h3 class="lk-judul" style="margin-top:0">Laporan kas <span>minggu ${esc(w.minggu)}</span></h3>${kas}</article>
+    <div style="display:grid;gap:14px">
+      <article class="lembar lk" style="margin:0"><h3 class="lk-judul" style="margin-top:0">Laba rugi <span>minggu ${esc(w.minggu)}</span></h3>${lr}</article>
+      <article class="lembar lk" style="margin:0"><h3 class="lk-judul" style="margin-top:0">Aset <span>per ${esc(tglPanjang(t))}</span></h3>${aset}</article>
+    </div></div></section>
+  <section class="bagian kartu" id="isiSaldo"><span class="label">Isi saldo akhir minggu ${esc(w.minggu)} (${esc(tglPanjang(w.akhir))})</span>
+    <p class="samar" style="font-size:12.5px;margin:6px 0 0">Lihat saldo di m-banking dan hitung uang tunai pada akhir minggu. Neraca bulanan dan kartu aset di Beranda ikut memakai angka terbaru ini.${KAS.minggu[w.akhir] ? ' Terakhir disimpan ' + esc(tglPanjang((KAS.minggu[w.akhir].dicatat || '').slice(0, 10))) + '.' : ''}</p>
+    <div class="grid g3" style="margin-top:10px">${BANK_KAS.map(b => `<label class="isian">Saldo ${esc(b)}<input type="number" inputmode="numeric" data-bank="${esc(b)}" value="${esc((isi.bank || {})[b] ?? '')}"></label>`).join('')}
+      <label class="isian">Uang tunai<input type="number" inputmode="numeric" id="kTunai" value="${esc(isi.tunai ?? '')}"></label>
+      <label class="isian">Utang ke pemasok yang belum dibayar<input type="number" inputmode="numeric" id="kUtang" value="${esc(isi.utang ?? '')}"></label></div>
+    <div class="baris-aksi" style="margin-top:10px"><button class="tombol utama" id="kSimpan">Simpan saldo</button></div></section>
+  <section class="bagian"><div class="kartu"><span class="label">Perkembangan aset per minggu</span>
+    <div class="tbl-bungkus" style="margin-top:10px"><table><thead><tr><th>Minggu</th><th class="angka">Uang (tunai + bank)</th><th class="angka">Piutang</th><th class="angka">Stok</th><th class="angka">Utang</th><th class="angka">Kekayaan bersih</th><th class="angka">Laba bersih minggu itu</th></tr></thead><tbody>
+    ${riwayat.map(r => `<tr>${r.map((c, i) => `<td class="${i ? 'angka' : ''}">${typeof c === 'number' ? esc(rp(c)) : esc(c)}</td>`).join('')}</tr>`).join('')}</tbody></table></div>
+    <p class="samar" style="font-size:12px;margin:8px 0 0">Tanda - berarti saldo bank atau stok minggu itu belum tercatat. Mulai minggu ini, isi saldo setiap akhir minggu supaya baris berikutnya lengkap.</p></div></section>`;
+  const lembarKas = `<div class="kop-lk"><div><span class="jenis">Laporan arus kas mingguan</span><b>${esc(PENERBIT.nama || 'NTA')}</b></div><div class="kanan-kop"><strong>Minggu ${esc(w.minggu)}</strong>${esc(tglPanjang(w.awal))} - ${esc(tglPanjang(w.akhir))}<br>dalam Rupiah</div></div>
+    <h3 class="lk-judul">Laporan kas <span>minggu ${esc(w.minggu)}</span></h3>${kas}
+    <h3 class="lk-judul">Laba rugi <span>minggu ${esc(w.minggu)}</span></h3>${lr}
+    <h3 class="lk-judul">Aset <span>per ${esc(tglPanjang(t))}</span></h3>${aset}
+    <div class="kaki-lk">Disusun dari catatan aplikasi NTA pada ${esc(tglPanjang(hariIniISO()))}.${w.akhir > hariIniISO() ? ' Minggu berjalan: angkanya masih bertambah.' : ''}</div>`;
+  const namaKas = `ARUS KAS MINGGU ${w.minggu} ${w.awal} SD ${w.akhir}`;
+  $('#bKirimKas', el).onclick = e => kirimLaporan(lembarKas, namaKas, true, e.currentTarget);
+  $('#bPdfKas', el).onclick = e => kirimLaporan(lembarKas, namaKas, false, e.currentTarget);
+  $('#kSimpan', el).onclick = async () => { const bank = {}; $$('[data-bank]', el).forEach(i => { if (i.value !== '') bank[i.dataset.bank] = +i.value; });
+    const tunai = $('#kTunai', el).value, utang = $('#kUtang', el).value;
+    if (!Object.keys(bank).length && tunai === '') return pesan('Isi saldo bank atau uang tunai.', true);
+    const baru = { ...KAS, minggu: { ...KAS.minggu, [w.akhir]: { bank, tunai: +tunai || 0, utang: +utang || 0, dicatat: new Date().toISOString() } } };
+    try { await simpanNilai('kas', baru); KAS = baru; pesan('Saldo minggu ' + w.minggu + ' tersimpan'); vKas(el, [String(w.minggu)]); } catch (er) { pesan(er.message, true); } };
+}
+
 // ---------- PIUTANG: buku piutang Excel + piutang baru dan pembayaran yang dicatat di aplikasi
 let PIU = { baru: [], bayar: [], ubah: {}, dana: [] };
 // Dana lebih dapur (4 Okt 2026). Ada dapur yang transfernya melebihi tagihan (rincian hutang Kakap 1: pengantaran
@@ -1857,9 +1967,10 @@ function rekapLK(b) { if (!b) return null;
 function posisiLK(k) { const t = akhirLK(k), base = [...(D.neraca || [])].filter(n => n.bulan <= k).sort((a, b) => a.bulan.localeCompare(b.bulan)).at(-1); if (!base) return null;
   const v = x => base.isian[x] && base.isian[x].nilai != null ? +base.isian[x].nilai : 0, sama = base.bulan === k;
   const P = piutangPer(t), stok = sama && v('A6') && !(INDUK() && t >= INDUK().tgl) ? { nilai: v('A6'), rinci: (stokPer(t) || {}).rinci || [], dariIsian: true } : (stokPer(t) || { nilai: v('A6'), rinci: [], dariIsian: true }), dana = danaPer(t);
-  const L = { kas: v('A1'), bank: v('A2'), ew: v('A3'), piuU: jmlLK(P.filter(p => p.usaha), p => p.sisa), piuL: jmlLK(P.filter(p => !p.usaha), p => p.sisa), stok: stok.nilai, um: v('A7'), dm: v('A8') };
+  const sk = saldoPer(t, base.bulan + '-01');   // saldo yang diisi di Arus kas (mingguan) menggantikan isian berkas neraca
+  const L = { kas: sk ? sk.tunai : v('A1'), bank: sk ? sk.bankJml : v('A2'), ew: v('A3'), piuU: jmlLK(P.filter(p => p.usaha), p => p.sisa), piuL: jmlLK(P.filter(p => !p.usaha), p => p.sisa), stok: stok.nilai, um: v('A7'), dm: v('A8') };
   const T = { kend: v('B1'), akKend: -v('B2'), alat: v('B3'), akAlat: -v('B4'), renov: v('B5'), akRenov: -v('B6') };
-  const LP = { supl: v('C1'), dana: jmlLK(dana, o => o.sisa), titip: v('C2'), gaji: v('C3'), pinj: v('C4'), lain: v('C5') }, LJ = { pinj: v('D1') };
+  const LP = { supl: sk ? sk.utang : v('C1'), dana: jmlLK(dana, o => o.sisa), titip: v('C2'), gaji: v('C3'), pinj: v('C4'), lain: v('C5') }, LJ = { pinj: v('D1') };
   const bln = BULAN.filter(x => x.bulan >= base.bulan && x.bulan <= k);
   const E = { modal: v('E1'), setor: v('E2'), saldo: jmlLK(bln.filter(x => x.bulan < k), x => x.labaBersih), laba: (bln.find(x => x.bulan === k) || {}).labaBersih || 0, prive: -(v('E4') + jmlLK(bln.filter(x => x.bulan > base.bulan), x => x.nonOps)) };
   const S = o => jmlLK(Object.values(o)), TAL = S(L), TAT = S(T), TLP = S(LP), TLJ = S(LJ), TE = S(E);
@@ -2027,10 +2138,10 @@ function vNeraca(el, [bln]) {
     nb(11, 'Perubahan ekuitas dan arus kas', `<p>Laporan arus kas disusun dengan metode tidak langsung: laba bersih disesuaikan dengan perubahan piutang, persediaan, dan utang antara neraca awal dan akhir periode, sehingga terlihat ke mana laba berubah menjadi uang. Kenaikan piutang atau stok berarti laba masih tertahan di dapur atau gudang, belum menjadi uang di bank.</p>
       <p>Baris penyesuaian ekuitas dan selisih kas muncul kalau saldo kas dan bank di awal periode belum pernah diisi, atau modal dan stok dicatat ulang (hitung gudang dan modal penyeimbang 10 Oktober 2026). Begitu saldo bank dan kas diisi setiap akhir bulan, kedua baris itu menjadi nol dan arus kas menjelaskan seluruh perubahan uang.</p>`)].join('');
 
-  el.innerHTML = `
+  el.innerHTML = `${tabKas(T ? 'tahunan' : 'bulanan')}
   <section class="bagian" style="margin-top:6px">
     <div class="tab-baris">${BULAN.map(x => `<a class="tab ${x === b ? 'aktif' : ''}" href="#neraca/${x.bulan}" style="text-decoration:none">${esc(namaBln(x.bulan))}</a>`).join('')}${[...new Set(BULAN.map(x => x.bulan.slice(0, 4)))].map(th => `<a class="tab ${th === tahun ? 'aktif' : ''}" href="#neraca/tahun-${th}" style="text-decoration:none"><b>Tahunan ${esc(th)}</b></a>`).join('')}</div>
-    <div class="baris-aksi" style="margin:14px 0"><button class="tombol utama kecil" id="bCetakLK">Cetak atau simpan PDF</button><span class="samar" style="font-size:12.5px">Susunannya mengikuti laporan keuangan perusahaan terbuka: neraca, laba rugi, perubahan ekuitas, arus kas, rasio, dan catatan.</span></div>
+    <div class="baris-aksi" style="margin:14px 0"><button class="tombol utama kecil" id="bKirimLK">${ik('kirim', 15)} Kirim</button><button class="tombol kecil" id="bPdfLK">${ik('unduh', 15)} Unduh PDF</button><button class="tombol kecil" id="bCetakLK">${ik('cetak', 15)} Cetak</button><span class="samar" style="font-size:12.5px">Susunannya mengikuti laporan keuangan perusahaan terbuka: neraca, laba rugi, perubahan ekuitas, arus kas, rasio, dan catatan.</span></div>
     <article class="lembar lk" id="cetak">
       <div class="kop-lk"><div><span class="jenis">Laporan keuangan ${T ? 'tahunan' : 'bulanan'}</span><b>${esc(PENERBIT.nama || 'NTA')}</b></div>
         <div class="kanan-kop"><strong>${esc(judulP)}${berjalan ? ' (berjalan)' : ''}</strong>dibandingkan ${esc(judulL)}<br>dalam Rupiah</div></div>
@@ -2058,6 +2169,9 @@ function vNeraca(el, [bln]) {
   </section>
   <section class="bagian"><div class="kartu"><span class="label">Laba per ${T ? 'bulan' : 'minggu'} ${esc(judulP)}</span><div style="margin-top:12px">${grafikBatang(T ? b.bulanIsi.map(x => ({ label: BLN3[+x.bulan.slice(5, 7) - 1], k: x.labaKotor, l: x.labaBersih })) : M.filter(w => b.minggu.includes(w.minggu)).map(w => ({ label: 'M' + w.minggu, k: w.total.labaKotor, l: w.total.labaBersih })), { seri: [{ k: 'k', warna: 'rgba(95,208,143,.35)' }, { k: 'l', warna: 'var(--hijau)' }] })}</div>
     <div class="legenda"><span><i style="background:rgba(95,208,143,.35)"></i>Laba bruto</span><span><i style="background:var(--hijau)"></i>Laba bersih</span></div></div></section>`;
+  const namaLK = `LAPORAN KEUANGAN ${judulP.toUpperCase()}${berjalan ? ' (SAMPAI ' + akhirLK(b.bulan) + ')' : ''}`;
+  $('#bKirimLK').onclick = e => kirimLaporan($('#cetak').innerHTML, namaLK, true, e.currentTarget);
+  $('#bPdfLK').onclick = e => kirimLaporan($('#cetak').innerHTML, namaLK, false, e.currentTarget);
   document.getElementById('bCetakLK').onclick = () => { document.title = `Laporan keuangan ${judulP}`; addEventListener('afterprint', () => { document.title = 'NTA'; }, { once: true }); window.print(); };
 }
 
@@ -2568,6 +2682,15 @@ async function buatPdf(jenis, v) {
   if (jenis === 'fee' && !h.fee) throw new Error('Fee belum diisi, jadi lembar fee mitra tidak dibuat.');
   return { blob: await pdfLembar(jenis === 'fee' ? lembarMitraInvoice(v) : jenis === 'sj' ? lembarSuratJalan(v) : lembarInvoice(v)), nama: namaBerkasInv(jenis, v) + '.pdf' };
 }
+// Laporan keuangan (Arus kas mingguan, bulanan, tahunan) dikirim seperti invoice: PDF A4 lalu dibagikan (WhatsApp dll.) atau diunduh.
+async function kirimLaporan(html, nama, kirim, tombol) {
+  const teks = tombol ? tombol.innerHTML : ''; if (tombol) { tombol.disabled = true; tombol.textContent = 'Membuat PDF...'; }
+  try { const blob = await pdfLembar(`<div class="lk" style="padding:0 22px 0 6px;box-sizing:border-box">${html}</div>`), berkas = nama + '.pdf';
+    if (kirim) { const f = new File([blob], berkas, { type: 'application/pdf' });
+      if (navigator.canShare && navigator.canShare({ files: [f] })) await navigator.share({ files: [f], title: nama }).catch(() => {});
+      else { unduhBlob(blob, berkas); pesan('HP ini tidak bisa membagikan langsung, PDF diunduh'); } }
+    else { unduhBlob(blob, berkas); pesan('PDF diunduh: ' + berkas); }
+  } catch (er) { pesan(er.message, true); } finally { if (tombol) { tombol.disabled = false; tombol.innerHTML = teks; } } }
 async function pdfLembar(html) {
   await muatSkrip('https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js', () => window.html2canvas, 'Pembuat PDF');
   await muatSkrip('https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js', () => window.jspdf, 'Pembuat PDF');
@@ -2820,7 +2943,7 @@ function vTarifFee(el) {
 
 // ---------- LAINNYA (HP)
 function vLainnya(el) {
-  const L = [['ringkasan', 'Ringkasan', 'ringkas', 'Laporan minggu terakhir dan hal yang perlu dilihat'], ['mingguan', 'Laba rugi', 'minggu', 'Laba kotor dan laba bersih tiap minggu laporan'], ['fee/tarif', 'Tarif fee', 'fee', 'Fee per satuan tiap barang untuk empat dapur fee'], ['stok', 'Stok', 'stok', 'Barang habis, menipis, dan nilai gudang'], ['laku', 'Barang laku', 'laku', 'Barang terlaris per minggu dan per bulan, serta saran jumlah stok'], ['piutang', 'Piutang', 'piutang', 'Tagihan dapur yang belum dibayar'], ['neraca', 'Neraca', 'neraca', 'Laporan keuangan bulanan: neraca, laba rugi, rasio, dan catatan rinci'], ['kabar', 'Catatan pembaruan', 'kabar', 'Kapan terakhir diperbarui dari laptop']];
+  const L = [['ringkasan', 'Ringkasan', 'ringkas', 'Laporan minggu terakhir dan hal yang perlu dilihat'], ['kas', 'Arus kas', 'neraca', 'Uang masuk dan keluar tiap minggu, laba rugi, aset per minggu, serta laporan bulanan dan tahunan'], ['fee/tarif', 'Tarif fee', 'fee', 'Fee per satuan tiap barang untuk empat dapur fee'], ['stok', 'Stok', 'stok', 'Barang habis, menipis, dan nilai gudang'], ['laku', 'Barang laku', 'laku', 'Barang terlaris per minggu dan per bulan, serta saran jumlah stok'], ['piutang', 'Piutang', 'piutang', 'Tagihan dapur yang belum dibayar'], ['kabar', 'Catatan pembaruan', 'kabar', 'Kapan terakhir diperbarui dari laptop']];
   el.innerHTML = `<section class="bagian" style="margin-top:6px"><h2>Lainnya</h2><div class="grid g2">${sudahTerpasang() ? '' : `<button class="kartu" id="kPasang" style="text-align:left;display:flex;gap:14px;align-items:center;font:inherit;color:inherit;cursor:pointer"><span class="ik" style="flex:none;width:42px;height:42px;border-radius:50%;display:grid;place-items:center;background:var(--hijau-bg);color:var(--hijau)">${ik('unduh', 20)}</span><span><b>Pasang di HP</b><div class="redup" style="font-size:13px">Jadikan aplikasi dengan ikon sendiri di layar utama</div></span></button>`}${L.map(x => `<a class="kartu" href="#${x[0]}" style="text-decoration:none;display:flex;gap:14px;align-items:center"><span class="ik" style="flex:none;width:42px;height:42px;border-radius:50%;display:grid;place-items:center;background:var(--hijau-bg);color:var(--hijau)">${ik(x[2], 20)}</span><span><b>${esc(x[1])}</b><div class="redup" style="font-size:13px">${esc(x[3])}</div></span></a>`).join('')}</div></section>`;
   if ($('#kPasang', el)) $('#kPasang', el).onclick = pasangAplikasi;
 }
