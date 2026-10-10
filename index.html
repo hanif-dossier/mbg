@@ -247,6 +247,11 @@ table.gaji-harian tr.hari-ini td{background:rgba(95,208,143,.07)} table.gaji-har
 .lk .lk-ket{font-size:11.5px;color:#555;margin:0 0 8px;max-width:68ch}
 .lk .lk-awas{font-size:11.5px;background:#fbf3e0;border:1px solid #e8b54a;border-radius:8px;padding:8px 11px;margin:8px 0;color:#5a4410;-webkit-print-color-adjust:exact;print-color-adjust:exact}
 .lk-tabel{width:100%;border-collapse:collapse;font-size:12.5px;min-width:0!important}
+.lk-sembunyi{display:none}.lk-sembunyi.tampil{display:block}
+.rasio-ubin{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px;margin-top:10px}
+.rasio-ubin>div{border:1px solid var(--garis);border-radius:14px;padding:12px 14px}.rasio-ubin small{display:block;color:var(--redup);font-size:12px}
+.rasio-ubin b{display:block;font-size:22px;margin:4px 0 2px;font-variant-numeric:tabular-nums}.rasio-ubin span{display:block;color:var(--samar);font-size:11.5px}
+@media (max-width:760px){.rasio-ubin{grid-template-columns:repeat(2,minmax(0,1fr))}}
 .kas-kepala{display:flex;justify-content:space-between;align-items:flex-end;gap:14px;flex-wrap:wrap}
 .kas-nav{display:flex;gap:8px;align-items:center;max-width:100%}
 .kas-daftar{display:grid;margin-top:8px}
@@ -1414,6 +1419,9 @@ function asetPer(t) { const sk = saldoPer(t), P = piutangPer(t), st = stokPer(t)
   const piuU = jmlLK(P.filter(p => p.usaha), p => p.sisa), piuL = jmlLK(P.filter(p => !p.usaha), p => p.sisa), stok = st ? st.nilai : null;
   const TA = sk && stok != null ? sk.tunai + sk.bankJml + piuU + piuL + stok : null, TL = sk ? sk.utang + dana : null;
   return { sk, piuU, piuL, stok, dana, TA, TL, TE: TA != null && TL != null ? TA - TL : null }; }
+// daftar angka berkartu: [{judul}] atau [{l, v, ket, jml, warna, selalu}]; baris bernilai 0 disembunyikan kecuali jml/selalu
+const daftarRp = R0 => `<div class="kas-daftar">${R0.filter(r => r.judul || r.jml || r.selalu || (typeof r.v === 'number' && Math.round(r.v))).map(r => r.judul ? `<div class="kas-sub">${esc(r.judul)}</div>`
+  : `<div class="kas-baris${r.jml ? ' jml' : ''}"><span>${esc(r.l)}${r.ket ? `<small>${esc(r.ket)}</small>` : ''}</span><b class="${r.warna || ''}">${typeof r.v === 'number' ? (Math.round(r.v) < 0 ? '− ' : '') + esc(rp(Math.abs(r.v))) : esc(r.v)}</b></div>`).join('')}</div>`;
 function vKas(el, [no]) {
   const W = M.filter(w => w.rincian.length || w.biaya.length), w = W.find(x => String(x.minggu) === no) || W.at(-1);
   if (!w) { el.innerHTML = tabKas('minggu') + '<div class="kosong">Belum ada laporan mingguan.</div>'; return; }
@@ -1456,8 +1464,7 @@ function vKas(el, [no]) {
   // berantakan"). Lembar putih bergaya laporan hanya untuk PDF; di layar memakai kartu aplikasi. Minggu dipilih lewat
   // tombol sebelum/sesudah dan kotak pilihan per bulan, perkembangan aset hanya 6 minggu terakhir kecuali dibuka semua.
   const f = vKas.f ||= { semua: false };
-  const daftar = R0 => `<div class="kas-daftar">${R0.filter(r => r.judul || r.jml || r.selalu || (typeof r.v === 'number' && Math.round(r.v))).map(r => r.judul ? `<div class="kas-sub">${esc(r.judul)}</div>`
-    : `<div class="kas-baris${r.jml ? ' jml' : ''}"><span>${esc(r.l)}${r.ket ? `<small>${esc(r.ket)}</small>` : ''}</span><b class="${r.warna || ''}">${typeof r.v === 'number' ? (r.v < 0 ? '− ' : '') + esc(rp(Math.abs(r.v))) : esc(r.v)}</b></div>`).join('')}</div>`;
+  const daftar = daftarRp;
   const masukR = [{ l: 'Pembayaran dari dapur', ket: 'setoran dan transfer yang dicatat', v: A.dapur }, { l: 'Nota ditandai lunas', ket: 'tanpa catatan setoran', v: A.lunasTanpaCatat },
     { l: 'Transfer dana lebih dapur', v: A.dana }, { l: 'Piutang lain-lain dibayar', v: A.lain }, { l: 'Jumlah uang masuk', v: A.masuk, jml: 1, warna: 'hijau' }];
   const keluarR = [{ l: 'Belanja stok gudang', v: A.beliStok }, { l: 'Belanja barang beli langsung jual', v: A.beliLangsung }, { l: 'Fee mitra dapur', v: A.fee }, { l: 'Gaji karyawan', v: A.gaji },
@@ -2203,11 +2210,64 @@ function vNeraca(el, [bln]) {
       <p>Neraca disusun dari opname tiap Sabtu: saldo bank dan uang tunai diisi di Arus kas, piutang dan stok dihitung aplikasi. Beda kecil antara hasil opname dan catatan transaksi (misalnya setoran atau biaya yang belum dicatat) masuk ekuitas sebagai "Koreksi hasil opname Sabtu".</p>
       <p>Baris penyesuaian ekuitas dan selisih kas muncul kalau saldo kas dan bank di awal periode belum pernah diisi, atau modal dan stok dicatat ulang (hitung gudang dan modal penyeimbang 10 Oktober 2026). Begitu saldo bank dan kas diisi setiap akhir bulan, kedua baris itu menjadi nol dan arus kas menjelaskan seluruh perubahan uang.</p>`)].join('');
 
+  // ----- tampilan layar (10 Okt 2026, pemilik: "rapikan juga laporan bulanan dan tahunan"): ringkasan berkartu seperti
+  // Arus kas. Format resmi bergaya laporan bank (#cetak) disembunyikan di layar, tetap dipakai untuk Kirim, PDF, dan Cetak.
+  const tahunAda = [...new Set(BULAN.map(x => x.bulan.slice(0, 4)))].sort().reverse();
+  const pilihP = `<select id="lkPilih" aria-label="Pilih laporan" style="padding:9px 12px;border-radius:12px;border:1px solid var(--garis2);background:var(--panel);color:var(--teks);font:inherit;font-weight:600;max-width:100%">${tahunAda.map(th => `<optgroup label="${th}"><option value="tahun-${th}" ${T && tahun === th ? 'selected' : ''}>Tahunan ${th}</option>${BULAN.filter(x => x.bulan.startsWith(th + '-')).slice().reverse().map(x => `<option value="${x.bulan}" ${!T && x === b ? 'selected' : ''}>${esc(namaBln(x.bulan))}</option>`).join('')}</optgroup>`).join('')}</select>`;
+  const kiriP = T ? (tahunAda.includes(String(+tahun - 1)) ? 'tahun-' + (+tahun - 1) : null) : (BULAN[iB - 1] || {}).bulan, kananP = T ? (tahunAda.includes(String(+tahun + 1)) ? 'tahun-' + (+tahun + 1) : null) : (BULAN[iB + 1] || {}).bulan;
+  const panah = (k, t, h) => `<a class="tombol kecil" ${k ? `href="#neraca/${k}"` : 'aria-disabled="true" style="opacity:.35;pointer-events:none"'} title="${t}">${h}</a>`;
+  const naik = (a, c) => c == null || !Math.round(c) ? '' : (() => { const p = (a - c) / Math.abs(c) * 100; return ` · <span class="${p >= 0 ? 'hijau' : 'merah'}">${p >= 0 ? '▲' : '▼'} ${Math.abs(p).toLocaleString('id-ID', { maximumFractionDigits: 0 })}%</span>`; })();
+  const nerR = N ? [{ judul: 'Aset' }, { l: 'Uang tunai dan bank', v: N.L.kas + N.L.bank + N.L.ew, selalu: 1 }, { l: 'Piutang dapur', v: N.L.piuU }, { l: 'Piutang lain-lain', v: N.L.piuL }, { l: 'Persediaan barang', v: N.L.stok },
+      { l: 'Uang muka dan dibayar di muka', v: N.L.um + N.L.dm }, { l: 'Aset tetap (nilai buku)', v: N.TAT }, { l: 'Jumlah aset', v: N.TA, jml: 1 },
+      { judul: 'Utang' }, { l: 'Utang ke pemasok', v: N.LP.supl }, { l: 'Dana lebih dapur', v: N.LP.dana }, { l: 'Utang lainnya', v: N.LP.titip + N.LP.gaji + N.LP.pinj + N.LP.lain + N.TLJ }, { l: 'Jumlah utang', v: N.TL, jml: 1 },
+      { judul: 'Ekuitas' }, { l: 'Modal disetor', v: N.E.modal + N.E.setor }, { l: 'Saldo laba sebelumnya', v: N.E.saldo }, { l: T ? 'Laba bersih ' + namaBln(b.bulan) : 'Laba bersih periode ini', v: N.E.laba }, { l: 'Pengambilan pribadi', v: N.E.prive },
+      { l: 'Koreksi hasil opname Sabtu', v: N.E.koreksi || 0 }, { l: 'Kekayaan bersih', ket: 'aset dikurangi utang', v: N.TE, jml: 1, warna: 'hijau' }] : null;
+  const lrR = [{ l: 'Pendapatan', v: R.omzet, selalu: 1 }, { l: 'Modal barang terjual', v: -R.modal }, { l: 'Fee dapur', v: -R.fee }, { l: 'Pengeluaran di nota', v: -R.pengeluaran }, { l: 'Penyesuaian laporan mingguan', v: -R.selisihKotor },
+    { l: 'Laba kotor', v: R.labaKotor, jml: 1 }, ...katNama.filter(k => R.beban[k]).map(k => ({ l: k, v: -R.beban[k] })), { l: 'Beban lain', v: -R.bebanLain }, { l: 'Laba bersih', v: R.labaBersih, jml: 1, warna: R.labaBersih >= 0 ? 'hijau' : 'merah' }];
+  const ekR = N ? [{ l: 'Ekuitas awal', ket: NL ? 'akhir ' + judulL : 'belum ada neraca sebelumnya', v: NL ? NL.TE : '-', selalu: 1 }, { l: 'Setoran modal', v: setorP(N, NL) }, { l: 'Laba bersih', v: R.labaBersih }, { l: 'Pengambilan pribadi', v: -R.nonOps },
+    { l: 'Penyesuaian berkas neraca dan opname', v: sesuaiE(N, NL, R) }, { l: 'Ekuitas akhir', v: N.TE, jml: 1 }] : null;
+  const opK = N ? R.labaBersih - beda(N, NL, x => x.L.piuU + x.L.piuL + x.L.stok + x.L.um + x.L.dm) + beda(N, NL, x => x.LP.supl + x.LP.dana + x.LP.titip + x.LP.gaji + x.LP.lain) : 0, invK = N ? -beda(N, NL, x => x.T.kend + x.T.alat + x.T.renov) : 0, pdK = N ? beda(N, NL, x => x.LP.pinj + x.LJ.pinj) + setorP(N, NL) - R.nonOps : 0;
+  const akR = N ? [{ l: 'Laba bersih', v: R.labaBersih, selalu: 1 }, { l: 'Perubahan piutang', ket: 'naik = uang masih di dapur', v: -beda(N, NL, x => x.L.piuU + x.L.piuL) }, { l: 'Perubahan stok', v: -beda(N, NL, x => x.L.stok + x.L.um + x.L.dm) },
+    { l: 'Perubahan utang dan dana dapur', v: beda(N, NL, x => x.LP.supl + x.LP.dana + x.LP.titip + x.LP.gaji + x.LP.lain) }, { l: 'Kas dari usaha', v: opK, jml: 1 }, { l: 'Kas untuk aset tetap', v: invK }, { l: 'Pinjaman, modal, dan prive', v: pdK },
+    { l: 'Kenaikan (penurunan) kas', v: opK + invK + pdK, jml: 1 }, { l: 'Kas dan bank di neraca', v: kasN(N), selalu: 1 }] : null;
+  const rasioU = [['Margin laba kotor', persen(R.labaKotor, R.omzet), 'laba kotor ÷ pendapatan'], ['Margin laba bersih', persen(R.labaBersih, R.omzet), 'laba bersih ÷ pendapatan'], ['Beban usaha', persen(R.biayaOps, R.omzet), 'dari pendapatan, makin kecil makin hemat'],
+    ['Rasio lancar', N ? kali(N.TAL, N.TLP) : '-', 'di atas 1x utang pendek tertutup'], ['Utang terhadap modal', N ? kali(N.TL, N.TE) : '-', 'makin kecil makin ringan'], ['Umur piutang dapur', N && R.omzet ? Math.round(N.L.piuU / (R.omzet / hariP(b))) + ' hari' : '-', 'rata-rata uang tertahan di dapur']];
+  const dapurU = Object.entries(R.dapur).sort((x, y) => y[1].omzet - x[1].omzet);
+  const perkU = T ? b.bulanIsi.slice().reverse().map(x => { const n = posisiLK(x.bulan); return { x, TA: n ? n.TA : null, TE: n ? n.TE : null }; }) : [];
+  const rpA = v => v == null ? '<span class="samar">-</span>' : esc(rp(v));
   el.innerHTML = `${tabKas(T ? 'tahunan' : 'bulanan')}
   <section class="bagian" style="margin-top:6px">
-    <div class="tab-baris">${BULAN.map(x => `<a class="tab ${x === b ? 'aktif' : ''}" href="#neraca/${x.bulan}" style="text-decoration:none">${esc(namaBln(x.bulan))}</a>`).join('')}${[...new Set(BULAN.map(x => x.bulan.slice(0, 4)))].map(th => `<a class="tab ${th === tahun ? 'aktif' : ''}" href="#neraca/tahun-${th}" style="text-decoration:none"><b>Tahunan ${esc(th)}</b></a>`).join('')}</div>
-    <div class="baris-aksi" style="margin:14px 0"><button class="tombol utama kecil" id="bKirimLK">${ik('kirim', 15)} Kirim</button><button class="tombol kecil" id="bPdfLK">${ik('unduh', 15)} Unduh PDF</button><button class="tombol kecil" id="bCetakLK">${ik('cetak', 15)} Cetak</button><span class="samar" style="font-size:12.5px">Susunannya mengikuti laporan keuangan perusahaan terbuka: neraca, laba rugi, perubahan ekuitas, arus kas, rasio, dan catatan.</span></div>
-    <article class="lembar lk" id="cetak">
+    <div class="kas-kepala"><div><h2 style="margin:0">Laporan keuangan <span class="miring">${esc(T ? 'tahun ' + tahun : namaBln(b.bulan))}</span></h2>
+        <p class="ket" style="margin:4px 0 0">${berjalan ? 'Berjalan sampai ' + esc(tglPanjang(akhirLK(b.bulan))) : 'Lengkap'} · dibandingkan ${esc(judulL)}</p></div>
+      <div class="kas-nav">${panah(kiriP, 'Sebelumnya', '‹')}${pilihP}${panah(kananP, 'Sesudahnya', '›')}</div></div>
+    <div class="baris-aksi" style="margin:12px 0 0"><button class="tombol utama kecil" id="bKirimLK">${ik('kirim', 15)} Kirim</button><button class="tombol kecil" id="bPdfLK">${ik('unduh', 15)} Unduh PDF</button><button class="tombol kecil" id="bCetakLK">${ik('cetak', 15)} Cetak</button></div>
+    <div class="grid g4" style="margin-top:14px">
+      <div class="kartu ubin"><span class="label">Pendapatan</span><div class="nilai">${esc(rpS(R.omzet))}</div><small>${RL ? 'vs ' + esc(rpS(RL.omzet)) : esc(dapurU.length + ' dapur')}${RL ? naik(R.omzet, RL.omzet) : ''}</small></div>
+      <div class="kartu ubin"><span class="label">Laba bersih</span><div class="nilai ${R.labaBersih >= 0 ? 'hijau' : 'merah'}">${esc(rpS(R.labaBersih))}</div><small>margin ${esc(persen(R.labaBersih, R.omzet))}${RL ? naik(R.labaBersih, RL.labaBersih) : ''}</small></div>
+      <div class="kartu ubin"><span class="label">Jumlah aset</span><div class="nilai">${N ? esc(rpS(N.TA)) : '-'}</div><small>per ${esc(tglPendek(akhirLK(b.bulan)))}${N && NL ? naik(N.TA, NL.TA) : ''}</small></div>
+      <div class="kartu ubin"><span class="label">Kekayaan bersih</span><div class="nilai">${N ? esc(rpS(N.TE)) : '-'}</div><small>aset dikurangi utang${N && NL ? naik(N.TE, NL.TE) : ''}</small></div>
+    </div>
+    ${N && N.selisih ? `<p class="kunyit" style="font-size:13px;margin:12px 0 0">Neraca bulan ini belum seimbang ${esc(rp(Math.abs(N.selisih)))}: saldo bank atau kas belum pernah diisi untuk periode ini. Isi saldo akhir minggu di Arus kas.</p>` : ''}
+  </section>
+  <section class="bagian"><div class="grid g2" style="align-items:start">
+    <div class="kartu"><span class="label">Neraca per ${esc(tglPendek(akhirLK(b.bulan)))}</span>${nerR ? daftarRp(nerR) : '<p class="samar">Belum ada neraca untuk periode ini.</p>'}</div>
+    <div class="kartu"><span class="label">Laba rugi ${esc(judulP)}</span>${daftarRp(lrR)}${R.nonOps ? `<p class="samar" style="font-size:12px;margin:8px 0 0">Pengambilan pribadi ${esc(rp(R.nonOps))} tidak memotong laba.</p>` : ''}</div>
+  </div></section>
+  ${N ? `<section class="bagian"><div class="grid g2" style="align-items:start">
+    <div class="kartu"><span class="label">Perubahan ekuitas</span>${daftarRp(ekR)}</div>
+    <div class="kartu"><span class="label">Arus kas</span>${daftarRp(akR)}</div>
+  </div></section>` : ''}
+  <section class="bagian"><div class="kartu"><span class="label">Rasio keuangan</span><div class="rasio-ubin">${rasioU.map(([l, v, k]) => `<div><small>${esc(l)}</small><b>${esc(v)}</b><span>${esc(k)}</span></div>`).join('')}</div></div></section>
+  ${T ? `<section class="bagian"><div class="kartu"><span class="label">Perkembangan per bulan</span>
+    <div class="tbl-bungkus kas-lebar" style="margin-top:10px"><table><thead><tr><th>Bulan</th><th class="angka">Pendapatan</th><th class="angka">Laba bersih</th><th class="angka">Jumlah aset</th><th class="angka">Kekayaan bersih</th></tr></thead><tbody>
+      ${perkU.map(r => `<tr><td><a href="#neraca/${r.x.bulan}">${esc(namaBln(r.x.bulan))}</a></td><td class="angka">${rpA(r.x.omzet)}</td><td class="angka ${r.x.labaBersih >= 0 ? '' : 'merah'}">${rpA(r.x.labaBersih)}</td><td class="angka">${rpA(r.TA)}</td><td class="angka"><b>${rpA(r.TE)}</b></td></tr>`).join('')}</tbody></table></div>
+    <div class="kas-sempit">${perkU.map(r => `<a class="kas-minggu" href="#neraca/${r.x.bulan}"><span><b>${esc(namaBln(r.x.bulan))}</b><small>pendapatan ${esc(rpS(r.x.omzet))}</small></span><span style="text-align:right"><b>${esc(rpS(r.x.labaBersih))}</b><small>laba bersih</small></span></a>`).join('')}</div></div></section>` : ''}
+  <section class="bagian"><details class="kartu"><summary style="cursor:pointer;list-style:revert"><span class="label">Penjualan per dapur · ${dapurU.length} dapur</span></summary>
+    <div class="tbl-bungkus" style="margin-top:10px"><table><thead><tr><th>Dapur</th><th class="angka">Nota</th><th class="angka">Pendapatan</th><th class="angka">Laba kotor</th></tr></thead><tbody>${dapurU.map(([n, d]) => `<tr><td>${esc(judulOutlet(n))}</td><td class="angka">${d.nota}</td><td class="angka">${esc(rp(d.omzet))}</td><td class="angka">${esc(rp(d.labaKotor))}</td></tr>`).join('')}</tbody></table></div></details></section>
+  <section class="bagian">
+    <div class="baris-aksi" style="margin:0 0 12px"><button class="tombol kecil" id="bResmi">Lihat format resmi (seperti laporan bank)</button><span class="samar" style="font-size:12.5px">Format ini yang dikirim, diunduh, dan dicetak: neraca, laba rugi, perubahan ekuitas, arus kas, rasio, dan catatan.</span></div>
+  <section class="bagian" style="margin-top:6px">
+    <article class="lembar lk lk-sembunyi" id="cetak">
       <div class="kop-lk"><div><span class="jenis">Laporan keuangan ${T ? 'tahunan' : 'bulanan'}</span><b>${esc(PENERBIT.nama || 'NTA')}</b></div>
         <div class="kanan-kop"><strong>${esc(judulP)}${berjalan ? ' (berjalan)' : ''}</strong>dibandingkan ${esc(judulL)}<br>dalam Rupiah</div></div>
       <h3 class="lk-judul">Laporan posisi keuangan <span>(neraca) per ${esc(tglPanjang(akhirLK(b.bulan)))}</span></h3>
@@ -2234,6 +2294,8 @@ function vNeraca(el, [bln]) {
   </section>
   <section class="bagian"><div class="kartu"><span class="label">Laba per ${T ? 'bulan' : 'minggu'} ${esc(judulP)}</span><div style="margin-top:12px">${grafikBatang(T ? b.bulanIsi.map(x => ({ label: BLN3[+x.bulan.slice(5, 7) - 1], k: x.labaKotor, l: x.labaBersih })) : M.filter(w => b.minggu.includes(w.minggu)).map(w => ({ label: 'M' + w.minggu, k: w.total.labaKotor, l: w.total.labaBersih })), { seri: [{ k: 'k', warna: 'rgba(95,208,143,.35)' }, { k: 'l', warna: 'var(--hijau)' }] })}</div>
     <div class="legenda"><span><i style="background:rgba(95,208,143,.35)"></i>Laba bruto</span><span><i style="background:var(--hijau)"></i>Laba bersih</span></div></div></section>`;
+  $('#lkPilih', el).onchange = e => { location.hash = 'neraca/' + e.target.value; };
+  $('#bResmi', el).onclick = e => { const c = $('#cetak'), buka = c.classList.toggle('tampil'); e.currentTarget.textContent = buka ? 'Sembunyikan format resmi' : 'Lihat format resmi (seperti laporan bank)'; if (buka) c.scrollIntoView({ block: 'start', behavior: 'smooth' }); };
   const namaLK = `LAPORAN KEUANGAN ${judulP.toUpperCase()}${berjalan ? ' (SAMPAI ' + akhirLK(b.bulan) + ')' : ''}`;
   $('#bKirimLK').onclick = e => kirimLaporan($('#cetak').innerHTML, namaLK, true, e.currentTarget);
   $('#bPdfLK').onclick = e => kirimLaporan($('#cetak').innerHTML, namaLK, false, e.currentTarget);
