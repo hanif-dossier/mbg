@@ -247,6 +247,21 @@ table.gaji-harian tr.hari-ini td{background:rgba(95,208,143,.07)} table.gaji-har
 .lk .lk-ket{font-size:11.5px;color:#555;margin:0 0 8px;max-width:68ch}
 .lk .lk-awas{font-size:11.5px;background:#fbf3e0;border:1px solid #e8b54a;border-radius:8px;padding:8px 11px;margin:8px 0;color:#5a4410;-webkit-print-color-adjust:exact;print-color-adjust:exact}
 .lk-tabel{width:100%;border-collapse:collapse;font-size:12.5px;min-width:0!important}
+.kas-kepala{display:flex;justify-content:space-between;align-items:flex-end;gap:14px;flex-wrap:wrap}
+.kas-nav{display:flex;gap:8px;align-items:center;max-width:100%}
+.kas-daftar{display:grid;margin-top:8px}
+.kas-sub{font-size:11px;letter-spacing:.12em;text-transform:uppercase;color:var(--redup);font-weight:600;padding:12px 0 4px}
+.kas-baris{display:flex;justify-content:space-between;align-items:baseline;gap:14px;padding:9px 0;border-bottom:1px solid var(--garis);font-size:14px}
+.kas-baris span{min-width:0}.kas-baris small{display:block;color:var(--samar);font-size:11.5px;margin-top:1px}
+.kas-baris b{font-variant-numeric:tabular-nums;white-space:nowrap;font-weight:600}
+.kas-baris.jml{border-bottom:0;border-top:1px solid var(--garis2);margin-top:4px;padding-top:11px;font-weight:700}
+.kas-saldo{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:14px}
+.kas-saldo b{display:block;font-size:17px;margin-top:6px;font-variant-numeric:tabular-nums}.kas-saldo small{display:block;margin-top:2px;font-size:11.5px}
+.kas-aktif td{background:rgba(95,208,143,.07)}
+.kas-sempit{display:none;margin-top:10px}
+.kas-minggu{display:flex;justify-content:space-between;gap:12px;padding:10px 4px;border-bottom:1px solid var(--garis);color:inherit;text-decoration:none}
+.kas-minggu small{display:block;color:var(--samar);font-size:11.5px}.kas-minggu.kas-aktif{background:rgba(95,208,143,.07);border-radius:10px;padding:10px}
+@media (max-width:760px){.kas-saldo{grid-template-columns:repeat(2,minmax(0,1fr))}.kas-lebar{display:none}.kas-sempit{display:block}.kas-nav select{flex:1;min-width:0}.kas-nav{width:100%}}
 .lk-tabel th,.lk-tabel td{border:0!important;padding:4px 6px;vertical-align:top;color:#111}
 .lk-tabel thead th{font-size:10.5px;letter-spacing:.06em;text-transform:uppercase;border-bottom:1.5px solid #111!important;background:none!important;color:#333;white-space:nowrap;font-weight:700}
 .lk-tabel .kanan{text-align:right;white-space:nowrap}
@@ -1437,37 +1452,71 @@ function vKas(el, [no]) {
     { t: 'judul', l: 'Utang' }, baris('Utang ke pemasok', S.sk ? S.sk.utang : '-'), baris('Dana lebih dapur', S.dana, { ket: 'uang dapur yang dititipkan' }),
     { t: 'jumlah', l: 'Jumlah utang', v: [S.TL != null ? S.TL : '-'] },
     { t: 'total', l: 'Kekayaan bersih (aset dikurangi utang)', v: [S.TE != null ? S.TE : '-'] }]);
-  const riwayat = W.slice().reverse().map(x => { const tt = x.akhir > hariIniISO() ? hariIniISO() : x.akhir, s = asetPer(tt); return [`M${x.minggu} · ${tglP(x.awal)}`, s.sk ? s.sk.tunai + s.sk.bankJml : '-', s.piuU + s.piuL, s.stok != null ? s.stok : '-', s.TL != null ? s.TL : '-', s.TE != null ? s.TE : '-', x.total.labaBersih]; });
-  const isi = KAS.minggu[w.akhir] || saldoPer(w.akhir) || {};
+  // ----- tampilan layar (10 Okt 2026, pemilik: "dirapikan, kalau sudah lama panjangnya sampai mana, tata letaknya
+  // berantakan"). Lembar putih bergaya laporan hanya untuk PDF; di layar memakai kartu aplikasi. Minggu dipilih lewat
+  // tombol sebelum/sesudah dan kotak pilihan per bulan, perkembangan aset hanya 6 minggu terakhir kecuali dibuka semua.
+  const f = vKas.f ||= { semua: false };
+  const daftar = R0 => `<div class="kas-daftar">${R0.filter(r => r.judul || r.jml || r.selalu || (typeof r.v === 'number' && Math.round(r.v))).map(r => r.judul ? `<div class="kas-sub">${esc(r.judul)}</div>`
+    : `<div class="kas-baris${r.jml ? ' jml' : ''}"><span>${esc(r.l)}${r.ket ? `<small>${esc(r.ket)}</small>` : ''}</span><b class="${r.warna || ''}">${typeof r.v === 'number' ? (r.v < 0 ? '− ' : '') + esc(rp(Math.abs(r.v))) : esc(r.v)}</b></div>`).join('')}</div>`;
+  const masukR = [{ l: 'Pembayaran dari dapur', ket: 'setoran dan transfer yang dicatat', v: A.dapur }, { l: 'Nota ditandai lunas', ket: 'tanpa catatan setoran', v: A.lunasTanpaCatat },
+    { l: 'Transfer dana lebih dapur', v: A.dana }, { l: 'Piutang lain-lain dibayar', v: A.lain }, { l: 'Jumlah uang masuk', v: A.masuk, jml: 1, warna: 'hijau' }];
+  const keluarR = [{ l: 'Belanja stok gudang', v: A.beliStok }, { l: 'Belanja barang beli langsung jual', v: A.beliLangsung }, { l: 'Fee mitra dapur', v: A.fee }, { l: 'Gaji karyawan', v: A.gaji },
+    { l: 'Biaya operasional lain', v: A.opsLain }, { l: 'Pengambilan pribadi', v: A.prive }, ...(dUtang ? [{ l: dUtang > 0 ? 'Dikurangi belanja yang belum dibayar' : 'Pembayaran utang ke pemasok', v: -dUtang }] : []),
+    { l: 'Jumlah uang keluar', v: A.keluar - dUtang, jml: 1, warna: 'kunyit' }];
+  const lrR = [{ l: 'Penjualan ke dapur', v: R.omzet, selalu: 1 }, { l: 'Modal barang terjual', v: -R.modal }, { l: 'Fee mitra dapur', v: -R.fee }, { l: 'Pengeluaran di nota', v: -(R.pengeluaran || 0) },
+    { l: 'Laba kotor', v: R.labaKotor, jml: 1 }, ...Object.entries(kat).sort((x, y) => y[1] - x[1]).map(([k, j]) => ({ l: k, v: -j })), { l: 'Laba bersih', v: R.labaBersih, jml: 1, warna: R.labaBersih >= 0 ? 'hijau' : 'merah' }];
+  const asetR = [...(S.sk ? [{ l: 'Uang tunai', v: S.sk.tunai }, ...BANK_KAS.map(b => ({ l: 'Saldo ' + b, v: +(S.sk.bank || {})[b] || 0 }))] : [{ l: 'Saldo bank dan tunai', v: 'belum diisi', selalu: 1 }]),
+    { l: 'Piutang dapur', v: S.piuU }, { l: 'Piutang lain-lain', v: S.piuL }, { l: 'Stok gudang', v: S.stok != null ? S.stok : '-', selalu: 1 }, { l: 'Jumlah aset', v: S.TA != null ? S.TA : '-', jml: 1 },
+    { l: 'Utang ke pemasok', v: S.sk ? S.sk.utang : '-', selalu: 1 }, { l: 'Dana lebih dapur', v: S.dana }, { l: 'Kekayaan bersih', ket: 'aset dikurangi utang', v: S.TE != null ? S.TE : '-', jml: 1, warna: 'hijau' }];
+  // pilihan minggu: kotak pilihan dikelompokkan per bulan
+  const perBulan = {}; for (const x of W) (perBulan[x.awal.slice(0, 7)] ||= []).push(x);
+  const pilihMinggu = `<select id="kPilih" aria-label="Pilih minggu" style="padding:9px 12px;border-radius:12px;border:1px solid var(--garis2);background:var(--panel);color:var(--teks);font:inherit;font-weight:600;max-width:100%">${Object.keys(perBulan).sort().reverse().map(k => `<optgroup label="${esc(BLN[+k.slice(5, 7) - 1] + ' ' + k.slice(0, 4))}">${perBulan[k].slice().reverse().map(x => `<option value="${x.minggu}" ${x === w ? 'selected' : ''}>Minggu ${x.minggu} · ${esc(tglP(x.awal))} - ${esc(tglP(x.akhir))}</option>`).join('')}</optgroup>`).join('')}</select>`;
+  const wSbl = W[iW - 1], wSsd = W[iW + 1];
+  // perkembangan aset: 6 minggu terakhir, bisa dibuka semua
+  const urutW = W.slice().reverse(), tampilW = f.semua ? urutW : urutW.slice(0, 6);
+  const riw = tampilW.map(x => { const tt = x.akhir > hariIniISO() ? hariIniISO() : x.akhir, s2 = asetPer(tt); return { x, uang: s2.sk ? s2.sk.tunai + s2.sk.bankJml : null, piu: s2.piuU + s2.piuL, stok: s2.stok, TE: s2.TE, laba: x.total.labaBersih }; });
+  const rpA = v => v == null ? '<span class="samar">-</span>' : esc(rp(v));
+  const sudahIsi = !!KAS.minggu[w.akhir], isi = KAS.minggu[w.akhir] || saldoPer(w.akhir) || {};
   el.innerHTML = `${tabKas('minggu')}
   <section class="bagian" style="margin-top:6px">
-    <h2>Arus kas <span class="miring">minggu ${esc(w.minggu)}</span></h2>
-    <p class="ket">${esc(tglPanjang(w.awal))} sampai ${esc(tglPanjang(w.akhir))}${w.akhir > hariIniISO() ? ' (minggu berjalan)' : ''}. Uang masuk dan keluar dihitung dari catatan aplikasi; saldo bank, uang tunai, dan utang diisi tiap akhir minggu di bawah.</p>
-    <div class="baris-aksi" style="margin:0 0 12px"><button class="tombol utama kecil" id="bKirimKas">${ik('kirim', 15)} Kirim laporan minggu ini</button><button class="tombol kecil" id="bPdfKas">${ik('unduh', 15)} Unduh PDF</button></div>
-    <div class="tab-baris">${W.map(x => `<a class="tab ${x === w ? 'aktif' : ''}" href="#kas/${x.minggu}" style="text-decoration:none" title="${esc(rentang(x.awal, x.akhir))}">Minggu ${x.minggu}</a>`).join('')}</div>
-    <div class="grid g4" style="margin-top:12px">
+    <div class="kas-kepala"><div><h2 style="margin:0">Arus kas <span class="miring">minggu ${esc(w.minggu)}</span></h2>
+        <p class="ket" style="margin:4px 0 0">${esc(tglPanjang(w.awal))} sampai ${esc(tglPanjang(w.akhir))}${w.akhir > hariIniISO() ? ' · minggu berjalan' : ''}</p></div>
+      <div class="kas-nav"><a class="tombol kecil" ${wSbl ? `href="#kas/${wSbl.minggu}"` : 'aria-disabled="true" style="opacity:.35;pointer-events:none"'} title="Minggu sebelumnya">‹</a>${pilihMinggu}<a class="tombol kecil" ${wSsd ? `href="#kas/${wSsd.minggu}"` : 'aria-disabled="true" style="opacity:.35;pointer-events:none"'} title="Minggu sesudahnya">›</a></div></div>
+    <div class="baris-aksi" style="margin:12px 0 0"><button class="tombol utama kecil" id="bKirimKas">${ik('kirim', 15)} Kirim laporan</button><button class="tombol kecil" id="bPdfKas">${ik('unduh', 15)} Unduh PDF</button></div>
+    <div class="grid g4" style="margin-top:14px">
       <div class="kartu ubin"><span class="label">Uang masuk</span><div class="nilai hijau">${esc(rpS(A.masuk))}</div><small>pembayaran dapur dan transfer</small></div>
-      <div class="kartu ubin"><span class="label">Uang keluar</span><div class="nilai kunyit">${esc(rpS(A.keluar))}</div><small>belanja, fee, gaji, biaya, prive</small></div>
-      <div class="kartu ubin"><span class="label">Laba bersih</span><div class="nilai">${esc(rpS(R.labaBersih))}</div><small>penjualan ${esc(rpS(R.omzet))}</small></div>
-      <div class="kartu ubin"><span class="label">Kekayaan bersih</span><div class="nilai">${S.TE != null ? esc(rpS(S.TE)) : '-'}</div><small>per ${esc(tglPanjang(t))}</small></div>
+      <div class="kartu ubin"><span class="label">Uang keluar</span><div class="nilai kunyit">${esc(rpS(A.keluar - dUtang))}</div><small>belanja, fee, gaji, biaya</small></div>
+      <div class="kartu ubin"><span class="label">Laba bersih</span><div class="nilai">${esc(rpS(R.labaBersih))}</div><small>dari penjualan ${esc(rpS(R.omzet))}</small></div>
+      <div class="kartu ubin"><span class="label">Kekayaan bersih</span><div class="nilai">${S.TE != null ? esc(rpS(S.TE)) : '-'}</div><small>per ${esc(tglPendek(t))}</small></div>
     </div>
   </section>
   <section class="bagian"><div class="grid g2" style="align-items:start">
-    <article class="lembar lk" style="margin:0"><h3 class="lk-judul" style="margin-top:0">Laporan kas <span>minggu ${esc(w.minggu)}</span></h3>${kas}</article>
-    <div style="display:grid;gap:14px">
-      <article class="lembar lk" style="margin:0"><h3 class="lk-judul" style="margin-top:0">Laba rugi <span>minggu ${esc(w.minggu)}</span></h3>${lr}</article>
-      <article class="lembar lk" style="margin:0"><h3 class="lk-judul" style="margin-top:0">Aset <span>per ${esc(tglPanjang(t))}</span></h3>${aset}</article>
-    </div></div></section>
-  <section class="bagian kartu" id="isiSaldo"><span class="label">Isi saldo akhir minggu ${esc(w.minggu)} (${esc(tglPanjang(w.akhir))})</span>
-    <p class="samar" style="font-size:12.5px;margin:6px 0 0">Lihat saldo di m-banking dan hitung uang tunai pada akhir minggu. Neraca bulanan dan kartu aset di Beranda ikut memakai angka terbaru ini.${KAS.minggu[w.akhir] ? ' Terakhir disimpan ' + esc(tglPanjang((KAS.minggu[w.akhir].dicatat || '').slice(0, 10))) + '.' : ''}</p>
+    <div class="kartu"><span class="label">Uang masuk</span>${daftar(masukR)}</div>
+    <div class="kartu"><span class="label">Uang keluar</span>${daftar(keluarR)}</div>
+  </div>
+    <div class="kartu kas-saldo" style="margin-top:14px">
+      <div><span class="label">Saldo awal</span><b>${awalKas != null ? esc(rp(awalKas)) : '<span class="samar">belum ada</span>'}</b></div>
+      <div><span class="label">Masuk − keluar</span><b class="${bersih >= 0 ? 'hijau' : 'merah'}">${esc((bersih >= 0 ? '+ ' : '− ') + rp(Math.abs(bersih)))}</b></div>
+      <div><span class="label">Saldo akhir menurut catatan</span><b>${akhirCatat != null ? esc(rp(akhirCatat)) : '<span class="samar">-</span>'}</b></div>
+      <div><span class="label">Saldo akhir sebenarnya</span><b>${akhirNyata != null ? esc(rp(akhirNyata)) : '<span class="samar">belum diisi</span>'}</b>${akhirCatat != null && akhirNyata != null && Math.round(akhirNyata - akhirCatat) ? `<small class="kunyit">selisih ${esc(rp(akhirNyata - akhirCatat))}</small>` : ''}</div>
+    </div></section>
+  <section class="bagian"><div class="grid g2" style="align-items:start">
+    <div class="kartu"><span class="label">Laba rugi minggu ${esc(w.minggu)}</span>${daftar(lrR)}${R.nonOps ? `<p class="samar" style="font-size:12px;margin:8px 0 0">Pengambilan pribadi ${esc(rp(R.nonOps))} tidak memotong laba.</p>` : ''}</div>
+    <div class="kartu"><span class="label">Aset per ${esc(tglPendek(t))}</span>${daftar(asetR)}</div>
+  </div></section>
+  <section class="bagian"><details class="kartu" id="isiSaldo" ${sudahIsi ? '' : 'open'}><summary style="cursor:pointer;list-style:revert"><span class="label">Isi saldo akhir minggu ${esc(w.minggu)} (${esc(tglPendek(w.akhir))})</span> ${sudahIsi ? `<span class="pil hijau" style="font-size:11px;padding:2px 9px">sudah diisi</span>` : `<span class="pil kunyit" style="font-size:11px;padding:2px 9px">belum diisi</span>`}</summary>
+    <p class="samar" style="font-size:12.5px;margin:8px 0 0">Isi tiap Sabtu dari m-banking dan hitungan uang tunai. Piutang dan stok dihitung aplikasi, neraca dan kartu aset di Beranda ikut memakai angka ini.</p>
     <div class="grid g3" style="margin-top:10px">${BANK_KAS.map(b => `<label class="isian">Saldo ${esc(b)}<input type="number" inputmode="numeric" data-bank="${esc(b)}" value="${esc((isi.bank || {})[b] ?? '')}"></label>`).join('')}
       <label class="isian">Uang tunai<input type="number" inputmode="numeric" id="kTunai" value="${esc(isi.tunai ?? '')}"></label>
       <label class="isian">Utang ke pemasok yang belum dibayar<input type="number" inputmode="numeric" id="kUtang" value="${esc(isi.utang ?? '')}"></label></div>
-    <div class="baris-aksi" style="margin-top:10px"><button class="tombol utama" id="kSimpan">Simpan saldo</button></div></section>
-  <section class="bagian"><div class="kartu"><span class="label">Perkembangan aset per minggu</span>
-    <div class="tbl-bungkus" style="margin-top:10px"><table><thead><tr><th>Minggu</th><th class="angka">Uang (tunai + bank)</th><th class="angka">Piutang</th><th class="angka">Stok</th><th class="angka">Utang</th><th class="angka">Kekayaan bersih</th><th class="angka">Laba bersih minggu itu</th></tr></thead><tbody>
-    ${riwayat.map(r => `<tr>${r.map((c, i) => `<td class="${i ? 'angka' : ''}">${typeof c === 'number' ? esc(rp(c)) : esc(c)}</td>`).join('')}</tr>`).join('')}</tbody></table></div>
-    <p class="samar" style="font-size:12px;margin:8px 0 0">Tanda - berarti saldo bank atau stok minggu itu belum tercatat. Mulai minggu ini, isi saldo setiap akhir minggu supaya baris berikutnya lengkap.</p></div></section>`;
+    <div class="baris-aksi" style="margin-top:10px"><button class="tombol utama" id="kSimpan">Simpan saldo</button></div></details></section>
+  <section class="bagian"><div class="kartu"><div style="display:flex;justify-content:space-between;gap:10px;align-items:center;flex-wrap:wrap"><span class="label">Perkembangan aset · ${f.semua ? 'semua minggu' : tampilW.length + ' minggu terakhir'}</span>${urutW.length > 6 ? `<button class="tombol kecil" id="kSemua">${f.semua ? 'Tampilkan 6 minggu terakhir' : 'Tampilkan semua ' + urutW.length + ' minggu'}</button>` : ''}</div>
+    <div class="tbl-bungkus kas-lebar" style="margin-top:10px"><table><thead><tr><th>Minggu</th><th class="angka">Uang (tunai + bank)</th><th class="angka">Piutang</th><th class="angka">Stok</th><th class="angka">Kekayaan bersih</th><th class="angka">Laba bersih</th></tr></thead><tbody>
+      ${riw.map(r => `<tr class="${r.x === w ? 'kas-aktif' : ''}"><td><a href="#kas/${r.x.minggu}">M${r.x.minggu}</a> <span class="samar" style="font-size:12px">${esc(tglP(r.x.awal))}</span></td><td class="angka">${rpA(r.uang)}</td><td class="angka">${rpA(r.piu)}</td><td class="angka">${rpA(r.stok)}</td><td class="angka"><b>${rpA(r.TE)}</b></td><td class="angka ${r.laba >= 0 ? '' : 'merah'}">${rpA(r.laba)}</td></tr>`).join('')}</tbody></table></div>
+    <div class="kas-sempit">${riw.map(r => `<a class="kas-minggu ${r.x === w ? 'kas-aktif' : ''}" href="#kas/${r.x.minggu}"><span><b>Minggu ${r.x.minggu}</b><small>${esc(tglP(r.x.awal))} - ${esc(tglP(r.x.akhir))}</small></span><span style="text-align:right"><b>${r.TE != null ? esc(rpS(r.TE)) : '-'}</b><small>laba ${esc(rpS(r.laba))}</small></span></a>`).join('')}</div>
+    <p class="samar" style="font-size:12px;margin:8px 0 0">Tanda - berarti saldo bank atau stok minggu itu belum tercatat.</p></div></section>`;
+  $('#kPilih', el).onchange = e => { location.hash = 'kas/' + e.target.value; };
+  if ($('#kSemua', el)) $('#kSemua', el).onclick = () => { f.semua = !f.semua; vKas(el, [String(w.minggu)]); };
   const lembarKas = `<div class="kop-lk"><div><span class="jenis">Laporan arus kas mingguan</span><b>${esc(PENERBIT.nama || 'NTA')}</b></div><div class="kanan-kop"><strong>Minggu ${esc(w.minggu)}</strong>${esc(tglPanjang(w.awal))} - ${esc(tglPanjang(w.akhir))}<br>dalam Rupiah</div></div>
     <h3 class="lk-judul">Laporan kas <span>minggu ${esc(w.minggu)}</span></h3>${kas}
     <h3 class="lk-judul">Laba rugi <span>minggu ${esc(w.minggu)}</span></h3>${lr}
