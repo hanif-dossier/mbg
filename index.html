@@ -1816,6 +1816,48 @@ function vNeraca(el, [bln]) {
     { t: 'total', l: 'Laba bersih periode berjalan', v: duaR(x => x.labaBersih) },
     { t: 'memo', l: 'Pengeluaran pribadi (tidak memotong laba usaha)', c: 9, v: duaR(x => x.nonOps) }]));
 
+  // ----- 2a. perubahan ekuitas dan 2b. arus kas (10 Okt 2026, urutan seperti laporan Tbk). Kolom kedua = periode
+  // sebelumnya, yang butuh neraca dua periode ke belakang (NLL). Arus kas memakai metode tidak langsung: laba bersih
+  // disesuaikan dengan perubahan pos neraca antara awal dan akhir periode.
+  const bll = T ? gabungTahun(String(+tahun - 2)) : BULAN[iB - 2], NLL = bll ? posisiLK(bll.bulan) : null;
+  const kolom2 = f => [N ? f(N, NL, R) : null, NL && RL ? f(NL, NLL, RL) : null];
+  const setorP = (n, a) => n.E.setor - (a && a.base.berkas === n.base.berkas ? a.E.setor : 0);
+  const kasN = x => x.L.kas + x.L.bank + x.L.ew, beda = (n, a, f) => f(n) - (a ? f(a) : 0);
+  const sesuaiE = (n, a, r) => n.TE - (a ? a.TE : 0) - setorP(n, a) - r.labaBersih + r.nonOps;
+  const ekuitas = N ? tabelLK(kolomR, [
+    { t: 'pos', l: 'Ekuitas awal periode', ket: 'jumlah ekuitas di neraca akhir periode sebelumnya', v: kolom2((n, a) => a ? a.TE : '-') },
+    { t: 'pos', l: 'Tambahan setoran modal', v: kolom2(setorP) },
+    { t: 'pos', l: 'Laba bersih periode berjalan', c: 7, v: kolom2((n, a, r) => r.labaBersih) },
+    { t: 'pos', l: 'Prive (pengambilan pribadi pemilik)', c: 9, v: kolom2((n, a, r) => -r.nonOps) },
+    { t: 'pos', l: 'Penyesuaian dari pembaruan berkas neraca', c: 11, ket: 'modal awal yang baru dicatat, koreksi kas, bank, dan stok hasil hitung ulang', v: kolom2(sesuaiE) },
+    { t: 'total', l: 'Ekuitas akhir periode', v: kolom2(n => n.TE) }]) : '<p class="lk-ket">Belum bisa disusun karena neraca periode ini belum ada.</p>';
+  const arusKas = N ? tabelLK(kolomR, [
+    { t: 'judul', l: 'Arus kas dari aktivitas operasi' },
+    { t: 'pos', l: 'Laba bersih periode berjalan', c: 7, v: kolom2((n, a, r) => r.labaBersih) },
+    { t: 'pos', l: '(Kenaikan) penurunan piutang usaha', c: 3, v: kolom2((n, a) => -beda(n, a, x => x.L.piuU)) },
+    { t: 'pos', l: '(Kenaikan) penurunan piutang lain-lain', c: 3, v: kolom2((n, a) => -beda(n, a, x => x.L.piuL)) },
+    { t: 'pos', l: '(Kenaikan) penurunan persediaan', c: 4, v: kolom2((n, a) => -beda(n, a, x => x.L.stok)) },
+    { t: 'pos', l: '(Kenaikan) penurunan uang muka dan biaya dibayar di muka', v: kolom2((n, a) => -beda(n, a, x => x.L.um + x.L.dm)) },
+    { t: 'pos', l: 'Kenaikan (penurunan) utang usaha ke pemasok', c: 6, v: kolom2((n, a) => beda(n, a, x => x.LP.supl)) },
+    { t: 'pos', l: 'Kenaikan (penurunan) dana lebih dapur', c: 6, v: kolom2((n, a) => beda(n, a, x => x.LP.dana)) },
+    { t: 'pos', l: 'Kenaikan (penurunan) utang lainnya', c: 6, v: kolom2((n, a) => beda(n, a, x => x.LP.titip + x.LP.gaji + x.LP.lain)) },
+    { t: 'jumlah', l: 'Kas bersih dari aktivitas operasi', v: kolom2((n, a, r) => r.labaBersih - beda(n, a, x => x.L.piuU + x.L.piuL + x.L.stok + x.L.um + x.L.dm) + beda(n, a, x => x.LP.supl + x.LP.dana + x.LP.titip + x.LP.gaji + x.LP.lain)) },
+    { t: 'judul', l: 'Arus kas dari aktivitas investasi' },
+    { t: 'pos', l: 'Pembelian aset tetap', c: 5, v: kolom2((n, a) => -beda(n, a, x => x.T.kend + x.T.alat + x.T.renov)) },
+    { t: 'jumlah', l: 'Kas bersih dari aktivitas investasi', v: kolom2((n, a) => -beda(n, a, x => x.T.kend + x.T.alat + x.T.renov)) },
+    { t: 'judul', l: 'Arus kas dari aktivitas pendanaan' },
+    { t: 'pos', l: 'Penerimaan (pembayaran) pinjaman', c: 6, v: kolom2((n, a) => beda(n, a, x => x.LP.pinj + x.LJ.pinj)) },
+    { t: 'pos', l: 'Setoran modal', v: kolom2(setorP) },
+    { t: 'pos', l: 'Prive (pengambilan pribadi pemilik)', c: 9, v: kolom2((n, a, r) => -r.nonOps) },
+    { t: 'jumlah', l: 'Kas bersih dari aktivitas pendanaan', v: kolom2((n, a, r) => beda(n, a, x => x.LP.pinj + x.LJ.pinj) + setorP(n, a) - r.nonOps) },
+    { t: 'total', l: 'Kenaikan (penurunan) kas dan setara kas', v: kolom2((n, a, r) => arusBersih(n, a, r)) },
+    { t: 'pos', l: 'Kas dan setara kas awal periode', c: 2, v: kolom2((n, a) => a ? kasN(a) : '-') },
+    { t: 'total', l: 'Kas dan setara kas akhir periode menurut arus kas', v: kolom2((n, a, r) => (a ? kasN(a) : 0) + arusBersih(n, a, r)) },
+    { t: 'pos', l: 'Kas dan setara kas di neraca', c: 2, v: kolom2(n => kasN(n)) },
+    { t: 'memo', l: 'Selisih kas yang belum tercatat', c: 11, v: kolom2((n, a, r) => kasN(n) - (a ? kasN(a) : 0) - arusBersih(n, a, r)) }]) : '<p class="lk-ket">Belum bisa disusun karena neraca periode ini belum ada.</p>';
+  function arusBersih(n, a, r) { return r.labaBersih - beda(n, a, x => x.L.piuU + x.L.piuL + x.L.stok + x.L.um + x.L.dm) + beda(n, a, x => x.LP.supl + x.LP.dana + x.LP.titip + x.LP.gaji + x.LP.lain)
+    - beda(n, a, x => x.T.kend + x.T.alat + x.T.renov) + beda(n, a, x => x.LP.pinj + x.LJ.pinj) + setorP(n, a) - r.nonOps; }
+
   // ----- 3. rasio
   const hariP = x => x ? Math.max(1, Math.round((tglD(akhirLK(x.bulan)) - tglD(x.mulai || x.bulan + '-01')) / 864e5) + 1) : 1;
   const persen = (a, c) => c ? (a / c * 100).toLocaleString('id-ID', { minimumFractionDigits: 1, maximumFractionDigits: 1 }) + '%' : '-';
@@ -1848,12 +1890,14 @@ function vNeraca(el, [bln]) {
     nb(7, 'Pendapatan dan beban pokok per dapur', tKecil(['Dapur', 'Nota', 'Pendapatan', 'Modal', 'Fee', 'Laba bruto', 'Margin'], Object.entries(R.dapur).sort((x, y) => y[1].omzet - x[1].omzet).map(([n, d]) => [judulOutlet(n), String(d.nota), d.omzet, -d.modal, -d.fee, d.labaKotor, persen(d.labaKotor, d.omzet)]), ['Jumlah', String(jmlLK(Object.values(R.dapur), d => d.nota)), R.omzet, -R.modal, -R.fee, jmlLK(Object.values(R.dapur), d => d.labaKotor), persen(jmlLK(Object.values(R.dapur), d => d.labaKotor), R.omzet)])),
     nb(8, 'Beban usaha', katNama.filter(k => R.beban[k]).length ? tKecil(['Jenis', 'Jumlah'], katNama.filter(k => R.beban[k]).flatMap(k => [[k, R.beban[k]], ...Object.entries(R.rinciBeban[k] || {}).sort((x, y) => y[1] - x[1]).slice(0, 8).map(([n, j]) => ['   ' + n, j])]).concat(Math.round(R.bebanLain) ? [['Beban lain tanpa rincian', R.bebanLain]] : []), ['Jumlah beban usaha', R.biayaOps]) + '<p style="margin-top:6px">Baris menjorok adalah rincian terbesar tiap jenis, digabung selama ${lamaP}.</p>' : '<p>Tidak ada beban usaha.</p>'),
     nb(9, 'Pengeluaran pribadi (prive)', R.pribadi.length ? tKecil(['Keterangan', 'Jumlah'], R.pribadi.map(x => [String(x.ket || 'Pribadi'), x.jumlah || 0]), ['Jumlah', R.nonOps]) + '<p style="margin-top:6px">Uang usaha yang dipakai untuk keperluan pribadi. Tidak dihitung beban, tetapi mengurangi ekuitas.</p>' : `<p>Tidak ada pengeluaran pribadi ${T ? 'tahun' : 'bulan'} ini.</p>`),
-    nb(10, 'Barang dengan penjualan terbesar', Object.keys(R.barang).length ? tKecil(['Barang', 'Jumlah', 'Penjualan', 'Laba'], Object.values(R.barang).sort((x, y) => y.omzet - x.omzet).slice(0, 10).map(x => [x.barang, (+x.qty).toLocaleString('id-ID', { maximumFractionDigits: 2 }) + ' ' + x.satuan, x.omzet, x.laba])) : '<p>Belum ada rincian barang.</p>')].join('');
+    nb(10, 'Barang dengan penjualan terbesar', Object.keys(R.barang).length ? tKecil(['Barang', 'Jumlah', 'Penjualan', 'Laba'], Object.values(R.barang).sort((x, y) => y.omzet - x.omzet).slice(0, 10).map(x => [x.barang, (+x.qty).toLocaleString('id-ID', { maximumFractionDigits: 2 }) + ' ' + x.satuan, x.omzet, x.laba])) : '<p>Belum ada rincian barang.</p>'),
+    nb(11, 'Perubahan ekuitas dan arus kas', `<p>Laporan arus kas disusun dengan metode tidak langsung: laba bersih disesuaikan dengan perubahan piutang, persediaan, dan utang antara neraca awal dan akhir periode, sehingga terlihat ke mana laba berubah menjadi uang. Kenaikan piutang atau stok berarti laba masih tertahan di dapur atau gudang, belum menjadi uang di bank.</p>
+      <p>Baris penyesuaian ekuitas dan selisih kas muncul kalau saldo kas dan bank di awal periode belum pernah diisi, atau modal dan stok dicatat ulang (hitung gudang dan modal penyeimbang 10 Oktober 2026). Begitu saldo bank dan kas diisi setiap akhir bulan, kedua baris itu menjadi nol dan arus kas menjelaskan seluruh perubahan uang.</p>`)].join('');
 
   el.innerHTML = `
   <section class="bagian" style="margin-top:6px">
     <div class="tab-baris">${BULAN.map(x => `<a class="tab ${x === b ? 'aktif' : ''}" href="#neraca/${x.bulan}" style="text-decoration:none">${esc(namaBln(x.bulan))}</a>`).join('')}${[...new Set(BULAN.map(x => x.bulan.slice(0, 4)))].map(th => `<a class="tab ${th === tahun ? 'aktif' : ''}" href="#neraca/tahun-${th}" style="text-decoration:none"><b>Tahunan ${esc(th)}</b></a>`).join('')}</div>
-    <div class="baris-aksi" style="margin:14px 0"><button class="tombol utama kecil" id="bCetakLK">Cetak atau simpan PDF</button><span class="samar" style="font-size:12.5px">Susunannya mengikuti laporan keuangan publikasi bank: neraca, laba rugi, rasio, dan catatan rinci.</span></div>
+    <div class="baris-aksi" style="margin:14px 0"><button class="tombol utama kecil" id="bCetakLK">Cetak atau simpan PDF</button><span class="samar" style="font-size:12.5px">Susunannya mengikuti laporan keuangan perusahaan terbuka: neraca, laba rugi, perubahan ekuitas, arus kas, rasio, dan catatan.</span></div>
     <article class="lembar lk" id="cetak">
       <div class="kop-lk"><div><span class="jenis">Laporan keuangan ${T ? 'tahunan' : 'bulanan'}</span><b>${esc(PENERBIT.nama || 'NTA')}</b></div>
         <div class="kanan-kop"><strong>${esc(judulP)}${berjalan ? ' (berjalan)' : ''}</strong>dibandingkan ${esc(judulL)}<br>dalam Rupiah</div></div>
@@ -1863,6 +1907,12 @@ function vNeraca(el, [bln]) {
       <h3 class="lk-judul">Laporan laba rugi <span>${esc(judulP)}</span></h3>
       <p class="lk-ket">Hasil usaha selama ${lamaP}: pendapatan dikurangi modal barang menjadi laba bruto, lalu dikurangi beban usaha menjadi laba bersih.</p>
       ${labaRugi}
+      <h3 class="lk-judul">Laporan perubahan ekuitas <span>${esc(judulP)}</span></h3>
+      <p class="lk-ket">Dari mana modal pemilik bertambah atau berkurang selama periode: laba menambah, pengambilan pribadi mengurangi.</p>
+      ${ekuitas}
+      <h3 class="lk-judul">Laporan arus kas <span>${esc(judulP)}</span></h3>
+      <p class="lk-ket">Uang yang benar-benar masuk dan keluar: dari usaha (operasi), pembelian aset (investasi), serta pinjaman dan modal (pendanaan).</p>
+      ${arusKas}
       <h3 class="lk-judul">Rasio keuangan</h3>
       <p class="lk-ket">Ukuran kesehatan usaha yang biasa dicantumkan bank di laporan publikasinya.</p>
       ${rasio}
