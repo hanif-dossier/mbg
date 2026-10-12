@@ -144,7 +144,7 @@ create or replace function public.mbg_simpan_nilai(p_token text, p_kunci text, p
 set search_path = public, extensions as $f$
 begin
   if not mbg__sah(p_token) then return jsonb_build_object('ok', false, 'pesan', 'Sesi habis. Masuk lagi.'); end if;
-  if p_kunci not in ('tarif-fee', 'karyawan', 'pengeluaran', 'piutang', 'dapur', 'stok', 'rekening', 'kas') then return jsonb_build_object('ok', false, 'pesan', 'kunci tidak diizinkan'); end if;
+  if p_kunci not in ('tarif-fee', 'karyawan', 'pengeluaran', 'piutang', 'dapur', 'stok', 'rekening', 'kas', 'ringkasan', 'aset-crypto', 'papan') then return jsonb_build_object('ok', false, 'pesan', 'kunci tidak diizinkan'); end if;
   insert into mbg_nilai(kunci, nilai) values (p_kunci, p_nilai) on conflict (kunci) do update set nilai = excluded.nilai, diubah = now();
   return jsonb_build_object('ok', true);
 end $f$;
@@ -183,3 +183,10 @@ begin
 end $f$;
 grant execute on function public.mbg_gaji_nta(text) to anon, authenticated;
 notify pgrst, 'reload schema';
+
+-- =====================================================================================================
+-- HANIF DASHBOARD (12 Okt 2026): kunci 'ringkasan' (posisi aset NTA yang ditulis aplikasi NTA tiap Beranda dibuka),
+-- 'aset-crypto' (jumlah koin yang dipegang) dan 'papan' (papan tugas). Dibaca dan ditulis Hanif Dashboard
+-- (hanif-dossier.github.io/hanif-dashboard/) memakai sesi sandi NTA yang sama, lewat mbg_ambil_nilai dan mbg_simpan_nilai.
+-- Allowlist mbg_simpan_nilai di atas sudah ikut diperluas.
+-- =====================================================================================================

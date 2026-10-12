@@ -2058,7 +2058,15 @@ function posisiLK(k) { const t = akhirLK(k), base = [...(D.neraca || [])].filter
   return { t, base, sama, P, stok, dana, L, T, LP, LJ, E, TAL, TAT, TA: TAL + TAT, TLP, TLJ, TL: TLP + TLJ, TE, selisih, opname: sk ? sk.tgl : null, belum: [['A1', 'kas'], ['A2', 'saldo bank'], ['E1', 'modal awal']].filter(([x]) => !v(x)).map(x => x[1]) }; }
 
 // Kartu aset di Beranda (10 Okt 2026): posisi harta hari ini dan pintu ke laporan bulanan dan tahunan.
+// Ringkasan aset untuk Hanif Dashboard (12 Okt 2026): tiap Beranda dibuka, posisi hari ini disimpan ke kunci 'ringkasan'.
+// Hanya ditulis kalau angkanya berubah, dan gagal menyimpan tidak mengganggu aplikasi.
+function kirimRingkasan(N, akhir) { const r = { tgl: N.t, aset: Math.round(N.TA), kas: Math.round(N.L.kas), bank: Math.round(N.L.bank + N.L.ew), piutang: Math.round(N.L.piuU + N.L.piuL),
+    stok: Math.round(N.L.stok), asetTetap: Math.round(N.TAT), utang: Math.round(N.TL), bersih: Math.round(N.TE), bulan: akhir.bulan, labaBulan: Math.round(akhir.labaBersih || 0), omzetBulan: Math.round(akhir.omzet || 0), opname: N.opname || null };
+  const kunci = JSON.stringify(r); let lalu = ''; try { lalu = localStorage.getItem('nta-ringkasan') || ''; } catch { }
+  if (kunci === lalu || !sesi.baca()) return;
+  simpanNilai('ringkasan', { ...r, dibuat: new Date().toISOString() }).then(() => { try { localStorage.setItem('nta-ringkasan', kunci); } catch { } }).catch(() => { }); }
 function kartuAset() { const akhir = BULAN.at(-1); if (!akhir) return ''; const N = posisiLK(akhir.bulan); if (!N) return '';
+  setTimeout(() => kirimRingkasan(N, akhir), 0);
   const namaB = k => BLN[+k.slice(5, 7) - 1] + ' ' + k.slice(0, 4), lalu = BULAN.at(-2), th = akhir.bulan.slice(0, 4);
   const hariBaru = +hariIniISO().slice(8, 10) <= 7 && lalu;   // minggu pertama bulan: laporan bulan lalu baru saja lengkap
   return `<section class="bagian kartu" id="kartuAset"><div style="display:flex;justify-content:space-between;gap:10px;flex-wrap:wrap;align-items:center"><span class="label">Aset usaha per ${esc(tgl(N.t, true))}</span><a class="tombol kecil" href="#neraca/${esc(akhir.bulan)}">Lihat neraca lengkap</a></div>
