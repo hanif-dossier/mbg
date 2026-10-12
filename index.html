@@ -297,15 +297,16 @@ table.gaji-harian tr.hari-ini td{background:rgba(95,208,143,.07)} table.gaji-har
   #isi > :has(#cetak){margin:0!important;padding:0!important}
   #cetak{display:block!important;position:static!important;margin:0!important;padding:0!important;border-radius:0;width:auto;overflow:visible!important}
   #cetak table{min-width:0!important}
-  /* Printer dot matrix (Epson LX-310): abu-abu dan garis titik dicetak putus-putus, jadi semuanya hitam pekat dan garis tegas. */
+  /* Nota dan surat jalan: hitam pekat tanpa abu-abu (aman untuk dot matrix), tetapi isi tabel memakai huruf biasa dan
+     garis tipis. 12 Okt 2026: pemilik mencetak di Epson L385 (tinta) dan semua tulisan tebal terasa terlalu pekat. */
   #cetak,#cetak *{color:#000!important;background:#fff!important;text-shadow:none!important}
   html,body{height:auto!important;min-height:0!important;overflow:visible!important}
-  #cetak{font-family:Verdana,Tahoma,Arial,sans-serif!important;font-size:15px!important;line-height:1.4!important;padding:6mm 10mm!important}
-  #cetak .kop>div:first-child b{font-size:22px!important;font-family:Verdana,Arial,sans-serif!important}#cetak .kop{border-bottom:3px solid #000!important;padding-bottom:8px!important}
-  #cetak h3{font-size:21px!important;letter-spacing:.1em!important;margin:10px 0 6px!important}#cetak .kecil{font-size:13.5px!important}
-  #cetak table{font-size:15px!important}#cetak th,#cetak td{border:2px solid #000!important;padding:5px 8px!important}
-  #cetak th{font-size:13px!important;font-weight:700!important}#cetak tbody td,#cetak tfoot td{font-weight:700!important}
-  #cetak .ttd{font-size:14px!important}#cetak .ttd .garis-ttd{border-top:2px solid #000!important;margin-top:44px!important;font-size:15px!important}
+  #cetak{font-family:Verdana,Tahoma,Arial,sans-serif!important;font-size:14px!important;line-height:1.4!important;padding:6mm 10mm!important}
+  #cetak .kop>div:first-child b{font-size:22px!important;font-family:Verdana,Arial,sans-serif!important}#cetak .kop{border-bottom:2px solid #000!important;padding-bottom:8px!important}
+  #cetak h3{font-size:18px!important;letter-spacing:.06em!important;margin:12px 0 8px!important}#cetak .kecil{font-size:13px!important}
+  #cetak table{font-size:14px!important}#cetak th,#cetak td{border:1px solid #000!important;padding:5px 8px!important}
+  #cetak th{font-size:12.5px!important;font-weight:700!important}#cetak tbody td{font-weight:400!important}#cetak tfoot td{font-weight:700!important}
+  #cetak .ttd{font-size:14px!important}#cetak .ttd .garis-ttd{border-top:1px solid #000!important;margin-top:44px!important;font-size:14px!important}
   .lembar .mitra-info{grid-template-columns:repeat(3,minmax(0,1fr))!important}
   /* laporan keuangan: tanpa garis sel, ukuran biasa (aturan #cetak di atas untuk nota printer dot matrix) */
   #cetak.lk{font-size:12px!important;padding:10mm 12mm!important}
