@@ -190,3 +190,16 @@ notify pgrst, 'reload schema';
 -- (hanif-dossier.github.io/hanif-dashboard/) memakai sesi sandi NTA yang sama, lewat mbg_ambil_nilai dan mbg_simpan_nilai.
 -- Allowlist mbg_simpan_nilai di atas sudah ikut diperluas.
 -- =====================================================================================================
+
+-- 12 Okt 2026 (lanjutan): Hanif Dashboard masuk dengan AKUN MARKASKU pemilik (Supabase Auth, proyek yang sama), bukan sandi NTA.
+-- Aset pribadi dibaca dari markas_dokumen 'keuangan/aset' (RLS milik sendiri); ringkasan usaha NTA dibaca lewat fungsi ini,
+-- yang hanya menjawab untuk UUID akun pemilik.
+create or replace function public.hanif_nta_ringkasan() returns jsonb language plpgsql stable security definer
+set search_path = public, extensions as $f$
+begin
+  if auth.uid() is distinct from 'ac358e3f-0316-48eb-a09a-3ac6ee8e0739'::uuid then return jsonb_build_object('ok', false, 'pesan', 'Hanya pemilik.'); end if;
+  return jsonb_build_object('ok', true, 'nilai', (select nilai from mbg_nilai where kunci = 'ringkasan'), 'diubah', (select diubah from mbg_nilai where kunci = 'ringkasan'));
+end $f$;
+revoke all on function public.hanif_nta_ringkasan() from public, anon;
+grant execute on function public.hanif_nta_ringkasan() to authenticated;
+notify pgrst, 'reload schema';
