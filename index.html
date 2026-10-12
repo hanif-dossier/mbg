@@ -1137,6 +1137,7 @@ function vStok(el) {
         ${S.induk ? '<label class="isian" style="grid-column:1/-1">Kemasan <span class="samar" style="font-weight:400">(mis. dus 36 kalau satuannya renteng; boleh kosong)</span><input id="nbKemasan" placeholder="dus 36"></label>' : ''}
       </div>
       <datalist id="dlKat">${Object.keys(kat).map(k => `<option value="${esc(k)}">`).join('')}</datalist>
+      ${S.induk ? `<div style="margin-top:12px;padding-top:12px;border-top:1px dashed var(--garis2);display:flex;gap:10px;align-items:center;flex-wrap:wrap"><button type="button" class="tombol kecil" id="bJadiLangsungBaru">Tidak nge-stok: daftarkan sebagai barang beli langsung jual</button><span class="samar" style="font-size:12px">Untuk barang yang dibeli lalu langsung diantar ke dapur. Hanya nama dan satuannya yang didaftarkan; stok gudang tidak berubah dan belanja tidak dicatat.</span></div>` : ''}
     </div>
     <div class="pil-baris" style="margin-top:12px" id="bRingkas"></div>
     <div class="baris-aksi" style="margin-top:12px"><button class="tombol utama" id="bSimpanBelanja">Simpan belanja</button></div>
@@ -1177,6 +1178,14 @@ function vStok(el) {
   $('#bHarga', el).addEventListener('input', () => { $('#bHarga', el).dataset.diketik = '1'; });
   ['#bJml', '#bHarga', '#bParkir'].forEach(id => $(id, el).oninput = segarBelanja);
   segarBelanja();
+  // 12 Okt 2026: barang baru yang tidak disimpan di gudang langsung didaftarkan sebagai beli langsung jual dari form ini
+  if ($('#bJadiLangsungBaru', el)) $('#bJadiLangsungBaru', el).onclick = async () => {
+    const nama = $('#bBarang', el).value.trim().replace(/\s+/g, ' '), sat = $('#nbSat', el).value.trim();
+    if (!nama) return pesan('Isi nama barangnya dulu.', true);
+    if (!sat) return pesan('Isi satuannya dulu (misalnya kotak, liter, pcs).', true);
+    if (INDUK().barang.some(x => kunciB(x.nama) === kunciB(nama) || aliasB(x).includes(kunciB(nama)))) return pesan(nama + ' sudah terdaftar.', true);
+    const baru = salinStok(); baru.induk.barang.push({ kode: 'LG-' + idBaru(), nama, jenis: 'langsung', satuan: sat, alias: '' });
+    try { await simpanStok(baru); pesan(nama + ' didaftarkan sebagai barang beli langsung jual. Sekarang bisa dipakai di invoice.'); ulang(); } catch (er) { pesan(er.message, true); } };
   $('#bSimpanBelanja', el).onclick = async () => {
     const jumlah = +$('#bJml', el).value || 0, harga = +$('#bHarga', el).value || 0, t = $('#bTgl', el).value, tempat = $('#bTempat', el).value.trim(), parkir = +$('#bParkir', el).value || 0;
     if (!t) return pesan('Tanggal belum diisi.', true);
