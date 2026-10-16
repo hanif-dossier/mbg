@@ -1529,7 +1529,9 @@ const daftarRp = R0 => `<div class="kas-daftar">${R0.filter(r => r.judul || r.jm
 function vKas(el, [no]) {
   const W = M.filter(w => w.rincian.length || w.biaya.length), w = W.find(x => String(x.minggu) === no) || W.at(-1);
   if (!w) { el.innerHTML = tabKas('minggu') + '<div class="kosong">Belum ada laporan mingguan.</div>'; return; }
-  const iW = W.indexOf(w), wl = W[iW - 1], t = w.akhir > hariIniISO() ? hariIniISO() : w.akhir, A = arusMinggu(w), R = w.total, S = asetPer(t);
+  // 16 Okt 2026: aset dihitung per akhir minggu (Sabtu), sama dengan cakupan uang masuk/keluar. Dulu minggu berjalan memakai
+  // tanggal hari ini, sehingga belanja stok bertanggal Sabtu sudah jadi uang keluar tetapi belum jadi stok (kekayaan tampak turun).
+  const iW = W.indexOf(w), wl = W[iW - 1], t = w.akhir, A = arusMinggu(w), R = w.total, S = asetPer(t);
   const skAwal = saldoPer(tambahHari(w.awal, -1)), skAkhir = KAS.minggu[w.akhir] ? saldoPer(w.akhir, w.akhir) : null;
   const dUtang = skAwal && skAkhir ? skAkhir.utang - skAwal.utang : 0, bersih = A.masuk - A.keluar + dUtang;
   const awalKas = skAwal ? skAwal.tunai + skAwal.bankJml : null, akhirCatat = awalKas != null ? awalKas + bersih : null, akhirNyata = skAkhir ? skAkhir.tunai + skAkhir.bankJml : null;
@@ -1590,7 +1592,7 @@ function vKas(el, [no]) {
   // saldo (awal + masuk − keluar = akhir), daftar masuk & keluar, laba rugi & aset, isian saldo dilipat, dan riwayat
   // per minggu dengan kolom yang mudah dibaca (masuk, keluar, laba bersih, kekayaan bersih).
   const selisih = akhirCatat != null && akhirNyata != null ? Math.round(akhirNyata - akhirCatat) : 0;
-  const riwK = tampilW.map(x => { const tt = x.akhir > hariIniISO() ? hariIniISO() : x.akhir, A2 = arusMinggu(x), s2 = asetPer(tt); return { x, masuk: A2.masuk, keluar: A2.keluar, laba: x.total.labaBersih, TE: s2.TE }; });
+  const riwK = tampilW.map(x => { const tt = x.akhir, A2 = arusMinggu(x), s2 = asetPer(tt); return { x, masuk: A2.masuk, keluar: A2.keluar, laba: x.total.labaBersih, TE: s2.TE }; });
   el.innerHTML = `${tabKas('minggu')}
   <section class="bagian" style="margin-top:6px">
     <div class="kas-kepala"><div><h2 style="margin:0">Arus kas <span class="miring">minggu ${esc(w.minggu)}</span></h2>
