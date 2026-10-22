@@ -1868,6 +1868,9 @@ const angkaQ = n => n === '' || n == null ? '' : (+n).toLocaleString('id-ID', { 
 // 6 Okt 2026 (permintaan dapur Kakap 1): satu tabel seperti berkas rincian hutang. Kiri: semua pengantaran, baris Excel
 // lalu invoice aplikasi yang memakai dana ini, masing-masing dirinci per barang dengan nomor lanjut. Kanan: semua transfer
 // dapur dan pembayaran nota-nota itu. Selisih di bawah tabel = posisi sekarang (plus dana lebih, minus piutang).
+// tagihan nota tanpa barang titipan, dan baris rincian yang hanya memuat bagian milik sendiri
+const milikInv = v => totalInv(v) - (hitungInv(v).titip || 0);
+const barisMilik = h => h.b.filter(b => qtyMilik(b) > 0).map(b => ({ barang: namaNota(b), qty: qtyMilik(b), satuan: b.satuan || '', harga: +b.harga || 0, jumlah: qtyMilik(b) * (+b.harga || 0) }));
 function susunDana(o) {
   const kiri = [];
   o.pakaiLuar.forEach(d => { const B = d.baris && d.baris.length ? d.baris : [{ barang: d.ket || 'Pengantaran', qty: '', satuan: '', harga: '', jumlah: +d.jumlah || 0 }];
@@ -1875,10 +1878,11 @@ function susunDana(o) {
   // semua invoice dapur ini sejak awal rincian, juga yang sudah melewati dana lebih (6 Okt: nota 027 tidak muncul karena dana habis);
   // invoice lunas hanya ikut kalau pembayarannya tercatat, supaya tidak tampil sebagai hutang tanpa transfernya
   const awal = [...o.setoran, ...o.pakaiLuar].map(d => d.tgl).sort()[0] || '0000-00-00';
-  const semuaInv = INVOICE.filter(v => v.outlet === o.outlet && totalInv(v) > 0 && (v.tanggal || '') >= awal && (!v.lunas || PIU.bayar.some(b => b.ref === 'i:' + v.id)))
-    .sort((a, b) => String(a.tanggal).localeCompare(String(b.tanggal)) || (+a.nomor || 0) - (+b.nomor || 0)).map(v => ({ inv: v.id, nomor: v.nomor, tgl: v.tanggal, total: totalInv(v) }));
+  const titipNotaD = v => !!((PIU.ubah || {})['i:' + v.id] || {}).titipNota;
+  const semuaInv = INVOICE.filter(v => v.outlet === o.outlet && milikInv(v) > 0 && !titipNotaD(v) && (v.tanggal || '') >= awal && (!v.lunas || PIU.bayar.some(b => b.ref === 'i:' + v.id)))
+    .sort((a, b) => String(a.tanggal).localeCompare(String(b.tanggal)) || (+a.nomor || 0) - (+b.nomor || 0)).map(v => ({ inv: v.id, nomor: v.nomor, tgl: v.tanggal, total: milikInv(v) }));
   const antarInv = semuaInv.map(x => { const v = INVOICE.find(i => i.id === x.inv); if (!v) return { x, B: [{ barang: 'Pengantaran nota ' + nomorNota(x.nomor), qty: '', satuan: '', harga: '', jumlah: x.total }] };
-    const h = hitungInv(v), B = h.b.map(b => ({ barang: namaNota(b), qty: +b.qty, satuan: b.satuan || '', harga: +b.harga || 0, jumlah: +b.qty * (+b.harga || 0) }));
+    const h = hitungInv(v), B = barisMilik(h);
     if (h.disk) B.push({ barang: `Diskon ${angkaQ(+v.diskon)}%`, qty: '', satuan: '', harga: '', jumlah: -h.disk });
     return { x, B }; });
   antarInv.forEach(({ x, B }) => B.forEach((b, j) => kiri.push({ no: j ? '' : kiri.filter(k => k.awal).length + 1, tgl: j ? '' : x.tgl, nota: j ? '' : nomorNota(x.nomor), inv: j ? null : x.inv, barang: b.barang, qty: b.qty, satuan: b.satuan, harga: b.harga, jumlah: b.jumlah, awal: !j, baru: true })));
@@ -1900,12 +1904,16 @@ function susunRincian(outlet, dari = '', sampai = '') {
   // invoice sebelum awal rincian dana lebih tidak ikut: itu sudah tercakup di baris Excel
   // 17 Okt 2026 (pemilik: nota Kakap 1 tgl 15 Okt "hanya titipan nota saja jangan masukan ke rincian hutang"): nota yang
   // ditandai titipan nota (PIU.ubah['i:'+id].titipNota) tidak ikut dirincikan sebagai pengantaran.
+  // 23 Okt 2026 (pemilik: "untuk titipan jangan masukan ke rincian piutang seperti kakap 1"): barang titipan di dalam nota
+  // (titipQty) juga tidak dirinci; yang dirinci hanya bagian milik sendiri. Nota yang seluruhnya titipan tidak muncul.
   const titipNota = v => !!((PIU.ubah || {})['i:' + v.id] || {}).titipNota;
-  INVOICE.filter(v => v.outlet === outlet && totalInv(v) > 0 && (v.tanggal || '') >= awal && !titipNota(v)).forEach(v => { const h = hitungInv(v), B = h.b.map(b => ({ barang: namaNota(b), qty: +b.qty, satuan: b.satuan || '', harga: +b.harga || 0, jumlah: +b.qty * (+b.harga || 0) }));
+  INVOICE.filter(v => v.outlet === outlet && milikInv(v) > 0 && (v.tanggal || '') >= awal && !titipNota(v)).forEach(v => { const h = hitungInv(v), B = barisMilik(h);
     if (h.disk) B.push({ barang: `Diskon ${angkaQ(+v.diskon)}%`, qty: '', satuan: '', harga: '', jumlah: -h.disk });
-    antar.push({ tgl: v.tanggal || '', nota: nomorNota(v.nomor), nomor: +v.nomor || 0, inv: v.id, jumlah: totalInv(v), B });
+    antar.push({ tgl: v.tanggal || '', nota: nomorNota(v.nomor), nomor: +v.nomor || 0, inv: v.id, jumlah: milikInv(v), B });
     // potongan dana lebih tidak ditulis lagi: uangnya sudah ada di baris transfer dana masuk
-    setoranInv(v).filter(b => !b.dana).forEach(b => setor.push({ tgl: b.tgl, jumlah: b.jumlah, ket: (b.maya ? 'ditandai lunas' : b.ket || 'setoran') + ' · nota ' + nomorNota(v.nomor), bayarId: b.id, inv: v.id })); });
+    // setoran per nota paling banyak sebesar bagian milik sendiri (pelunasan yang ikut menutup titipan tidak jadi "dana lebih")
+    let sisaMilik = (hitungInv(v).titip || 0) > 0 ? milikInv(v) : Infinity;
+    setoranInv(v).filter(b => !b.dana).forEach(b => { const j = Math.min(b.jumlah, sisaMilik); sisaMilik -= j; if (j > 0) setor.push({ tgl: b.tgl, jumlah: j, ket: (b.maya ? 'ditandai lunas' : b.ket || 'setoran') + ' · nota ' + nomorNota(v.nomor), bayarId: b.id, inv: v.id }); }); });
   // piutang dapur dari buku Excel atau yang dicatat manual
   semuaPiutang().filter(p => p.usaha && p.outlet === outlet && p.sumber !== 'invoice' && (!p.lunas || p.riwayat.length)).forEach(p => {
     antar.push({ tgl: p.tanggal || '', jumlah: p.awal, B: [{ barang: (p.sumber === 'laporan' ? 'Tagihan buku piutang' : 'Piutang') + (p.catatan ? ', ' + p.catatan : ''), qty: '', satuan: '', harga: '', jumlah: p.awal }] });
@@ -1975,6 +1983,9 @@ function vPiutangDana(el, outlet) {
       <tfoot><tr><td colspan="6">Total</td><td class="angka">${esc(rp(S.totalAntar))}</td><td></td><td style="border-left:2px solid var(--garis2)"></td><td class="angka">${esc(rp(S.totalTf))}</td><td></td></tr>
         <tr><td colspan="6">Selisih (setoran dikurangi pengantaran)${rg.sampai ? ' per ' + esc(tglP(rg.sampai)) : ', posisi sekarang'}</td><td colspan="5" class="angka ${S.selisih >= 0 ? 'kunyit' : 'merah'}"><b>${esc(rp(S.selisih))}</b> <span class="samar">${S.selisih >= 0 ? 'dana dapur lebih' : 'dapur kurang bayar'}</span></td></tr></tfoot></table></div>
   </section>
+  ${(() => { const T2 = INVOICE.filter(v => v.outlet === outlet && !((PIU.ubah || {})['i:' + v.id] || {}).titipNota && (hitungInv(v).titip || 0) > 0).sort((a, b) => String(b.tanggal).localeCompare(String(a.tanggal)));
+    return T2.length ? `<section class="bagian kartu"><span class="label">Barang titipan · tidak masuk rincian piutang</span>
+    <div class="daftar" style="margin-top:6px">${T2.map(v => { const h = hitungInv(v); return `<div><span><b>Nota ${esc(nomorNota(v.nomor))}</b> · ${esc(tgl(v.tanggal, true))}<div class="samar" style="font-size:12px">${esc(h.b.filter(b => qtyTitip(b) > 0).map(b => b.barang + ' ' + angkaQ(qtyTitip(b)) + (b.satuan ? ' ' + b.satuan : '')).join(', '))}</div></span><span class="angka">${esc(rp(h.titip))}</span></div>`; }).join('')}</div></section>` : ''; })()}
   ${(() => { const T = INVOICE.filter(v => v.outlet === outlet && ((PIU.ubah || {})['i:' + v.id] || {}).titipNota); return T.length ? `<section class="bagian kartu"><span class="label">Titipan nota · tidak masuk rincian hutang</span>
     <div class="daftar" style="margin-top:6px">${T.map(v => `<div><span><b>Nota ${esc(nomorNota(v.nomor))}</b> · ${esc(tgl(v.tanggal, true))}<div class="samar" style="font-size:12px">${esc(hitungInv(v).b.map(b => b.barang + ' ' + angkaQ(+b.qty) + ' ' + (b.satuan || '')).join(', '))}</div></span><span class="angka">${esc(rp(totalInv(v)))} <button class="pil mini" data-titipnota="${esc(v.id)}" data-batal="1">masukkan lagi</button></span></div>`).join('')}</div></section>` : ''; })()}
   <section class="bagian"><span class="label">Tampilan untuk dapur (PDF)</span><div class="lembar" id="dLembar" style="margin-top:10px">${lembarRincian(outlet, S)}</div></section>`;
