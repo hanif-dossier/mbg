@@ -1083,7 +1083,7 @@ function stokKini() { const I = INDUK(); if (!I) return stokLama();
   const gerak = [...STOK.gerak.map(x => ({ ...x, app: true })), ...keluarInvoice(daftar)].filter(x => peta[x.kode] && sesudah(x))
     .sort((a, b) => a.tgl.localeCompare(b.tgl) || (a.dibuat || '').localeCompare(b.dibuat || ''));
   for (const x of gerak) { const b = peta[x.kode];
-    if (x.jenis === 'beli') { b.stok += x.jumlah; if (x.harga) { b.harga = x.harga; b.belanjaApp = true; } }
+    if (x.jenis === 'beli') { b.stok += x.jumlah; if (x.harga && !(b.hargaDiubah && (x.dibuat || x.tgl) < b.hargaDiubah)) { b.harga = x.harga; b.belanjaApp = true; } }   // harga yang diisi pemilik di Data barang menang atas belanja yang lebih lama
     else if (x.jenis === 'keluar') b.stok -= x.jumlah; else if (x.jenis === 'set') b.stok = x.jumlah;
     b.riwayat.push(x); }
   for (const b of daftar) { b.stok = Math.round(b.stok * 1000) / 1000; b.status = b.stok <= 0 ? 'HABIS' : b.stok <= (+b.minimum || 0) ? 'MENIPIS' : 'AMAN'; b.nilai = Math.round(Math.max(0, b.stok) * (+b.harga || 0)); }
@@ -1099,7 +1099,7 @@ function stokLama() {
     .sort((a, b) => a.tgl.localeCompare(b.tgl) || (a.dibuat || '').localeCompare(b.dibuat || ''));
   for (const b of daftar) b.stokAwal = +b.stok || 0;   // untuk menghitung stok pada tanggal tertentu (laporan keuangan)
   for (const x of gerak) { const b = peta[x.kode];
-    if (x.jenis === 'beli') { b.stok += x.jumlah; if (x.harga) { b.harga = x.harga; b.belanjaApp = true; } }
+    if (x.jenis === 'beli') { b.stok += x.jumlah; if (x.harga && !(b.hargaDiubah && (x.dibuat || x.tgl) < b.hargaDiubah)) { b.harga = x.harga; b.belanjaApp = true; } }   // harga yang diisi pemilik di Data barang menang atas belanja yang lebih lama
     else if (x.jenis === 'keluar') b.stok -= x.jumlah;
     else if (x.jenis === 'set') b.stok = x.jumlah;
     b.riwayat.push(x); }
@@ -1334,7 +1334,8 @@ function vStok(el) {
         $('#dHargaKem', el).textContent = K.map(([sat, isi]) => `= ${rp(Math.round(h * isi))} per ${sat}`).join(' · '); });
       $('#bDataStok', el).onclick = async () => { const nama = $('#dNama', el).value.trim().replace(/\s+/g, ' '); if (!nama) return pesan('Nama barang tidak boleh kosong.', true);
         if (INDUK().barang.some(x => x.kode !== b.kode && kunciB(x.nama) === kunciB(nama))) return pesan(nama + ' sudah ada di daftar barang. Satu barang satu nama.', true);
-        try { await ubahInduk(b.kode, { nama, satuan: $('#dSat', el).value.trim() || b.satuan, minimum: +$('#dMin', el).value || 0, harga: +$('#dHarga', el).value || 0, alias: $('#dAlias', el).value.trim().replace(/\s*,\s*/g, ', '), kemasan: bacaKemasan($('#dKemasan', el).value), kategori: $('#dKat', el).value.trim().replace(/\s+/g, ' ') || tebakKategori(nama) });
+        const hargaBaru = +$('#dHarga', el).value || 0, ubahHarga = Math.round(hargaBaru) !== Math.round(+b.harga || 0) ? { hargaDiubah: new Date().toISOString() } : {};   // 23 Okt 2026: harga diisi sendiri tidak tertimpa belanja lama
+        try { await ubahInduk(b.kode, { ...ubahHarga, nama, satuan: $('#dSat', el).value.trim() || b.satuan, minimum: +$('#dMin', el).value || 0, harga: hargaBaru, alias: $('#dAlias', el).value.trim().replace(/\s*,\s*/g, ', '), kemasan: bacaKemasan($('#dKemasan', el).value), kategori: $('#dKat', el).value.trim().replace(/\s+/g, ' ') || tebakKategori(nama) });
           pesan('Data ' + nama + ' tersimpan'); ulang(); } catch (er) { pesan(er.message, true); } };
       $('#bJadiLangsung', el).onclick = async () => { if (!confirm(`${b.nama} jadi barang beli langsung jual? Namanya tetap terdaftar, tetapi stoknya (${teksStok(b)}) tidak dihitung lagi di gudang.`)) return;
         try { await ubahInduk(b.kode, { jenis: 'langsung' }); f.buka = null; pesan(b.nama + ' sekarang barang beli langsung jual'); ulang(); } catch (er) { pesan(er.message, true); } };
@@ -3351,7 +3352,7 @@ muat().catch(e => { akar.innerHTML = `<div class="masuk"><div class="kotak"><h1>
 if ('serviceWorker' in navigator) addEventListener('load', () => navigator.serviceWorker.register('sw.js').catch(() => {}));
 // 23 Okt 2026 (pemilik: "masih tetap sama" setelah perubahan dipasang): aplikasi yang sudah terbuka/terpasang memeriksa
 // versi di server saat dibuka lagi dan tiap 5 menit. Kalau berbeda, muncul tombol "Perbarui NTA" (muat ulang tanpa salinan lama).
-const VERSI_NTA = 'mbg-v68';
+const VERSI_NTA = 'mbg-v69';
 async function cekVersiNta() { try { const t = await (await fetch('sw.js?cek=' + Date.now(), { cache: 'no-store' })).text(), v = (t.match(/mbg-v\d+/) || [])[0];
   if (!v || v === VERSI_NTA || document.getElementById('versiBaru')) return;
   const d = document.createElement('div'); d.id = 'versiBaru';
