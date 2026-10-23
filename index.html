@@ -3349,6 +3349,18 @@ function layarMasuk(pesan) {
 
 muat().catch(e => { akar.innerHTML = `<div class="masuk"><div class="kotak"><h1>Belum tersambung</h1><p>${esc(e.message)}</p><button class="tombol utama" onclick="location.reload()">Coba lagi</button></div></div>`; });
 if ('serviceWorker' in navigator) addEventListener('load', () => navigator.serviceWorker.register('sw.js').catch(() => {}));
+// 23 Okt 2026 (pemilik: "masih tetap sama" setelah perubahan dipasang): aplikasi yang sudah terbuka/terpasang memeriksa
+// versi di server saat dibuka lagi dan tiap 5 menit. Kalau berbeda, muncul tombol "Perbarui NTA" (muat ulang tanpa salinan lama).
+const VERSI_NTA = 'mbg-v68';
+async function cekVersiNta() { try { const t = await (await fetch('sw.js?cek=' + Date.now(), { cache: 'no-store' })).text(), v = (t.match(/mbg-v\d+/) || [])[0];
+  if (!v || v === VERSI_NTA || document.getElementById('versiBaru')) return;
+  const d = document.createElement('div'); d.id = 'versiBaru';
+  d.style.cssText = 'position:fixed;left:50%;bottom:18px;transform:translateX(-50%);z-index:9999;display:flex;gap:12px;align-items:center;padding:12px 16px;border-radius:14px;background:#11251c;border:1px solid #5fd08f;box-shadow:0 12px 40px rgba(0,0,0,.5);color:#e8f5ee;font:600 14px/1.4 inherit;max-width:calc(100% - 32px)';
+  d.innerHTML = '<span>Ada versi NTA yang lebih baru.</span><button type="button" style="border:0;border-radius:999px;padding:8px 14px;background:#5fd08f;color:#08130d;font:700 13px inherit;cursor:pointer">Perbarui NTA</button>';
+  d.querySelector('button').onclick = async () => { try { const r = await navigator.serviceWorker?.getRegistration(); await r?.update(); const k = await caches.keys(); await Promise.all(k.map(x => caches.delete(x))); } catch { /* lewati */ } location.reload(); };
+  document.body.appendChild(d); } catch { /* sedang offline */ } }
+addEventListener('load', () => setTimeout(cekVersiNta, 3000)); setInterval(cekVersiNta, 5 * 60 * 1000);
+document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') cekVersiNta(); });
 </script>
 </body>
 </html>
