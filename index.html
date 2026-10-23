@@ -365,6 +365,26 @@ table.gaji-harian tr.hari-ini td{background:rgba(95,208,143,.07)} table.gaji-har
 'use strict';
 const SB = 'https://hzxfheydtrjhizbwbddh.supabase.co', ANON = 'sb_publishable_3c_5VhfP4Z9g1dSU9c00HQ_0QkuiHTm';
 const $ = (s, el = document) => el.querySelector(s), $$ = (s, el = document) => [...el.querySelectorAll(s)];
+// 23 Okt 2026, pemilik: "jadikan dalam bentuk Rupiah jangan angka biasa seluruhnya untuk harga modal, pengeluaran yang
+// berkaitan dengan harga". Isian bertanda data-rp diubah jadi teks bertampilan Rupiah. Titik adalah pemisah ribuan, jadi
+// mengetik 108.050 atau 108050 sama-sama Rp 108.050. Kode lain tetap membaca .value sebagai angka polos.
+const NILAI_ASLI = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value');
+const tampilRp = (v, dariKode) => { let t = String(v ?? '').trim(); if (t === '') return '';
+  if (dariKode && /^-?\d+(\.\d+)?$/.test(t)) t = String(Math.round(+t));   // angka dari data (boleh desimal) dibulatkan
+  const neg = /^\s*-/.test(t), d = t.replace(/\D/g, ''); if (!d) return neg ? '-' : '';
+  return (neg ? '-' : '') + 'Rp ' + (+d).toLocaleString('id-ID'); };
+function jadikanRupiah(inp) {
+  if (inp.dataset.rpSiap) return; inp.dataset.rpSiap = '1';
+  const awal = NILAI_ASLI.get.call(inp); inp.type = 'text'; inp.inputMode = 'numeric'; inp.autocomplete = 'off';
+  NILAI_ASLI.set.call(inp, tampilRp(awal, true));
+  Object.defineProperty(inp, 'value', { configurable: true,
+    get() { const t = NILAI_ASLI.get.call(this), d = t.replace(/\D/g, ''); return d ? (/^\s*-/.test(t) ? '-' : '') + d : ''; },
+    set(v) { NILAI_ASLI.set.call(this, tampilRp(v, true)); } });
+  inp.addEventListener('input', () => { const t = NILAI_ASLI.get.call(inp), dariAkhir = t.length - (inp.selectionStart ?? t.length), baru = tampilRp(t, false);
+    NILAI_ASLI.set.call(inp, baru); const pos = Math.max(0, baru.length - dariAkhir); try { inp.setSelectionRange(pos, pos); } catch { /* lewati */ } }, true);
+  inp.addEventListener('focus', () => { if (!NILAI_ASLI.get.call(inp)) NILAI_ASLI.set.call(inp, ''); });
+}
+new MutationObserver(() => document.querySelectorAll('input[data-rp]:not([data-rp-siap])').forEach(jadikanRupiah)).observe(document.documentElement, { childList: true, subtree: true });
 const akar = $('#akar');
 const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]);
 const rp = n => 'Rp ' + Math.round(n || 0).toLocaleString('id-ID');
@@ -780,7 +800,7 @@ function opBiaya(el, senin, hariIni) {
     <div class="pilih" style="margin-top:10px" id="pJenis">${JENIS_KELUAR.map(j => `<button class="tab ${f.jenis === j ? 'aktif' : ''}" data-jenis="${esc(j)}">${esc(j)}</button>`).join('')}</div>
     <div class="grid g3" style="margin-top:12px">
       <label class="isian">Tanggal<input type="date" id="kTgl" value="${dalam ? hariIni : minggu}"></label>
-      <label class="isian">Jumlah (Rp)<input type="number" id="kJumlah" inputmode="numeric" min="0" placeholder="0"></label>
+      <label class="isian">Jumlah (Rp)<input type="number" id="kJumlah" data-rp inputmode="numeric" min="0" placeholder="0"></label>
       <label class="isian">Keterangan<input id="kKet" placeholder="${f.jenis === 'Lainnya' ? 'wajib diisi' : 'boleh kosong'}"></label>
     </div>
     <div style="margin-top:12px"><span class="isian">Terkait dengan</span><div class="pilih" style="margin-top:6px" id="pTerkait">${TERKAIT.map(([k, n]) => `<button class="tab ${f.terkait === k ? 'aktif' : ''}" data-terkait="${k}">${esc(n)}</button>`).join('')}</div></div>
@@ -1135,7 +1155,7 @@ function vStok(el) {
           <label class="isian" style="margin-top:8px">Nama<input id="dNama" value="${esc(b.nama)}"></label>
           <label class="isian" style="margin-top:8px">Nama lain di invoice <span class="samar" style="font-weight:400">(pisahkan koma; invoice dengan nama ini mengurangi stok barang ini)</span><input id="dAlias" value="${esc(b.alias || '')}" placeholder="mis. beras cap belalang, beras belalang"></label>
           <div class="grid g2" style="margin-top:8px;gap:8px"><label class="isian">Satuan<input id="dSat" value="${esc(b.satuan)}"></label><label class="isian">Minimum<input type="number" id="dMin" step="any" value="${esc(b.minimum || 0)}"></label></div>
-          <label class="isian" style="margin-top:8px">Harga modal per ${esc(b.satuan || 'satuan')}<input type="number" id="dHarga" inputmode="numeric" value="${esc(b.harga || 0)}"></label>
+          <label class="isian" style="margin-top:8px">Harga modal per ${esc(b.satuan || 'satuan')}<input type="number" id="dHarga" data-rp inputmode="numeric" value="${esc(b.harga || 0)}"></label>
           <button class="tombol kecil" id="bDataStok" style="margin-top:10px">Simpan data</button></div>
       </div>
       <div class="baris-aksi" style="margin-top:10px"><button class="tombol kecil" id="bTutupStok">Tutup</button>${!b.dariExcel && !b.riwayat.length ? '<button class="tombol kecil bahaya" id="bHapusBarang">Hapus barang</button>' : ''}</div></div>`;
@@ -1156,7 +1176,7 @@ function vStok(el) {
           <label class="isian" style="margin-top:8px">Kategori <span class="samar" style="font-weight:400">(pilih atau ketik baru)</span><input id="dKat" list="dlKat" value="${esc(b.kategori || '')}"></label>
           <div class="grid g2" style="margin-top:8px;gap:8px"><label class="isian">Satuan dasar<input id="dSat" value="${esc(b.satuan)}"></label><label class="isian">Minimum (${esc(b.satuan)})<input type="number" id="dMin" step="any" value="${esc(b.minimum || 0)}"></label></div>
           <label class="isian" style="margin-top:8px">Kemasan <span class="samar" style="font-weight:400">(mis. dus 36, karung 20; boleh kosong)</span><input id="dKemasan" value="${esc(tulisKemasan(b))}"></label>
-          <label class="isian" style="margin-top:8px">Harga modal per ${esc(b.satuan || 'satuan')}<input type="number" id="dHarga" inputmode="decimal" step="any" value="${esc(b.harga || 0)}"></label>
+          <label class="isian" style="margin-top:8px">Harga modal per ${esc(b.satuan || 'satuan')}<input type="number" id="dHarga" data-rp inputmode="decimal" step="any" value="${esc(b.harga || 0)}"><small class="samar" id="dHargaKem" style="font-weight:400" data-kem="${esc(JSON.stringify(kemasanB(b).filter(k => +k.isi > 1).map(k => [k.satuan, +k.isi])))}">${esc(kemasanB(b).filter(k => +k.isi > 1).map(k => `= ${rp(Math.round((+b.harga || 0) * k.isi))} per ${k.satuan}`).join(' · '))}</small></label>
           <button class="tombol kecil" id="bDataStok" style="margin-top:10px">Simpan data</button></div>
       </div>
       <div class="baris-aksi" style="margin-top:10px;flex-wrap:wrap"><button class="tombol kecil" id="bTutupStok">Tutup</button><button class="tombol kecil" id="bJadiLangsung" title="Barang tetap terdaftar, tetapi tidak dihitung di stok gudang">Jadikan barang beli langsung jual</button>${!b.riwayat.length && !(+b.stok) ? '<button class="tombol kecil bahaya" id="bHapusBarang">Hapus barang</button>' : ''}</div></div>`;
@@ -1212,9 +1232,9 @@ function vStok(el) {
       <label class="isian">Tanggal<input type="date" id="bTgl" value="${hIni}"></label>
       <label class="isian">Jumlah<input type="number" id="bJml" inputmode="decimal" step="any" min="0" placeholder="0"></label>
       <label class="isian" id="bSatBungkus" hidden>Satuan belanja<select id="bSat"></select></label>
-      <label class="isian">Harga beli per satuan (modal)<input type="number" id="bHarga" inputmode="numeric" min="0"></label>
+      <label class="isian">Harga beli per satuan (modal)<input type="number" id="bHarga" data-rp inputmode="numeric" min="0"></label>
       <label class="isian">Belanja di mana<input id="bTempat" placeholder="misalnya pasar Flamboyan"></label>
-      <label class="isian">Parkir atau ongkos saat belanja (Rp)<input type="number" id="bParkir" inputmode="numeric" min="0" placeholder="boleh kosong"></label>
+      <label class="isian">Parkir atau ongkos saat belanja (Rp)<input type="number" id="bParkir" data-rp inputmode="numeric" min="0" placeholder="boleh kosong"></label>
     </div>
     <div id="formBaru" hidden style="margin-top:12px;padding:12px;border:1px dashed var(--garis2);border-radius:14px">
       <span class="label">Barang baru</span>
@@ -1239,7 +1259,7 @@ function vStok(el) {
         <span class="angka">${x.jenis === 'beli' ? esc(rp(x.jumlah * x.harga)) + '<br>' : ''}${x.app ? `<button class="tombol kecil" data-ubahgerak="${esc(x.id)}" style="padding:3px 9px;font-size:11.5px;margin-top:4px">ubah</button> <button class="tombol kecil bahaya" data-hapusgerak="${esc(x.id)}" style="padding:3px 9px;font-size:11.5px;margin-top:4px">hapus</button>` : `<a href="#invoice/${encodeURIComponent(x.inv)}" style="font-size:12px">buka invoice</a>`}</span></div>
         ${f2.ubah === x.id ? `<div style="display:block;border-bottom:1px solid var(--garis);padding:4px 0 14px"><div class="grid g3">
           <label class="isian">${x.jenis === 'set' ? 'Stok jadi' : 'Jumlah'} (${esc(b.satuan)})<input type="number" id="ugJml" step="any" inputmode="decimal" value="${x.jumlah}"></label>
-          ${x.jenis === 'beli' ? `<label class="isian">Harga beli per satuan<input type="number" id="ugHarga" inputmode="numeric" value="${x.harga}"></label>` : ''}
+          ${x.jenis === 'beli' ? `<label class="isian">Harga beli per satuan<input type="number" id="ugHarga" data-rp inputmode="numeric" value="${x.harga}"></label>` : ''}
           <label class="isian">Tanggal<input type="date" id="ugTgl" value="${esc(x.tgl)}"></label>
           ${x.jenis === 'beli' ? `<label class="isian">Belanja di mana<input id="ugTempat" value="${esc(x.tempat || '')}"></label>` : `<label class="isian">Keterangan<input id="ugKet" value="${esc(x.ket || '')}"></label>`}</div>
           <div class="baris-aksi" style="margin-top:10px"><button class="tombol utama kecil" id="ugSimpan">Simpan perubahan</button><button class="tombol kecil" id="ugBatal">Batal</button></div></div>` : ''}`; }).join('')}</div></div></section>` : ''}
@@ -1310,6 +1330,8 @@ function vStok(el) {
         catat({ jenis: 'keluar', jumlah: j, ket: $('#kKetStok', el).value.trim() }, `${b.nama} berkurang ${teksStok(b, j)}`); };
       $('#bSetStok', el).onclick = () => { const v = bacaIsianKemasan(el, 'set'); if (v == null || v < 0) return pesan('Isi stok sebenarnya.', true);
         catat({ jenis: 'set', jumlah: v, ket: 'hitung ulang di gudang' }, `Stok ${b.nama} jadi ${teksStok(b, v)}`); };
+      if ($('#dHargaKem', el)) $('#dHarga', el).addEventListener('input', () => { const h = +$('#dHarga', el).value || 0, K = JSON.parse($('#dHargaKem', el).dataset.kem || '[]');
+        $('#dHargaKem', el).textContent = K.map(([sat, isi]) => `= ${rp(Math.round(h * isi))} per ${sat}`).join(' · '); });
       $('#bDataStok', el).onclick = async () => { const nama = $('#dNama', el).value.trim().replace(/\s+/g, ' '); if (!nama) return pesan('Nama barang tidak boleh kosong.', true);
         if (INDUK().barang.some(x => x.kode !== b.kode && kunciB(x.nama) === kunciB(nama))) return pesan(nama + ' sudah ada di daftar barang. Satu barang satu nama.', true);
         try { await ubahInduk(b.kode, { nama, satuan: $('#dSat', el).value.trim() || b.satuan, minimum: +$('#dMin', el).value || 0, harga: +$('#dHarga', el).value || 0, alias: $('#dAlias', el).value.trim().replace(/\s*,\s*/g, ', '), kemasan: bacaKemasan($('#dKemasan', el).value), kategori: $('#dKat', el).value.trim().replace(/\s+/g, ' ') || tebakKategori(nama) });
@@ -1630,9 +1652,9 @@ function vKas(el, [no]) {
   </section>
   <section class="bagian"><details class="kartu" id="isiSaldo"><summary style="cursor:pointer;list-style:revert"><span class="label">Saldo akhir minggu ${esc(w.minggu)} (${esc(tglPendek(w.akhir))})</span> ${sudahIsi ? `<span class="pil hijau mini">sudah diisi</span>` : `<span class="pil kunyit mini">belum diisi</span>`}</summary>
     <p class="samar" style="font-size:12.5px;margin:8px 0 0">Isi tiap Sabtu dari m-banking dan hitungan uang tunai. Piutang dan stok dihitung aplikasi.</p>
-    <div class="grid g3" style="margin-top:10px">${BANK_KAS.map(b => `<label class="isian">Saldo ${esc(b)}<input type="number" inputmode="numeric" data-bank="${esc(b)}" value="${esc((isi.bank || {})[b] ?? '')}"></label>`).join('')}
-      <label class="isian">Uang tunai<input type="number" inputmode="numeric" id="kTunai" value="${esc(isi.tunai ?? '')}"></label>
-      <label class="isian">Utang ke pemasok yang belum dibayar<input type="number" inputmode="numeric" id="kUtang" value="${esc(isi.utang ?? '')}"></label></div>
+    <div class="grid g3" style="margin-top:10px">${BANK_KAS.map(b => `<label class="isian">Saldo ${esc(b)}<input type="number" inputmode="numeric" data-bank="${esc(b)}" data-rp value="${esc((isi.bank || {})[b] ?? '')}"></label>`).join('')}
+      <label class="isian">Uang tunai<input type="number" inputmode="numeric" id="kTunai" data-rp value="${esc(isi.tunai ?? '')}"></label>
+      <label class="isian">Utang ke pemasok yang belum dibayar<input type="number" inputmode="numeric" id="kUtang" data-rp value="${esc(isi.utang ?? '')}"></label></div>
     <div class="baris-aksi" style="margin-top:10px"><button class="tombol utama" id="kSimpan">Simpan saldo</button></div></details></section>
   <section class="bagian"><div class="grid g2" style="align-items:start">
     <div class="kartu"><span class="label">Uang masuk</span>${daftar(masukR)}</div>
@@ -1771,7 +1793,7 @@ function vPiutang(el, a = []) {
       ${p.dibayar ? `<div style="font-size:12.5px;margin-top:3px">dari <span class="redup">${esc(rp(p.awal))}</span>, sudah dibayar <span class="hijau">${esc(rp(p.dibayar))}</span></div>
         <div class="pil-baris" style="margin-top:5px">${p.riwayat.map(b => `<span class="pil hijau" title="${esc(b.ket || '')}">${esc(tglP(b.tgl))} · ${esc(rpS(b.jumlah))}${b.dana ? ' <span class="samar">dana lebih</span>' : `<button data-batalbayar="${esc(b.id)}" aria-label="Batalkan pembayaran ini" style="border:0;background:none;color:inherit;font:inherit;cursor:pointer;padding:0 0 0 4px">×</button>`}</span>`).join('')}</div>` : ''}
       ${f.buka === p.ref ? `<div class="grid g3" style="margin-top:10px">
-          <label class="isian">Jumlah dibayar${p.usaha ? '<small class="samar" style="font-weight:400">boleh lebih; kelebihannya jadi dana lebih dapur</small>' : ''}<input type="number" id="byJumlah" inputmode="numeric" min="1" value="${p.nominal}"></label>
+          <label class="isian">Jumlah dibayar${p.usaha ? '<small class="samar" style="font-weight:400">boleh lebih; kelebihannya jadi dana lebih dapur</small>' : ''}<input type="number" id="byJumlah" data-rp inputmode="numeric" min="1" value="${p.nominal}"></label>
           <label class="isian">Tanggal<input type="date" id="byTgl" value="${hIni}"></label>
           <label class="isian">Keterangan<input id="byKet" placeholder="transfer, tunai"></label></div>
         <div class="baris-aksi" style="margin-top:10px"><button class="tombol utama kecil" id="bySimpan" data-ref="${esc(p.ref)}">Simpan pembayaran</button><button class="tombol kecil" id="byTutup">Batal</button></div>`
@@ -1795,7 +1817,7 @@ function vPiutang(el, a = []) {
     <p class="samar" style="font-size:13px;margin:6px 0 0">Kalau dapur mentransfer lebih dari tagihannya, kelebihannya dicatat di sini. Setiap invoice baru untuk dapur itu otomatis dipotong dari dana ini sampai habis; sisanya baru jadi piutang.</p>
     ${f.danaForm ? `<div class="grid g3" style="margin-top:12px">
       <label class="isian">Dapur<select id="dnDapur">${dapur.map(d => `<option value="${esc(d.outlet)}" ${f.danaDapur === d.outlet ? 'selected' : ''}>${esc(judulOutlet(d.outlet))}${d.aktif === false ? ' (tidak aktif)' : ''}</option>`).join('')}</select></label>
-      <label class="isian">Jumlah dana lebih (Rp)<input type="number" id="dnJumlah" inputmode="numeric" min="1" placeholder="0"></label>
+      <label class="isian">Jumlah dana lebih (Rp)<input type="number" id="dnJumlah" data-rp inputmode="numeric" min="1" placeholder="0"></label>
       <label class="isian">Tanggal masuk<input type="date" id="dnTgl" value="${hIni}"></label>
       <label class="isian" style="grid-column:span 3">Keterangan<input id="dnKet" placeholder="misalnya kelebihan transfer per rincian hutang sampai 18 Agustus"></label></div>
       <div class="baris-aksi" style="margin-top:12px"><button class="tombol utama kecil" id="bDanaSimpan">Simpan dana lebih</button></div>` : ''}
@@ -1810,7 +1832,7 @@ function vPiutang(el, a = []) {
     <div class="grid g3" style="margin-top:12px">
       ${f.usaha ? `<label class="isian">Dapur<select id="puDapur">${dapur.map(d => `<option value="${esc(d.outlet)}">${esc(judulOutlet(d.outlet))}${d.aktif === false ? ' (tidak aktif)' : ''}</option>`).join('')}</select></label>`
         : `<label class="isian">Nama yang berutang<input id="puNama" placeholder="nama orang"></label>`}
-      <label class="isian">Jumlah (Rp)<input type="number" id="puNominal" inputmode="numeric" min="1" placeholder="0"></label>
+      <label class="isian">Jumlah (Rp)<input type="number" id="puNominal" data-rp inputmode="numeric" min="1" placeholder="0"></label>
       <label class="isian">Tanggal<input type="date" id="puTgl" value="${hIni}"></label>
       <label class="isian">Jatuh tempo<input type="date" id="puTempo"></label>
       <label class="isian" style="grid-column:span 2">Catatan<input id="puCatatan" placeholder="misalnya nota 012, pinjam untuk modal"></label>
@@ -1994,7 +2016,7 @@ function vPiutangDana(el, outlet) {
   $('#rgTerap', el).onclick = () => { const a = $('#rgDari', el).value, b = $('#rgSampai', el).value; if (a && b && b < a) return pesan('Tanggal akhir lebih awal dari tanggal awal.', true); rg.dari = a; rg.sampai = b; ulang(); };
   $$('[data-rg]', el).forEach(b => b.onclick = () => { [rg.dari, rg.sampai] = b.dataset.rg.split('|'); ulang(); });
   $('#dTambah', el).onclick = () => { $('#dForm', el).innerHTML = `<div class="kartu" style="margin-top:12px"><span class="label">Catat setoran dapur atau pengantaran lama</span>
-      <div class="grid g3" style="margin-top:10px"><label class="isian">Jenis<select id="dfJenis"><option value="masuk">Setoran dapur (dana masuk)</option><option value="pakai">Pengantaran tanpa invoice aplikasi</option></select></label><label class="isian">Jumlah<input type="number" id="dfJml" inputmode="numeric" min="1" placeholder="0"></label><label class="isian">Tanggal<input type="date" id="dfTgl" value="${hIni}"></label><label class="isian" style="grid-column:span 3">Keterangan<input id="dfKet" placeholder="misalnya transfer cicilan, atau barang yang diantar"></label></div>
+      <div class="grid g3" style="margin-top:10px"><label class="isian">Jenis<select id="dfJenis"><option value="masuk">Setoran dapur (dana masuk)</option><option value="pakai">Pengantaran tanpa invoice aplikasi</option></select></label><label class="isian">Jumlah<input type="number" id="dfJml" data-rp inputmode="numeric" min="1" placeholder="0"></label><label class="isian">Tanggal<input type="date" id="dfTgl" value="${hIni}"></label><label class="isian" style="grid-column:span 3">Keterangan<input id="dfKet" placeholder="misalnya transfer cicilan, atau barang yang diantar"></label></div>
       <p class="samar" style="font-size:12px;margin:8px 0 0">Setoran untuk nota tertentu lebih baik dicatat dari halaman invoicenya (bagian Setoran), supaya sisa nota itu ikut berkurang. Setoran di sini otomatis memotong nota ${esc(judulOutlet(outlet))} yang belum lunas, tertua dulu.</p>
       <div class="baris-aksi" style="margin-top:10px"><button class="tombol utama kecil" id="dfSimpan">Simpan</button><button class="tombol kecil" id="dfBatal">Batal</button></div></div>`;
     $('#dfJml', el).focus(); $('#dfBatal', el).onclick = ulang;
@@ -2066,7 +2088,7 @@ function vPiutangRinci(el, ref) {
   </section>
   <section class="bagian kartu"><span class="label">Tabel tagihan dan pembayaran</span>
     <div class="tbl-bungkus" style="margin-top:8px"><table><thead><tr><th>No</th><th>Tanggal</th><th>Keterangan</th><th class="angka">Tagihan</th><th class="angka">Pembayaran</th><th class="angka">Sisa</th><th></th></tr></thead>
-      <tbody>${R.map((r, i) => f.ubahBayar && f.ubahBayar === r.id ? `<tr><td>${i + 1}</td><td class="sel"><input type="date" id="ubTgl" value="${esc(r.tgl)}"></td><td class="sel"><input id="ubKet" value="${esc((p.riwayat.find(b => b.id === r.id) || {}).ket || '')}" placeholder="keterangan"></td><td></td><td class="sel"><input type="number" id="ubJml" class="angka" inputmode="numeric" value="${r.bayar}" style="min-width:110px"></td><td></td>
+      <tbody>${R.map((r, i) => f.ubahBayar && f.ubahBayar === r.id ? `<tr><td>${i + 1}</td><td class="sel"><input type="date" id="ubTgl" value="${esc(r.tgl)}"></td><td class="sel"><input id="ubKet" value="${esc((p.riwayat.find(b => b.id === r.id) || {}).ket || '')}" placeholder="keterangan"></td><td></td><td class="sel"><input type="number" id="ubJml" data-rp class="angka" inputmode="numeric" value="${r.bayar}" style="min-width:110px"></td><td></td>
           <td style="white-space:nowrap"><button class="tombol kecil utama" id="ubSimpan" style="padding:4px 10px;font-size:12px">Simpan</button> <button class="tombol kecil" id="ubBatal" style="padding:4px 10px;font-size:12px">Batal</button></td></tr>`
         : `<tr><td class="samar">${i + 1}</td><td style="white-space:nowrap">${esc(r.tgl ? tglP(r.tgl) + ' ' + r.tgl.slice(0, 4) : '-')}</td><td>${esc(r.ket)}</td><td class="angka">${r.tagih ? esc(rp(r.tagih)) : ''}</td><td class="angka hijau">${r.bayar ? esc(rp(r.bayar)) : ''}</td><td class="angka"><b>${esc(rp(r.sisa))}</b></td>
           <td style="white-space:nowrap">${r.id ? `<button class="tombol kecil" data-ubahbayar="${esc(r.id)}" style="padding:3px 9px;font-size:11.5px">ubah</button> <button class="tombol kecil bahaya" data-hapusbayar="${esc(r.id)}" style="padding:3px 9px;font-size:11.5px">hapus</button>` : ''}</td></tr>`).join('')}</tbody>
@@ -2078,7 +2100,7 @@ function vPiutangRinci(el, ref) {
   const ulang = () => vPiutangRinci(el, ref);
   // ----- catat pembayaran
   if ($('#rBayar', el)) $('#rBayar', el).onclick = () => { $('#rForm', el).innerHTML = `<div class="kartu" style="margin-top:12px"><span class="label">Catat pembayaran</span>
-      <div class="grid g3" style="margin-top:10px"><label class="isian">Jumlah${p.usaha ? '<small class="samar" style="font-weight:400">boleh lebih; kelebihannya jadi dana lebih dapur</small>' : ''}<input type="number" id="rbJml" inputmode="numeric" min="1" placeholder="0"></label><label class="isian">Tanggal<input type="date" id="rbTgl" value="${hIni}"></label><label class="isian">Keterangan<input id="rbKet" placeholder="transfer, tunai"></label></div>
+      <div class="grid g3" style="margin-top:10px"><label class="isian">Jumlah${p.usaha ? '<small class="samar" style="font-weight:400">boleh lebih; kelebihannya jadi dana lebih dapur</small>' : ''}<input type="number" id="rbJml" data-rp inputmode="numeric" min="1" placeholder="0"></label><label class="isian">Tanggal<input type="date" id="rbTgl" value="${hIni}"></label><label class="isian">Keterangan<input id="rbKet" placeholder="transfer, tunai"></label></div>
       <div class="baris-aksi" style="margin-top:10px"><button class="tombol utama kecil" id="rbSimpan">Simpan pembayaran</button><button class="tombol kecil" id="rbBatal">Batal</button></div></div>`;
     $('#rbJml', el).focus();
     $('#rbBatal', el).onclick = ulang;
@@ -2105,7 +2127,7 @@ function vPiutangRinci(el, ref) {
     $('#rForm', el).innerHTML = `<div class="kartu" style="margin-top:12px"><span class="label">Ubah piutang</span>
       <div class="grid g3" style="margin-top:10px">
         ${p.usaha ? '' : `<label class="isian">Nama yang berutang<input id="upNama" value="${esc(p.pihak)}"></label>`}
-        <label class="isian">Jumlah piutang awal${kunciNominal ? ' (dari invoice)' : ''}<input type="number" id="upNom" inputmode="numeric" value="${p.awal}" ${kunciNominal ? 'disabled' : ''}></label>
+        <label class="isian">Jumlah piutang awal${kunciNominal ? ' (dari invoice)' : ''}<input type="number" id="upNom" data-rp inputmode="numeric" value="${p.awal}" ${kunciNominal ? 'disabled' : ''}></label>
         ${p.cicilan || kunciNominal ? '' : `<label class="isian">Tanggal<input type="date" id="upTgl" value="${esc(p.tanggal || '')}"></label>`}
         <label class="isian">Jatuh tempo<input type="date" id="upTempo" value="${esc(p.jatuhTempo || '')}"></label>
         <label class="isian" style="grid-column:span 2">Catatan<input id="upCat" value="${esc(p.catatan || '')}"></label>
@@ -2940,7 +2962,7 @@ function editorInvoice(el) {
   tb.addEventListener('click', e => { const b = e.target.closest('[data-hapus]'); if (!b) return; v.baris.splice(+b.dataset.hapus, 1); if (!v.baris.length) v.baris.push(barisKosong()); ulang(); });
   // setoran (cicilan) nota ini: dicatat lewat catatBayarDapur, jadi kelebihannya ikut aturan dana lebih dapur
   if ($('#sTambah')) $('#sTambah').onclick = () => { const p = semuaPiutang().find(x => x.ref === 'i:' + v.id), hIni = new Date().toLocaleDateString('sv-SE'); if (!p) return pesan('Nota ini sudah tidak tercatat sebagai piutang.', true);
-    $('#sForm').innerHTML = `<div class="grid g3" style="margin-top:10px"><label class="isian">Jumlah setoran<small class="samar" style="font-weight:400">sisa ${esc(rp(p.nominal))}; boleh lebih</small><input type="number" id="sJml" inputmode="numeric" min="1" placeholder="0"></label><label class="isian">Tanggal setor<input type="date" id="sTgl" value="${hIni}"></label><label class="isian">Keterangan<input id="sKet" placeholder="transfer, tunai, cicilan ke-2"></label></div>
+    $('#sForm').innerHTML = `<div class="grid g3" style="margin-top:10px"><label class="isian">Jumlah setoran<small class="samar" style="font-weight:400">sisa ${esc(rp(p.nominal))}; boleh lebih</small><input type="number" id="sJml" data-rp inputmode="numeric" min="1" placeholder="0"></label><label class="isian">Tanggal setor<input type="date" id="sTgl" value="${hIni}"></label><label class="isian">Keterangan<input id="sKet" placeholder="transfer, tunai, cicilan ke-2"></label></div>
       <div class="baris-aksi" style="margin-top:10px"><button class="tombol utama kecil" id="sSimpan">Simpan setoran</button><button class="tombol kecil" id="sBatal">Batal</button></div>`;
     $('#sJml').focus(); $('#sBatal').onclick = () => { $('#sForm').innerHTML = ''; };
     $('#sSimpan').onclick = async () => { const jumlah = +$('#sJml').value || 0, t = $('#sTgl').value; if (jumlah <= 0) return pesan('Jumlah setoran belum diisi.', true); if (!t) return pesan('Tanggal setor belum diisi.', true);
@@ -2995,7 +3017,7 @@ function editorInvoice(el) {
 }
 function barisEditor(x, i, adaFee) {
   const tarifHint = x => { if (!INV || !x.barang) return ''; const inf = infoBarang(INV.outlet, x.barang, x.satuan); return inf && inf.fee ? String(inf.fee) : ''; };
-  const inp = (k, lebar, jenis = 'text', kanan = false, extra = '') => `<td class="sel"><input data-i="${i}" data-k="${k}" type="${jenis}" value="${esc(x[k] ?? '')}" style="min-width:${lebar}px" ${kanan ? 'class="angka"' : ''} ${jenis === 'number' ? 'step="any" inputmode="decimal"' : ''} ${extra}></td>`;
+  const inp = (k, lebar, jenis = 'text', kanan = false, extra = '') => `<td class="sel"><input data-i="${i}" data-k="${k}" type="${jenis}" value="${esc(x[k] ?? '')}" style="min-width:${lebar}px" ${kanan ? 'class="angka"' : ''} ${jenis === 'number' ? 'step="any" inputmode="decimal"' : ''} ${['harga', 'fee', 'modal'].includes(k) ? 'data-rp' : ''} ${extra}></td>`;
   return `<tr><td class="samar">${i + 1}</td>${inp('barang', 170, 'text', false, 'list="dlBarang" autocomplete="off"')}${inp('qty', 76, 'number', true)}${inp('satuan', 70)}${inp('harga', 96, 'number', true)}
     <td class="angka" data-jumlah style="padding-top:12px">-</td><td class="sel"><input data-i="${i}" data-k="titipQty" type="number" step="any" inputmode="decimal" min="0" class="angka" value="${esc(x.titip ? x.qty : (x.titipQty ?? ''))}" placeholder="0" title="Jumlah titipan dalam baris ini" style="min-width:70px">${qtyTitip(x) > 0 ? `<select data-i="${i}" data-k="titipDari" title="Titipan ini dari siapa" style="margin-top:4px;min-width:70px;font-size:12px"><option value="dapur"${(x.titipDari || 'mitra') === 'dapur' ? ' selected' : ''}>dari dapur</option><option value="mitra"${(x.titipDari || 'mitra') === 'mitra' ? ' selected' : ''}>ke mitra</option></select>` : ''}</td>
     ${adaFee ? inp('fee', 78, 'number', true, `placeholder="${esc(tarifHint(x))}"`) : ''}${inp('modal', 90, 'number', true)}
@@ -3271,7 +3293,7 @@ function vTarifFee(el) {
     <div class="grid g2">${OUTLET_FEE.map(o => { const R = Object.entries(riwayat[o] || {}).sort((a, b) => a[1].barang.localeCompare(b[1].barang));
       return `<div class="kartu"><b style="font-size:17px">${esc(judulOutlet(o))}</b><div class="samar" style="font-size:12px">${R.length} barang pernah dikirim</div>
         <div class="tbl-bungkus" style="margin-top:8px;max-height:460px;overflow-y:auto"><table class="ed"><thead><tr><th>Barang</th><th>Satuan</th><th class="angka">Fee/sat</th></tr></thead>
-        <tbody>${R.map(([k, x]) => { const t = (ubah[o] || {})[k]; return `<tr><td>${esc(x.barang)}</td><td class="redup">${esc(x.satuan)}</td><td class="sel"><input type="number" class="angka" step="any" inputmode="decimal" data-o="${esc(o)}" data-k="${esc(k)}" value="${esc(t ?? x.fee ?? 0)}" style="width:100px"></td></tr>`; }).join('') || '<tr><td colspan="3" class="kosong">Belum ada riwayat.</td></tr>'}</tbody></table></div></div>`; }).join('')}</div>
+        <tbody>${R.map(([k, x]) => { const t = (ubah[o] || {})[k]; return `<tr><td>${esc(x.barang)}</td><td class="redup">${esc(x.satuan)}</td><td class="sel"><input type="number" class="angka" step="any" inputmode="decimal" data-rp data-o="${esc(o)}" data-k="${esc(k)}" value="${esc(t ?? x.fee ?? 0)}" style="width:100px"></td></tr>`; }).join('') || '<tr><td colspan="3" class="kosong">Belum ada riwayat.</td></tr>'}</tbody></table></div></div>`; }).join('')}</div>
     <div class="baris-aksi aksi-lekat" style="margin-top:14px"><button class="tombol utama" id="bSimpanTarif">Simpan tarif</button></div>
   </section>`;
   $$('input[data-o]', el).forEach(i => i.oninput = () => { (ubah[i.dataset.o] ||= {})[i.dataset.k] = +i.value || 0; });
