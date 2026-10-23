@@ -482,10 +482,10 @@ function mingguAplikasi(dasar) {
   let no = +(dasar.at(-1)?.minggu || 0);
   return Object.values(per).sort((a, b) => a.awal.localeCompare(b.awal)).map(g => { no++;
     const akhir = tambahHari(g.awal, 6), out = {}, rincian = [], barang = {};
-    for (const v of g.inv) { const h = hitungInv(v), o = out[v.outlet] ||= { outlet: v.outlet, omzet: 0, modal: 0, fee: 0, pengeluaran: 0, labaKotor: 0, biayaOps: 0, labaBersih: 0, nota: 0, baris: 0, tanggal: [] };
+    for (const v of g.inv) { if (tandaTitipNota(v)) continue; const h = hitungInv(v), o = out[v.outlet] ||= { outlet: v.outlet, omzet: 0, modal: 0, fee: 0, pengeluaran: 0, labaKotor: 0, biayaOps: 0, labaBersih: 0, nota: 0, baris: 0, tanggal: [] };
       o.omzet += h.omzet; o.modal += h.modal; o.fee += h.fee; o.nota++; o.baris += h.b.length; if (!o.tanggal.includes(v.tanggal)) o.tanggal.push(v.tanggal);
       for (const x of h.b) { const q = qtyMilik(x), l = q * ((+x.harga || 0) - (+x.modal || 0) - (+x.fee || 0));
-        rincian.push({ t: v.tanggal, o: v.outlet, n: 'NOTA ' + nomorNota(v.nomor), b: x.barang, q: +x.qty || 0, s: x.satuan || '', h: +x.harga || 0, m: +x.modal || 0, f: +x.fee || 0, l });
+        if (q > 0) rincian.push({ t: v.tanggal, o: v.outlet, n: 'NOTA ' + nomorNota(v.nomor), b: x.barang, q, s: x.satuan || '', h: +x.harga || 0, m: +x.modal || 0, f: +x.fee || 0, l });
         const bb = barang[kunciB(x.barang)] ||= { barang: x.barang, qty: 0, omzet: 0, laba: 0, satuan: x.satuan || '' }; bb.qty += q; bb.omzet += q * (+x.harga || 0); bb.laba += l; } }
     const biaya = (KELUAR.daftar || []).filter(x => x.tgl >= g.awal && x.tgl <= akhir).map(x => ({ tanggal: x.tgl, ket: [x.jenis || 'Lainnya', x.ket].filter(Boolean).join(' · '), kategori: x.terkait === 'pribadi' ? 'Pribadi' : KAT_KELUAR[x.jenis] || 'Lainnya', jumlah: +x.jumlah || 0, operasional: x.terkait !== 'pribadi' }));
     for (const o of KRY.orang || []) { const gp = gajiPekan(o, g.awal); if (gp.gaji > 0) biaya.push({ tanggal: akhir, ket: 'Gaji ' + o.nama, kategori: 'Gaji & Upah', jumlah: gp.gaji, operasional: true }); }
@@ -1551,8 +1551,8 @@ function saldoPer(t, sejak = '0000-00-00') { const k = Object.keys(KAS.minggu ||
 const tabKas = aktif => `<div class="tab-baris" style="margin:6px 0 4px">${[['minggu', '#kas', 'Per minggu'], ['bulanan', '#neraca', 'Bulanan'], ['tahunan', '#neraca/tahun-' + (BULAN.at(-1) || { bulan: hariIniISO() }).bulan.slice(0, 4), 'Tahunan'], ['rincian', '#mingguan', 'Rincian laba rugi mingguan']].map(([k, h, l]) => `<a class="tab ${k === aktif ? 'aktif' : ''}" href="${h}" style="text-decoration:none">${l}</a>`).join('')}</div>`;
 // uang masuk dan keluar satu minggu (a..z) dari catatan aplikasi
 function arusMinggu(w) { const a = w.awal, z = w.akhir, dalam = t => t && t >= a && t <= z, P = semuaPiutang(), usahaRef = Object.fromEntries(P.map(p => [p.ref, !!p.usaha]));
-  const bayar = (PIU.bayar || []).filter(b => dalam(b.tgl)), dapur = jmlLK(bayar.filter(b => usahaRef[b.ref] !== false), b => +b.jumlah), lain = jmlLK(bayar.filter(b => usahaRef[b.ref] === false), b => +b.jumlah);
-  const lunasTanpaCatat = jmlLK(INVOICE.filter(v => v.lunas && dalam(v.tglLunas)), v => Math.max(0, totalInv(v) - jmlLK((PIU.bayar || []).filter(b => b.ref === 'i:' + v.id), b => +b.jumlah) - potonganDana(v)));
+  const refTitip = new Set(INVOICE.filter(notaTitip).map(v => 'i:' + v.id)), bayar = (PIU.bayar || []).filter(b => dalam(b.tgl) && !refTitip.has(b.ref)), dapur = jmlLK(bayar.filter(b => usahaRef[b.ref] !== false), b => +b.jumlah), lain = jmlLK(bayar.filter(b => usahaRef[b.ref] === false), b => +b.jumlah);
+  const lunasTanpaCatat = jmlLK(INVOICE.filter(v => v.lunas && dalam(v.tglLunas) && !notaTitip(v)), v => Math.max(0, tagihInv(v) - jmlLK((PIU.bayar || []).filter(b => b.ref === 'i:' + v.id), b => +b.jumlah) - potonganDana(v)));
   const dana = jmlLK((PIU.dana || []).filter(d => d.jenis !== 'pakai' && dalam(d.tgl)), d => +d.jumlah);
   const daftar = stokKini().barang, beliStok = jmlLK((STOK.gerak || []).filter(x => x.jenis === 'beli' && dalam(x.tgl)), x => x.jumlah * (+x.harga || 0));
   const beliLangsung = jmlLK(w.rincian.filter(r => !cocokStok(daftar, r.b, r.s)), r => (+r.q || 0) * (+r.m || 0));
@@ -1704,9 +1704,9 @@ function danaDapur() {
     const awal = [...o.setoran, ...o.pakaiLuar].map(d => d.tgl).sort()[0] || '0000-00-00';
     // invoice lunas tetap ikut kalau pembayarannya tercatat di Piutang (7 Okt 2026): potongan dana yang dulu menutup
     // sebagiannya harus tetap terhitung setelah sisanya dibayar, kalau tidak dana itu seolah kembali
-    const inv = INVOICE.filter(v => v.outlet === o.outlet && totalInv(v) > 0 && (!v.lunas || PIU.bayar.some(b => b.ref === 'i:' + v.id)) && (v.tanggal || '') >= awal).sort((a, b) => String(a.tanggal).localeCompare(String(b.tanggal)) || (+a.nomor || 0) - (+b.nomor || 0));
-    for (const v of inv) { if (sisa <= 0) break; const lain = PIU.bayar.filter(b => b.ref === 'i:' + v.id).reduce((a, b) => a + b.jumlah, 0), butuh = totalInv(v) - lain; if (butuh <= 0) continue;
-      const j = Math.min(sisa, butuh); o.pakai.push({ inv: v.id, nomor: v.nomor, tgl: v.tanggal, jumlah: j, total: totalInv(v), penuh: j >= butuh }); sisa -= j; }
+    const inv = INVOICE.filter(v => v.outlet === o.outlet && tagihInv(v) > 0 && (!v.lunas || PIU.bayar.some(b => b.ref === 'i:' + v.id)) && (v.tanggal || '') >= awal).sort((a, b) => String(a.tanggal).localeCompare(String(b.tanggal)) || (+a.nomor || 0) - (+b.nomor || 0));
+    for (const v of inv) { if (sisa <= 0) break; const lain = PIU.bayar.filter(b => b.ref === 'i:' + v.id).reduce((a, b) => a + b.jumlah, 0), butuh = tagihInv(v) - lain; if (butuh <= 0) continue;
+      const j = Math.min(sisa, butuh); o.pakai.push({ inv: v.id, nomor: v.nomor, tgl: v.tanggal, jumlah: j, total: tagihInv(v), penuh: j >= butuh }); sisa -= j; }
     o.dipakai = o.masuk - sisa; o.sisa = sisa; }
   return per;
 }
@@ -1746,8 +1746,8 @@ function semuaPiutang() {
   semuaPiutang.kembar = kembar;
   const ap = PIU.baru.map(p => ({ ...p, ref: 'a:' + p.id, sumber: 'app', lunas: false }));
   // invoice aplikasi yang belum lunas = tagihan ke dapur; yang sudah lunas tidak ikut sama sekali
-  const iv = INVOICE.filter(v => !v.lunas && totalInv(v) > 0).map(v => ({ ref: 'i:' + v.id, sumber: 'invoice', invId: v.id, usaha: true, outlet: v.outlet, pihak: judulOutlet(v.outlet),
-    nominal: totalInv(v), tanggal: v.tanggal, jatuhTempo: null, catatan: 'invoice nota ' + nomorNota(v.nomor), lunas: false }))
+  const iv = INVOICE.filter(v => !v.lunas && tagihInv(v) > 0).map(v => ({ ref: 'i:' + v.id, sumber: 'invoice', invId: v.id, usaha: true, outlet: v.outlet, pihak: judulOutlet(v.outlet),
+    nominal: tagihInv(v), tanggal: v.tanggal, jatuhTempo: null, catatan: 'invoice nota ' + nomorNota(v.nomor), lunas: false }))
     .map(p => { const u = (PIU.ubah || {})[p.ref] || {}; return { ...p, jatuhTempo: u.jatuhTempo ?? p.jatuhTempo, catatan: u.catatan ?? p.catatan }; });
   return [...ex, ...ap, ...iv].map(p => {
     const riwayat = PIU.bayar.filter(b => b.ref === p.ref).map(b => ({ ...b }));
@@ -1766,12 +1766,12 @@ const totalInv = v => v.total != null ? +v.total : hitungInv(v).total;
 // invoice ditandai lunas tanpa catatan setoran (baris maya, supaya hitungan rincian tetap seimbang).
 function setoranInv(v) { const R = PIU.bayar.filter(b => b.ref === 'i:' + v.id).map(b => ({ id: b.id, tgl: b.tgl || '', jumlah: +b.jumlah || 0, ket: b.ket || '' }));
   const pd = potonganDana(v); if (pd) R.push({ tgl: v.tanggal || '', jumlah: pd, ket: 'dipotong dana lebih dapur', dana: true });
-  const tutup = R.reduce((a, b) => a + b.jumlah, 0); if (v.lunas && totalInv(v) - tutup >= 1) R.push({ tgl: v.tglLunas || v.tanggal || '', jumlah: totalInv(v) - tutup, ket: 'ditandai lunas tanpa catatan setoran', maya: true });
+  const tutup = R.reduce((a, b) => a + b.jumlah, 0); if (v.lunas && tagihInv(v) - tutup >= 1) R.push({ tgl: v.tglLunas || v.tanggal || '', jumlah: tagihInv(v) - tutup, ket: 'ditandai lunas tanpa catatan setoran', maya: true });
   return R.sort((a, b) => a.tgl.localeCompare(b.tgl)); }
 // Sisa tagihan satu invoice setelah pembayaran yang dicatat di Piutang.
-const sisaInv = v => Math.max(0, totalInv(v) - potonganDana(v) - PIU.bayar.filter(b => b.ref === 'i:' + v.id).reduce((a, b) => a + b.jumlah, 0));
+const sisaInv = v => Math.max(0, tagihInv(v) - potonganDana(v) - PIU.bayar.filter(b => b.ref === 'i:' + v.id).reduce((a, b) => a + b.jumlah, 0));
 // Invoice dianggap lunas kalau ditandai lunas, atau sudah tertutup pembayaran dan potongan dana lebih dapur.
-const invLunas = v => !!v.lunas || (totalInv(v) > 0 && sisaInv(v) <= 0);
+const invLunas = v => !!v.lunas || (tagihInv(v) > 0 && sisaInv(v) <= 0);
 async function setLunasInvoice(id, lunas, tgl) {
   const v = INVOICE.find(x => x.id === id); if (!v) return;
   const data = { ...v, lunas, tglLunas: lunas ? (tgl || new Date().toLocaleDateString('sv-SE')) : null };
@@ -1893,6 +1893,11 @@ const angkaQ = n => n === '' || n == null ? '' : (+n).toLocaleString('id-ID', { 
 // dapur dan pembayaran nota-nota itu. Selisih di bawah tabel = posisi sekarang (plus dana lebih, minus piutang).
 // tagihan nota tanpa barang titipan, dan baris rincian yang hanya memuat bagian milik sendiri
 const milikInv = v => totalInv(v) - (hitungInv(v).titip || 0);
+// 23 Okt 2026, pemilik: "nota kakap 1 itu kan titipan ... di kolom invoice anggap aja hanya nota titip sementara agar tidak
+// mengganggu perhitungan cash flow". Nota titip tidak jadi piutang, uang masuk, belanja, omzet, maupun rincian.
+const tandaTitipNota = v => !!(((typeof PIU !== 'undefined' && PIU && PIU.ubah) || {})['i:' + v.id] || {}).titipNota;
+const notaTitip = v => totalInv(v) > 0 && (tandaTitipNota(v) || milikInv(v) <= 0);
+const tagihInv = v => notaTitip(v) ? 0 : Math.max(0, milikInv(v));
 const barisMilik = h => h.b.filter(b => qtyMilik(b) > 0).map(b => ({ barang: namaNota(b), qty: qtyMilik(b), satuan: b.satuan || '', harga: +b.harga || 0, jumlah: qtyMilik(b) * (+b.harga || 0) }));
 function susunDana(o) {
   const kiri = [];
@@ -2732,7 +2737,7 @@ function gambarDaftarInv(el) {
   wadah.innerHTML = `
     <div class="grid" style="grid-template-columns:repeat(auto-fit,minmax(150px,1fr));margin-bottom:14px">
       <div class="kartu ubin"><span class="label">Belum lunas</span><div class="nilai kecil ${belum.length ? 'merah' : ''}">${esc(rp(sisaBelum))}</div><div class="samar" style="font-size:12.5px">${belum.length} invoice</div></div>
-      <div class="kartu ubin"><span class="label">Bulan ini</span><div class="nilai kecil">${esc(rp(bulanIni.reduce((a, v) => a + totalInv(v), 0)))}</div><div class="samar" style="font-size:12.5px">${bulanIni.length} invoice</div></div>
+      <div class="kartu ubin"><span class="label">Bulan ini</span><div class="nilai kecil">${esc(rp(bulanIni.reduce((a, v) => a + tagihInv(v), 0)))}</div><div class="samar" style="font-size:12.5px">${bulanIni.length} invoice</div></div>
       <div class="kartu ubin"><span class="label">Semua</span><div class="nilai kecil">${semua.length}</div><div class="samar" style="font-size:12.5px">invoice tersimpan</div></div>
     </div>
     <div class="kartu saring" style="margin-bottom:6px">
@@ -2750,12 +2755,12 @@ function gambarDaftarInv(el) {
     for (const v of daftar) { const k = S.mode === 'tanggal' ? String(v.tanggal || '') : v.outlet; (K[k] ||= []).push(v); }
     const kunci = Object.keys(K).sort((a, b) => S.mode === 'tanggal' ? b.localeCompare(a) : judulOutlet(a).localeCompare(judulOutlet(b)));
     const baris = v => { const h = hitungInv(v), sisa = sisaInv(v), total = totalInv(v);
-      return `<a class="baris-inv ${invLunas(v) ? 'lunas' : 'belum'}" href="#invoice/${encodeURIComponent(v.id)}">
+      return `<a class="baris-inv ${notaTitip(v) || invLunas(v) ? 'lunas' : 'belum'}" href="#invoice/${encodeURIComponent(v.id)}"${notaTitip(v) ? ' style="opacity:.72"' : ''}>
         <div class="bi-kiri"><b>${S.mode === 'tanggal' ? esc(judulOutlet(v.outlet)) : esc(hariNama(v.tanggal) + ', ' + tgl(v.tanggal, true))}</b><span class="samar">nota ${esc(nomorNota(v.nomor))} · ${h.b.length} barang${h.fee ? ` · fee ${esc(rpS(h.fee))}${v.mitra ? ' (' + esc(v.mitra) + ')' : ''}` : ''}${h.modal ? ` · laba kotor ${esc(rpS(h.laba))}` : ''}</span></div>
         ${(() => { const ST = setoranInv(v), setor = ST.reduce((a, b) => a + b.jumlah, 0), kali = ST.filter(b => !b.dana && !b.maya).length;
           return `<div class="bi-setor"><span class="samar">Setoran</span><b class="${setor ? 'hijau' : 'redup'}">${setor ? esc(rp(setor)) : 'Belum ada'}</b><span class="bar"><i style="width:${total ? Math.min(100, setor / total * 100) : 0}%"></i></span><span class="samar">${kali ? kali + ' kali setor' : ST.length ? (ST[0].dana ? 'dari dana lebih' : 'ditandai lunas') : 'belum dicicil'}${setor && sisa > 0 ? ' · sisa ' + esc(rpS(sisa)) : ''}</span></div>`; })()}
-        <div class="bi-kanan"><b>${esc(rp(h.total))}</b>${v.lunas ? `<span class="pil hijau">Lunas${v.tglLunas ? ' ' + esc(tglP(v.tglLunas)) : ''}</span>` : invLunas(v) ? '<span class="pil hijau">Lunas · dana lebih</span>' : `<span class="pil merah">Belum lunas${sisa < total ? ' · sisa ' + esc(rpS(sisa)) : ''}</span>`}</div></a>`; };
-    $('#invKelompok', el).innerHTML = kunci.length ? kunci.map(k => { const L = K[k], tot = L.reduce((a, v) => a + totalInv(v), 0), bl = L.filter(v => !invLunas(v)), sb = bl.reduce((a, v) => a + sisaInv(v), 0);
+        <div class="bi-kanan"><b>${esc(rp(h.total))}</b>${notaTitip(v) ? '<span class="pil" title="Titipan: tidak masuk piutang, arus kas, dan laba">Nota titip</span>' : v.lunas ? `<span class="pil hijau">Lunas${v.tglLunas ? ' ' + esc(tglP(v.tglLunas)) : ''}</span>` : invLunas(v) ? '<span class="pil hijau">Lunas · dana lebih</span>' : `<span class="pil merah">Belum lunas${sisa < total ? ' · sisa ' + esc(rpS(sisa)) : ''}</span>`}</div></a>`; };
+    $('#invKelompok', el).innerHTML = kunci.length ? kunci.map(k => { const L = K[k], tot = L.reduce((a, v) => a + tagihInv(v), 0), bl = L.filter(v => !notaTitip(v) && !invLunas(v)), sb = bl.reduce((a, v) => a + sisaInv(v), 0);
       return `<div class="kelompok-judul"><b>${S.mode === 'tanggal' ? esc(hariNama(k) + ', ' + tgl(k, true)) : esc(judulOutlet(k))}</b><span class="samar">${L.length} invoice · ${esc(rp(tot))}${bl.length ? ` · <span class="merah">belum lunas ${esc(rpS(sb))}</span>` : ' · semua lunas'}${S.mode === 'dapur' ? ` · <a href="#piutang/dana/${encodeURIComponent(k)}">rincian setoran</a>` : ''}</span></div>${L.map(baris).join('')}`; }).join('')
       : `<div class="kartu kosong">Tidak ada invoice yang cocok dengan saringan.</div>`; };
   kelompok();
@@ -3352,7 +3357,7 @@ muat().catch(e => { akar.innerHTML = `<div class="masuk"><div class="kotak"><h1>
 if ('serviceWorker' in navigator) addEventListener('load', () => navigator.serviceWorker.register('sw.js').catch(() => {}));
 // 23 Okt 2026 (pemilik: "masih tetap sama" setelah perubahan dipasang): aplikasi yang sudah terbuka/terpasang memeriksa
 // versi di server saat dibuka lagi dan tiap 5 menit. Kalau berbeda, muncul tombol "Perbarui NTA" (muat ulang tanpa salinan lama).
-const VERSI_NTA = 'mbg-v69';
+const VERSI_NTA = 'mbg-v70';
 async function cekVersiNta() { try { const t = await (await fetch('sw.js?cek=' + Date.now(), { cache: 'no-store' })).text(), v = (t.match(/mbg-v\d+/) || [])[0];
   if (!v || v === VERSI_NTA || document.getElementById('versiBaru')) return;
   const d = document.createElement('div'); d.id = 'versiBaru';
