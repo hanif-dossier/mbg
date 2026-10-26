@@ -466,7 +466,7 @@ async function muat() {
   TARIF = (t.ok && t.nilai) || {}; INVOICE = inv.ok ? inv.invoice : [];
   KRY = bangunKry(kr.ok ? kr.karyawan : []); KRY.diubah = kr.ok ? kr.diubah : null; KRY.gagal = !kr.ok; KELUAR = { daftar: [], ...((kl.ok && kl.nilai) || {}) }; PIU = { baru: [], bayar: [], ubah: {}, dana: [], ...((pu.ok && pu.nilai) || {}) }; DAPUR_T = ((dt.ok && dt.nilai) || {}).tambahan || []; REK_T = ((rkT.ok && rkT.nilai) || {}).tambahan || []; FEE_ATUR = ((dt.ok && dt.nilai) || {}).feeAtur || {}; STOK = { gerak: [], ubah: {}, baru: [], lewat: [], ...((st.ok && st.nilai) || {}) };
   if (!D) { akar.innerHTML = `<div class="masuk"><div class="kotak"><h1>Belum ada data</h1><p>Data dikirim dari laptop setiap kali berkas Excel disimpan. Nyalakan laptop, lalu buka lagi.</p></div></div>`; return; }
-  siapkan(); tampil();
+  siapkan(); tampil(); jalankanRutin().then(() => {}, () => {});
 }
 
 // ---------- olahan data
@@ -474,7 +474,7 @@ async function muat() {
 // dicatat di aplikasi setelah laporan Excel terakhir dikelompokkan Minggu sampai Sabtu dan disusun dalam bentuk yang
 // sama dengan laporan mingguan Excel, nomornya melanjutkan. Ditandai sumber 'aplikasi' supaya biayanya tidak dihitung
 // dua kali di halaman Operasional. Biaya operasional dibagi ke dapur sebanding laba kotor, seperti laporan Excel.
-const KAT_KELUAR = { Parkir: 'Transportasi', Bensin: 'Transportasi', 'Ongkos antar': 'Transportasi', Makan: 'Konsumsi', Perlengkapan: 'Perlengkapan & Perbaikan', Gaji: 'Gaji & Upah' };
+const KAT_KELUAR = { Langganan: 'Langganan & Aplikasi', Parkir: 'Transportasi', Bensin: 'Transportasi', 'Ongkos antar': 'Transportasi', Makan: 'Konsumsi', Perlengkapan: 'Perlengkapan & Perbaikan', Gaji: 'Gaji & Upah' };
 function mingguAplikasi(dasar) {
   const akhirExcel = dasar.at(-1)?.akhir || '0000-00-00', per = {}, jml = (A, f) => A.reduce((a, x) => a + f(x), 0);
   for (const v of INVOICE) if (v.tanggal && v.tanggal > akhirExcel) ((per[awalPekanKry(v.tanggal)] ||= { awal: awalPekanKry(v.tanggal), inv: [] }).inv.push(v));
@@ -700,7 +700,7 @@ function bangunKry(daftar) { const harian = {}, orang = [], pinjam = [];
     for (const d of k.hutang || []) { if (+d.pinjam > 0) pinjam.push({ id: k.kode + '|' + (d.tgl || '') + '|p', orang: k.kode, jenis: 'pinjam', jumlah: +d.pinjam, tgl: d.tgl || '', ket: d.ket || '' });
       if (+d.bayar > 0) pinjam.push({ id: k.kode + '|' + (d.tgl || '') + '|b', orang: k.kode, jenis: 'bayar', jumlah: +d.bayar, tgl: d.tgl || '', ket: d.ket || '' }); } }
   return { orang, absen: {}, harian, bayar: {}, manual: {}, pinjam }; }
-const JENIS_KELUAR = ['Parkir', 'Bensin', 'Makan', 'Ongkos antar', 'Perlengkapan', 'Lainnya'];
+const JENIS_KELUAR = ['Parkir', 'Bensin', 'Makan', 'Ongkos antar', 'Perlengkapan', 'Langganan', 'Lainnya'];
 const TERKAIT = [['belanja', 'Belanja barang'], ['antar', 'Antar ke dapur'], ['umum', 'Operasional umum'], ['pribadi', 'Pribadi']];
 const namaTerkait = x => x.terkait === 'belanja' ? 'Belanja' + (x.tempat ? ' di ' + x.tempat : ' barang') : x.terkait === 'antar' ? 'Antar ke ' + (x.dapur ? judulOutlet(x.dapur) : 'dapur') : x.terkait === 'pribadi' ? 'Pribadi' : x.terkait === 'gaji' ? 'Gaji karyawan' : 'Operasional umum';
 const idBaru = () => Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
@@ -736,6 +736,46 @@ function biayaLaporan(senin) {
     for (const b of w.biaya || []) if (b.tanggal >= senin && b.tanggal <= minggu) out.push({ ...b, jenis: jenisDariKet(b.ket, b.kategori) }); }
   return out;
 }
+// 26 Okt 2026, pemilik: "pengeluaran bulanan rutin itu kan ada bayar Claude Max setiap bulan, jadi masukkan ke pengeluaran
+// juga tanpa saya suruh". KELUAR.rutin = [{ id, jenis, ket, jumlah, hari (1-28), terkait, mulai: 'YYYY-MM', aktif }].
+// Setiap NTA dibuka, tagihan rutin yang tanggalnya sudah lewat dan belum tercatat bulan itu otomatis masuk KELUAR.daftar
+// (ditandai rutin: id, bulan: 'YYYY-MM'), lalu disimpan.
+async function jalankanRutin() {
+  const R = (KELUAR.rutin || []).filter(r => r.aktif !== false && +r.jumlah > 0); if (!R.length) return;
+  const hari = hariIniISO(), bulanIni = hari.slice(0, 7), baru = [];
+  for (const r of R) { let [y, m] = String(r.mulai || bulanIni).split('-').map(Number);
+    for (let n = 0; n < 24; n++) { const b = `${y}-${String(m).padStart(2, '0')}`; if (b > bulanIni) break;
+      const tgl = `${b}-${String(Math.min(28, Math.max(1, +r.hari || 1))).padStart(2, '0')}`;
+      if (tgl <= hari && !KELUAR.daftar.some(x => x.rutin === r.id && x.bulan === b))
+        baru.push({ id: idBaru(), tgl, jenis: r.jenis || 'Langganan', ket: (r.ket || '') + ' (rutin bulanan)', jumlah: +r.jumlah, terkait: r.terkait || 'umum', rutin: r.id, bulan: b });
+      if (++m > 12) { m = 1; y++; } } }
+  if (!baru.length) return;
+  const isi = { ...KELUAR, daftar: [...baru, ...KELUAR.daftar] };
+  try { await simpanNilai('pengeluaran', isi); KELUAR = isi; pesan(baru.length + ' pengeluaran rutin dicatat otomatis: ' + [...new Set(baru.map(x => x.ket.replace(' (rutin bulanan)', '') || x.jenis))].join(', ')); } catch { /* dicoba lagi saat dibuka berikutnya */ } }
+function kotakRutin(el, ulang) {
+  const R = KELUAR.rutin || [], f = kotakRutin.f ||= { buka: false };
+  const html = `<div class="kartu" style="margin-top:14px"><div style="display:flex;justify-content:space-between;gap:10px;align-items:center;flex-wrap:wrap"><span class="label">Pengeluaran rutin bulanan · dicatat otomatis</span><button class="tombol kecil" id="rtBuka">${f.buka ? 'Tutup' : '+ Tambah rutin'}</button></div>
+    <p class="samar" style="font-size:12.5px;margin:6px 0 0">Tagihan yang sama tiap bulan (misalnya langganan Claude Max). Setiap tanggal tagihannya lewat, NTA mencatatnya sendiri ke pengeluaran.</p>
+    ${R.length ? `<div class="daftar" style="margin-top:8px">${R.map(r => `<div><div style="flex:1;min-width:0"><b>${esc(r.ket || r.jenis)}</b> <span class="redup">${esc(r.jenis)}</span><div class="samar" style="font-size:12px">tiap tanggal ${esc(String(r.hari))} · ${esc(namaTerkait({ terkait: r.terkait }))}${r.aktif === false ? ' · dijeda' : ''} · mulai ${esc(r.mulai)}</div></div>
+      <span class="angka">${esc(rp(+r.jumlah))}<br><button class="tombol kecil" data-rtjeda="${esc(r.id)}" style="padding:3px 9px;font-size:11.5px;margin-top:4px">${r.aktif === false ? 'lanjutkan' : 'jeda'}</button> <button class="tombol kecil bahaya" data-rthapus="${esc(r.id)}" style="padding:3px 9px;font-size:11.5px;margin-top:4px">hapus</button></span></div>`).join('')}</div>` : ''}
+    ${f.buka ? `<div class="grid g3" style="margin-top:12px"><label class="isian">Nama tagihan<input id="rtKet" placeholder="mis. Claude Max"></label>
+      <label class="isian">Jumlah per bulan<input type="number" id="rtJml" data-rp placeholder="0"></label>
+      <label class="isian">Tanggal tagihan tiap bulan<input type="number" id="rtHari" min="1" max="28" placeholder="1-28"></label>
+      <label class="isian">Jenis<select id="rtJenis">${JENIS_KELUAR.map(j => `<option${j === 'Langganan' ? ' selected' : ''}>${esc(j)}</option>`).join('')}</select></label>
+      <label class="isian">Terkait dengan<select id="rtTerkait">${TERKAIT.filter(([k]) => k !== 'antar' && k !== 'belanja').map(([k, n]) => `<option value="${k}">${esc(n)}</option>`).join('')}</select></label>
+      <label class="isian">Mulai bulan<input type="month" id="rtMulai" value="${hariIniISO().slice(0, 7)}"></label></div>
+      <div class="baris-aksi" style="margin-top:10px"><button class="tombol utama kecil" id="rtSimpan">Simpan rutin</button></div>` : ''}</div>`;
+  const pasang = () => {
+    $('#rtBuka', el).onclick = () => { f.buka = !f.buka; ulang(); };
+    const simpan = async (isi, teks) => { try { await simpanNilai('pengeluaran', isi); KELUAR = isi; pesan(teks); await jalankanRutin(); ulang(); } catch (er) { pesan(er.message, true); } };
+    if ($('#rtSimpan', el)) $('#rtSimpan', el).onclick = () => { const ket = $('#rtKet', el).value.trim(), jumlah = +$('#rtJml', el).value || 0, hari = +$('#rtHari', el).value || 0;
+      if (!ket) return pesan('Isi nama tagihannya.', true); if (jumlah <= 0) return pesan('Isi jumlah per bulan.', true); if (hari < 1 || hari > 28) return pesan('Tanggal tagihan 1 sampai 28.', true);
+      const r = { id: idBaru(), ket, jumlah, hari, jenis: $('#rtJenis', el).value, terkait: $('#rtTerkait', el).value, mulai: $('#rtMulai', el).value || hariIniISO().slice(0, 7), aktif: true };
+      f.buka = false; simpan({ ...KELUAR, rutin: [...(KELUAR.rutin || []), r] }, ket + ' disimpan sebagai pengeluaran rutin'); };
+    $$('[data-rtjeda]', el).forEach(b => b.onclick = () => simpan({ ...KELUAR, rutin: (KELUAR.rutin || []).map(r => r.id === b.dataset.rtjeda ? { ...r, aktif: r.aktif === false } : r) }, 'Tersimpan'));
+    $$('[data-rthapus]', el).forEach(b => b.onclick = () => { if (!confirm('Hapus pengeluaran rutin ini? Catatan yang sudah masuk tidak ikut terhapus.')) return;
+      simpan({ ...KELUAR, rutin: (KELUAR.rutin || []).filter(r => r.id !== b.dataset.rthapus) }, 'Rutin dihapus'); }); };
+  return { html, pasang }; }
 function keluarPekan(senin) {
   const minggu = tambahHari(senin, 6);
   const app = KELUAR.daftar.filter(x => x.tgl >= senin && x.tgl <= minggu).map(x => ({ ...x, sumber: 'app' }));
@@ -808,6 +848,7 @@ function opBiaya(el, senin, hariIni) {
     ${f.terkait === 'antar' ? `<label class="isian" style="margin-top:12px">Dapur<select id="kDapur">${dapur.map(d => `<option value="${esc(d.outlet)}">${esc(judulOutlet(d.outlet))}</option>`).join('')}</select></label>` : ''}
     <div class="baris-aksi" style="margin-top:14px"><button class="tombol utama" id="bSimpanKeluar">Simpan pengeluaran</button></div>
   </div>
+  ${(opBiaya.rt = kotakRutin(el, () => opBiaya(el, senin, hariIni))).html}
   <div class="grid g4" style="margin-top:14px">
     <div class="kartu ubin"><span class="label">Biaya usaha pekan ini</span><div class="nilai kecil">${esc(rpS(jml(ops)))}</div><small>${ops.length} catatan</small></div>
     <div class="kartu ubin"><span class="label">Terkait belanja</span><div class="nilai kecil">${esc(rpS(per('belanja')))}</div><small>parkir dan lainnya saat belanja</small></div>
@@ -821,6 +862,7 @@ function opBiaya(el, senin, hariIni) {
         <span class="angka ${x.terkait === 'pribadi' ? 'samar' : ''}">${esc(rp(x.jumlah))}${x.sumber === 'app' ? `<br><button class="tombol kecil bahaya" data-hapus="${esc(x.id)}" style="padding:3px 9px;font-size:11.5px;margin-top:4px">hapus</button>` : ''}</span></div>`).join('')}</div></div>`).join('')
       : '<div class="kosong">Belum ada pengeluaran pekan ini.</div>'}
   </div>`;
+  opBiaya.rt.pasang();
   $$('[data-jenis]', el).forEach(b => b.onclick = () => { f.jenis = b.dataset.jenis; if (f.jenis === 'Ongkos antar') f.terkait = 'antar'; opBiaya(el, senin, hariIni); });
   $$('[data-terkait]', el).forEach(b => b.onclick = () => { f.terkait = b.dataset.terkait; opBiaya(el, senin, hariIni); });
   $('#bSimpanKeluar', el).onclick = async () => {
@@ -3369,7 +3411,7 @@ muat().catch(e => { akar.innerHTML = `<div class="masuk"><div class="kotak"><h1>
 if ('serviceWorker' in navigator) addEventListener('load', () => navigator.serviceWorker.register('sw.js').catch(() => {}));
 // 23 Okt 2026 (pemilik: "masih tetap sama" setelah perubahan dipasang): aplikasi yang sudah terbuka/terpasang memeriksa
 // versi di server saat dibuka lagi dan tiap 5 menit. Kalau berbeda, muncul tombol "Perbarui NTA" (muat ulang tanpa salinan lama).
-const VERSI_NTA = 'mbg-v71';
+const VERSI_NTA = 'mbg-v72';
 async function cekVersiNta() { try { const t = await (await fetch('sw.js?cek=' + Date.now(), { cache: 'no-store' })).text(), v = (t.match(/mbg-v\d+/) || [])[0];
   if (!v || v === VERSI_NTA || document.getElementById('versiBaru')) return;
   const d = document.createElement('div'); d.id = 'versiBaru';
