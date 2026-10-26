@@ -2955,11 +2955,14 @@ function editorInvoice(el) {
   tb.addEventListener('input', e => { const t = e.target, i = +t.dataset.i, k = t.dataset.k; if (k == null || !v.baris[i] || t.type === 'checkbox') return; v.baris[i][k] = t.value;
     if (k === 'titipQty') { const x = v.baris[i]; if (+x.titipQty > 0 && !x.titipDari) x.titipDari = 'dapur'; const sel = t.parentElement.querySelector('select'); if ((+x.titipQty > 0) !== !!sel) { ulang(); return; } }
     segar(); });
+  tb.addEventListener('focusin', e => { const t = e.target; if (t.dataset.k !== 'satuan' || !t.value) return; t.dataset.lama = t.value; t.placeholder = t.value; t.value = ''; });
+  tb.addEventListener('focusout', e => { const t = e.target; if (t.dataset.k !== 'satuan') return; if (!t.value && t.dataset.lama) t.value = t.dataset.lama; delete t.dataset.lama; t.placeholder = ''; });
   tb.addEventListener('change', e => { const t = e.target, i = +t.dataset.i;
     if (t.dataset.k !== 'barang') return;
     // nama barang yang memuat kata "titip" langsung ditandai titipan
     if (/titip/i.test(v.baris[i].barang) && !(+v.baris[i].titipQty) && +v.baris[i].qty) { v.baris[i].titipQty = +v.baris[i].qty; v.baris[i].titipDari ||= 'dapur'; ulang(); return; }
     const resmi = namaTerdaftar(v.baris[i].barang, v.baris[i].satuan); if (resmi && resmi !== v.baris[i].barang) { v.baris[i].barang = resmi; t.value = resmi; }
+    { const dl = t.closest('tr') && t.closest('tr').querySelector('datalist[id^="dlSat"]'); if (dl) dl.innerHTML = opsiSatuan(v.baris[i].barang); }
     const x = v.baris[i], inf = infoBarang(v.outlet, x.barang, x.satuan); if (!inf) return;
     // hanya kotak yang masih kosong yang diisi, supaya ketikan pemilik tidak tertimpa
     if (!x.satuan) x.satuan = inf.satuan; if (!+x.harga) x.harga = inf.harga || ''; if (!+x.modal) x.modal = inf.modal || '';
@@ -3021,10 +3024,19 @@ function editorInvoice(el) {
     INVOICE = INVOICE.filter(x => x.id !== v.id); INV = null; pesan('Invoice dihapus'); location.hash = 'invoice'; };
   segar();
 }
+// 26 Okt 2026, pemilik: "untuk invoice satuannya kamu jadikan ada pilihan tapi masih bisa diketik". Pilihan: satuan
+// dasar + kemasan barang itu di Stok, satuan yang pernah dipakai di invoice untuk barang itu, lalu satuan umum.
+const SATUAN_UMUM = ['kg', 'gram', 'ons', 'liter', 'ml', 'pcs', 'buah', 'butir', 'bungkus', 'pack', 'renteng', 'dus', 'karung', 'sak', 'ikat', 'papan', 'botol', 'ken', 'jerigen', 'kaleng', 'sisir', 'tandan', 'keranjang', 'ekor', 'ball', 'kotak', 'tray', 'lusin'];
+function pilihanSatuan(nama) { const k = kunciB(nama || ''), I = INDUK(), out = [];
+  const b = k && I ? I.barang.find(x => kunciB(x.nama) === k || aliasB(x).includes(k)) : null;
+  if (b) { if (b.satuan) out.push(b.satuan); kemasanB(b).forEach(m => out.push(m.satuan)); }
+  if (k) for (const v of INVOICE) for (const x of v.baris || []) if (x.satuan && kunciB(x.barang || '') === k) out.push(String(x.satuan).trim());
+  const lihat = new Set(); return [...out, ...SATUAN_UMUM].filter(u => { const kk = String(u).toLowerCase(); if (!u || lihat.has(kk)) return false; lihat.add(kk); return true; }); }
+const opsiSatuan = nama => pilihanSatuan(nama).map(u => `<option value="${esc(u)}">`).join('');
 function barisEditor(x, i, adaFee) {
   const tarifHint = x => { if (!INV || !x.barang) return ''; const inf = infoBarang(INV.outlet, x.barang, x.satuan); return inf && inf.fee ? String(inf.fee) : ''; };
   const inp = (k, lebar, jenis = 'text', kanan = false, extra = '') => `<td class="sel"><input data-i="${i}" data-k="${k}" type="${jenis}" value="${esc(x[k] ?? '')}" style="min-width:${lebar}px" ${kanan ? 'class="angka"' : ''} ${jenis === 'number' ? 'step="any" inputmode="decimal"' : ''} ${['harga', 'fee', 'modal'].includes(k) ? 'data-rp' : ''} ${extra}></td>`;
-  return `<tr><td class="samar">${i + 1}</td>${inp('barang', 170, 'text', false, 'list="dlBarang" autocomplete="off"')}${inp('qty', 76, 'number', true)}${inp('satuan', 70)}${inp('harga', 96, 'number', true)}
+  return `<tr><td class="samar">${i + 1}</td>${inp('barang', 170, 'text', false, 'list="dlBarang" autocomplete="off"')}${inp('qty', 76, 'number', true)}${inp('satuan', 84, 'text', false, `list="dlSat${i}" autocomplete="off" title="Pilih dari daftar atau ketik sendiri"`).replace('</td>', `<datalist id="dlSat${i}">${opsiSatuan(x.barang)}</datalist></td>`)}${inp('harga', 96, 'number', true)}
     <td class="angka" data-jumlah style="padding-top:12px">-</td><td class="sel"><input data-i="${i}" data-k="titipQty" type="number" step="any" inputmode="decimal" min="0" class="angka" value="${esc(x.titip ? x.qty : (x.titipQty ?? ''))}" placeholder="0" title="Jumlah titipan dalam baris ini" style="min-width:70px">${qtyTitip(x) > 0 ? `<select data-i="${i}" data-k="titipDari" title="Titipan ini dari siapa" style="margin-top:4px;min-width:70px;font-size:12px"><option value="dapur"${(x.titipDari || 'mitra') === 'dapur' ? ' selected' : ''}>dari dapur</option><option value="mitra"${(x.titipDari || 'mitra') === 'mitra' ? ' selected' : ''}>ke mitra</option></select>` : ''}</td>
     ${adaFee ? inp('fee', 78, 'number', true, `placeholder="${esc(tarifHint(x))}"`) : ''}${inp('modal', 90, 'number', true)}
     <td><button class="tombol-ikon" data-hapus="${i}" title="Hapus baris" aria-label="Hapus baris" style="width:32px;height:32px">×</button></td></tr>`;
@@ -3357,7 +3369,7 @@ muat().catch(e => { akar.innerHTML = `<div class="masuk"><div class="kotak"><h1>
 if ('serviceWorker' in navigator) addEventListener('load', () => navigator.serviceWorker.register('sw.js').catch(() => {}));
 // 23 Okt 2026 (pemilik: "masih tetap sama" setelah perubahan dipasang): aplikasi yang sudah terbuka/terpasang memeriksa
 // versi di server saat dibuka lagi dan tiap 5 menit. Kalau berbeda, muncul tombol "Perbarui NTA" (muat ulang tanpa salinan lama).
-const VERSI_NTA = 'mbg-v70';
+const VERSI_NTA = 'mbg-v71';
 async function cekVersiNta() { try { const t = await (await fetch('sw.js?cek=' + Date.now(), { cache: 'no-store' })).text(), v = (t.match(/mbg-v\d+/) || [])[0];
   if (!v || v === VERSI_NTA || document.getElementById('versiBaru')) return;
   const d = document.createElement('div'); d.id = 'versiBaru';
