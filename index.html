@@ -359,6 +359,7 @@ table.gaji-harian tr.hari-ini td{background:rgba(95,208,143,.07)} table.gaji-har
 @media (prefers-reduced-motion:no-preference){ .muncul{animation:muncul .45s ease both} @keyframes muncul{from{opacity:.001;transform:translateY(8px)}to{opacity:1;transform:none}} }
 .pilih-periode{display:flex;gap:8px;align-items:center;margin-top:10px}.pilih-periode select{flex:1;max-width:340px;padding:9px 12px;border-radius:12px;border:1px solid var(--garis2);background:transparent;color:inherit;font:inherit;font-weight:600}.pilih-periode select option{background:#0f1c17}.pilih-periode .tombol{padding:7px 14px;font-size:16px}.pilih-periode .tombol[disabled]{opacity:.35}
 .baris-saring{display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin-top:10px}.baris-saring .cari{flex:1;min-width:180px;max-width:320px;margin:0}
+.sembunyi-saring{display:none!important}.pil.aktif{background:var(--hijau,#5fd08f);color:#08130d;border-color:transparent}
 </style>
 </head>
 <body>
@@ -1226,16 +1227,17 @@ function vStok(el) {
       ${(() => { const M = STOK.gerak.filter(x => x.kode === b.kode && x.jenis === 'beli').sort((x, y) => (y.tgl + (y.dibuat || '')).localeCompare(x.tgl + (x.dibuat || '')));
         return `<div class="kartu" style="padding:14px;margin-top:12px"><span class="label">Riwayat barang masuk · ${esc(b.nama)}</span>${M.length ? `<div class="tbl-bungkus" style="margin-top:6px"><table><thead><tr><th>Tanggal</th><th class="angka">Jumlah</th><th class="angka">Harga beli</th><th class="angka">Total</th><th>Supplier</th></tr></thead><tbody>${M.slice(0, 12).map(x => `<tr><td>${esc(tglP(x.tgl))}</td><td class="angka">${esc(teksStok(b, x.jumlah))}</td><td class="angka">${esc(rp(x.harga))}</td><td class="angka">${esc(rp(x.jumlah * (+x.harga || 0)))}</td><td>${x.tempat ? esc(x.tempat) : '<span class="samar">-</span>'}</td></tr>`).join('')}</tbody></table></div>${M.length > 12 ? `<p class="samar" style="font-size:12px;margin:6px 0 0">${M.length - 12} catatan lebih lama ada di Riwayat barang masuk di bawah.</p>` : ''}` : '<p class="samar" style="font-size:13px;margin:6px 0 0">Belum ada barang masuk yang dicatat di aplikasi.</p>'}</div>`; })()}
       <div class="baris-aksi" style="margin-top:10px;flex-wrap:wrap"><button class="tombol kecil" id="bTutupStok">Tutup</button><button class="tombol kecil" id="bJadiLangsung" title="Barang tetap terdaftar, tetapi tidak dihitung di stok gudang">Jadikan barang beli langsung jual</button>${!b.riwayat.length && !(+b.stok) ? '<button class="tombol kecil bahaya" id="bHapusBarang">Hapus barang</button>' : ''}</div></div>`;
-  const barisBarang = b => S.induk ? `<tr><td><b>${esc(b.nama)}</b>${kemasanB(b).length ? `<div class="samar" style="font-size:11.5px">${esc(teksKemasan(b))}</div>` : ''}
-        <div><button class="tombol kecil" data-ubahstok="${esc(b.kode)}" style="padding:3px 10px;font-size:11.5px;margin-top:4px">${f.buka === b.kode ? 'Tutup' : 'Ubah'}</button></div></td>
+  const atrCari = b => `data-cari="${esc((b.nama + ' ' + (b.alias || '')).toLowerCase())}" data-status="${b.status}"`;
+  const barisBarang = b => S.induk ? `<tr ${atrCari(b)}><td><b>${esc(b.nama)}</b>${kemasanB(b).length ? `<div class="samar" style="font-size:11.5px">${esc(teksKemasan(b))}</div>` : ''}
+</td>
       <td class="angka">${esc(teksStok(b))}</td><td class="angka redup">${esc(angkaStok(b.minimum))} <span class="samar">${esc(b.satuan)}</span></td>
       <td><span class="pil ${b.status === 'HABIS' ? 'merah' : b.status === 'MENIPIS' ? 'kunyit' : 'hijau'}">${b.status === 'HABIS' ? 'Habis' : b.status === 'MENIPIS' ? 'Menipis' : 'Aman'}</span></td>
-      <td class="angka redup">${esc(rp(b.harga))}<div class="samar" style="font-size:11px">per ${esc(b.satuan)}${b.belanjaApp ? ', belanja terakhir' : ''}</div></td><td class="angka">${esc(rp(b.nilai))}</td></tr>`
-    : `<tr><td><b>${esc(b.nama)}</b>${b.dariExcel ? '' : ' <span class="pil" style="font-size:10.5px;padding:2px 8px">baru</span>'}
-        <div><button class="tombol kecil" data-ubahstok="${esc(b.kode)}" style="padding:3px 10px;font-size:11.5px;margin-top:4px">${f.buka === b.kode ? 'Tutup' : 'Ubah'}</button></div></td>
+      <td class="angka redup">${esc(rp(b.harga))}<div class="samar" style="font-size:11px">per ${esc(b.satuan)}${b.belanjaApp ? ', belanja terakhir' : ''}</div></td><td class="angka">${esc(rp(b.nilai))}</td><td class="angka"><button class="tombol kecil" data-ubahstok="${esc(b.kode)}" style="padding:3px 10px;font-size:11.5px">${f.buka === b.kode ? 'Tutup' : 'Ubah'}</button></td></tr>`
+    : `<tr ${atrCari(b)}><td><b>${esc(b.nama)}</b>${b.dariExcel ? '' : ' <span class="pil" style="font-size:10.5px;padding:2px 8px">baru</span>'}
+</td>
       <td class="angka">${esc(angkaStok(b.stok))} <span class="samar">${esc(b.satuan)}</span></td><td class="angka redup">${esc(angkaStok(b.minimum))}</td>
       <td><span class="pil ${b.status === 'HABIS' ? 'merah' : b.status === 'MENIPIS' ? 'kunyit' : 'hijau'}">${b.status === 'HABIS' ? 'Habis' : b.status === 'MENIPIS' ? 'Menipis' : 'Aman'}</span></td>
-      <td class="angka redup">${esc(rp(b.harga))}${b.belanjaApp ? '<div class="samar" style="font-size:11px">belanja terakhir</div>' : ''}</td><td class="angka">${esc(rp(b.nilai))}</td></tr>`;
+      <td class="angka redup">${esc(rp(b.harga))}${b.belanjaApp ? '<div class="samar" style="font-size:11px">belanja terakhir</div>' : ''}</td><td class="angka">${esc(rp(b.nilai))}</td><td class="angka"><button class="tombol kecil" data-ubahstok="${esc(b.kode)}" style="padding:3px 10px;font-size:11.5px">${f.buka === b.kode ? 'Tutup' : 'Ubah'}</button></td></tr>`;
   const beliApp = STOK.gerak.filter(x => x.jenis === 'beli').map(x => ({ ...x, nama: (S.barang.find(b => b.kode === x.kode) || {}).nama || x.kode, app: true }));
   const beliExcel = (D.stok ? D.stok.pembelian : []).map(p => ({ tgl: p.tanggal, nama: p.barang, jumlah: +p.jumlah, harga: +p.harga, ket: p.ket }));
   const f2 = vStok.f2 ||= { ubah: null };
@@ -1243,23 +1245,33 @@ function vStok(el) {
   el.innerHTML = `
   <section class="bagian" style="margin-top:6px">
     <h2>Stok <span class="miring">gudang</span></h2>
-    ${S.induk ? `<p class="ket">Stok dari hitung gudang ${esc(tgl(S.patokan, true))}, ditambah belanja dan dikurangi barang keluar serta invoice ke dapur sesudahnya. Satu barang satu nama: dus, renteng, dan karung adalah kemasan barang yang sama, jadi invoice 1 dus marinasi mengurangi 36 renteng. Barang yang dibeli lalu langsung dijual tetap terdaftar di bawah, tetapi tidak dihitung di stok. Nilai memakai harga modal per satuan dasar.</p>` : `<p class="ket">Stok dari berkas Excel (sampai ${esc(tgl(S.patokan, true))}) ditambah belanja, barang keluar, dan hitungan ulang yang dicatat di sini. Invoice ke dapur ikut mengurangi stok kalau nama barangnya sama atau memuat nama barang di sini (misalnya "beras cap belalang" untuk Beras), atau tercantum sebagai nama lain di data barang. Singkatan satuan seperti btl, bks, dan rtng dikenali. Nilai memakai harga modal; setiap belanja memperbarui harga modal barang itu.</p>`}
+    <details class="ket-lipat"><summary class="samar" style="cursor:pointer;font-size:13px">Cara stok dihitung</summary>${S.induk ? `<p class="ket">Stok dari hitung gudang ${esc(tgl(S.patokan, true))}, ditambah belanja dan dikurangi barang keluar serta invoice ke dapur sesudahnya. Satu barang satu nama: dus, renteng, dan karung adalah kemasan barang yang sama, jadi invoice 1 dus marinasi mengurangi 36 renteng. Barang yang dibeli lalu langsung dijual tetap terdaftar di bawah, tetapi tidak dihitung di stok. Nilai memakai harga modal per satuan dasar.</p>` : `<p class="ket">Stok dari berkas Excel (sampai ${esc(tgl(S.patokan, true))}) ditambah belanja, barang keluar, dan hitungan ulang yang dicatat di sini. Invoice ke dapur ikut mengurangi stok kalau nama barangnya sama atau memuat nama barang di sini (misalnya "beras cap belalang" untuk Beras), atau tercantum sebagai nama lain di data barang. Singkatan satuan seperti btl, bks, dan rtng dikenali. Nilai memakai harga modal; setiap belanja memperbarui harga modal barang itu.</p>`}</details>
     <div class="grid g4">
       <div class="kartu ubin"><span class="label">Nilai stok</span><div class="nilai">${esc(rpS(S.nilai))}</div><small>${S.barang.length} barang stok${S.induk ? ' · ' + S.langsung.length + ' beli langsung jual' : ''}</small></div>
       <div class="kartu ubin"><span class="label">Habis</span><div class="nilai merah">${S.habis}</div><small>perlu segera dibeli</small></div>
       <div class="kartu ubin"><span class="label">Menipis</span><div class="nilai kunyit">${S.menipis}</div><small>di bawah stok minimum</small></div>
       <div class="kartu ubin"><span class="label">Aman</span><div class="nilai hijau">${S.barang.length - S.habis - S.menipis}</div><small>di atas stok minimum</small></div>
     </div>
+    <div class="tab-baris tab-bagian" id="stTab" style="margin-top:14px">${[['gudang', 'Stok gudang', S.barang.length], ['belanja', 'Catat belanja'], ['masuk', 'Barang masuk'], ...(S.induk ? [['langsung', 'Beli langsung jual', S.langsung.length]] : []), ['catatan', 'Catatan stok']].map(([k, l, n]) => `<button class="tab" data-sttab="${k}">${l}${n != null ? ` <span class="samar">${n}</span>` : ''}</button>`).join('')}</div>
+  </section>
+  <section class="bagian kartu" data-st="gudang">
+    <div class="baris-saring" style="margin-top:0"><input id="sgCari" class="cari" placeholder="cari barang di gudang" autocomplete="off">
+      <span class="pil-baris">${[['', 'Semua'], ['HABIS', 'Habis'], ['MENIPIS', 'Menipis'], ['AMAN', 'Aman']].map(([k, l]) => `<button class="tab" data-sgstatus="${k}">${l}</button>`).join('')}</span></div>
+    <div class="pil-baris" style="margin-top:10px">${['', ...Object.keys(kat).sort(urutKategori)].map(k => `<button class="pil" data-sgkat="${esc(k)}">${esc(k || 'Semua kategori')}</button>`).join('')}</div>
+    <p class="samar" id="sgKosong" hidden style="font-size:13px;margin:10px 0 0">Tidak ada barang gudang yang cocok.</p>
   </section>
   ${S.induk ? (() => { const lepas = lepasInvoice(S.barang), L = S.langsung.slice().sort((a, b) => urutKategori(a.kategori || 'Lainnya', b.kategori || 'Lainnya') || a.nama.localeCompare(b.nama)), fl = vStok.fl ||= { buka: null, cari: '' };
-    const cocokCari = b => !fl.cari || (b.nama + ' ' + (b.alias || '')).toLowerCase().includes(fl.cari.toLowerCase());
-    return `<section class="bagian kartu" id="bagianLepas"><div style="display:flex;justify-content:space-between;gap:10px;align-items:center;flex-wrap:wrap"><span class="label">Nama di invoice yang belum terdaftar</span>${lepas.length ? `<button class="tombol kecil utama" id="bHubungSemua">Daftarkan ${lepas.length} nama</button>` : ''}</div>
+    const cocokCari = b => (!fl.cari || (b.nama + ' ' + (b.alias || '')).toLowerCase().includes(fl.cari.toLowerCase())) && (!fl.kat || (b.kategori || 'Lainnya') === fl.kat);
+    const LT = L.filter(cocokCari), Ltampil = LT.slice(0, fl.cari || fl.semua || fl.buka ? 999 : 20);
+    return `<section class="bagian kartu" id="bagianLepas" ${lepas.length ? '' : 'data-st="langsung"'}><div style="display:flex;justify-content:space-between;gap:10px;align-items:center;flex-wrap:wrap"><span class="label">Nama di invoice yang belum terdaftar</span>${lepas.length ? `<button class="tombol kecil utama" id="bHubungSemua">Daftarkan ${lepas.length} nama</button>` : ''}</div>
       ${lepas.length ? `<p class="samar" style="font-size:13px;margin:6px 0 10px">Setiap barang di invoice wajib memakai nama yang terdaftar: barang stok, atau barang beli langsung jual. Invoice baru tidak bisa disimpan sebelum namanya terdaftar.</p>
       <div class="pil-baris">${lepas.map(x => `<span class="pil" title="${esc(x.nota)} nota, terakhir ${esc(tgl(x.terakhir))}">${esc(x.barang)} <span class="samar">${esc(angkaStok(x.qty))} ${esc(x.satuan)}${x.nota > 1 ? ' · ' + x.nota + ' nota' : ''}</span></span>`).join('')}</div>` : '<p class="samar" style="font-size:13px;margin:6px 0 0">Semua nama di invoice sudah terdaftar.</p>'}</section>
-    <section class="bagian kartu" id="bagianLangsung"><details ${fl.buka || fl.cari || fl.terbuka ? 'open' : ''} id="lDetail"><summary style="cursor:pointer;list-style:revert"><span class="label">Barang beli langsung jual · ${L.length} terdaftar</span> <span class="samar" style="font-size:12.5px">ketuk untuk buka, ubah, atau daftarkan barang baru</span></summary><div style="display:flex;justify-content:flex-end;margin-top:8px"><input id="lCari" value="${esc(fl.cari)}" placeholder="cari nama" style="max-width:200px;padding:7px 10px;border-radius:10px;border:1px solid var(--garis2);background:transparent;color:inherit;font:inherit;font-size:13px"></div>
+    <section class="bagian kartu" id="bagianLangsung" data-st="langsung"><details open id="lDetail"><summary style="list-style:none"><span class="label">Barang beli langsung jual · ${L.length} terdaftar</span></summary>
+      <div class="baris-saring"><input id="lCari" class="cari" value="${esc(fl.cari)}" placeholder="cari barang beli langsung jual" autocomplete="off">${LT.length > Ltampil.length ? `<button class="tombol kecil" id="lSemuaL">Tampilkan semua ${LT.length}</button>` : ''}</div>
+      <div class="pil-baris" style="margin-top:8px">${['', ...[...new Set(L.map(b => b.kategori || 'Lainnya'))].sort(urutKategori)].map(k => `<button class="pil ${(fl.kat || '') === k ? 'aktif' : ''}" data-lkat="${esc(k)}">${esc(k || 'Semua')}</button>`).join('')}</div>
       <p class="samar" style="font-size:13px;margin:6px 0 10px">Barang yang dibeli lalu langsung diantar ke dapur. Namanya terdaftar supaya invoice tidak tercampur dengan stok gudang, tetapi tidak ada jumlah stoknya.</p>
       <div class="tbl-bungkus"><table><thead><tr><th>Nama</th><th>Kategori</th><th>Satuan</th><th>Nama lain di invoice</th><th></th></tr></thead><tbody>
-      ${L.filter(cocokCari).map(b => fl.buka === b.kode ? `<tr><td colspan="5"><div class="grid g3"><label class="isian">Nama<input id="lNama" value="${esc(b.nama)}"></label><label class="isian">Kategori <span class="samar" style="font-weight:400">(pilih atau ketik baru)</span><input id="lKat" list="dlKat" value="${esc(b.kategori || '')}"></label><label class="isian">Satuan<input id="lSat" value="${esc(b.satuan || '')}"></label><label class="isian">Nama lain <span class="samar" style="font-weight:400">(pisahkan koma)</span><input id="lAlias" value="${esc(b.alias || '')}"></label></div>
+      ${Ltampil.map(b => fl.buka === b.kode ? `<tr><td colspan="5"><div class="grid g3"><label class="isian">Nama<input id="lNama" value="${esc(b.nama)}"></label><label class="isian">Kategori <span class="samar" style="font-weight:400">(pilih atau ketik baru)</span><input id="lKat" list="dlKat" value="${esc(b.kategori || '')}"></label><label class="isian">Satuan<input id="lSat" value="${esc(b.satuan || '')}"></label><label class="isian">Nama lain <span class="samar" style="font-weight:400">(pisahkan koma)</span><input id="lAlias" value="${esc(b.alias || '')}"></label></div>
           <div class="baris-aksi" style="margin-top:8px;flex-wrap:wrap"><button class="tombol utama kecil" id="lSimpan">Simpan</button><button class="tombol kecil" id="lJadiStok">Jadikan barang stok</button><button class="tombol kecil bahaya" id="lHapus">Hapus dari daftar</button><button class="tombol kecil" id="lBatal">Batal</button></div></td></tr>`
         : `<tr><td><b>${esc(b.nama)}</b></td><td class="samar" style="font-size:12.5px">${esc(b.kategori || 'Lainnya')}</td><td class="samar">${esc(b.satuan || '')}</td><td class="samar" style="font-size:12.5px">${esc(b.alias || '')}</td><td><button class="tombol kecil" data-ubahlangsung="${esc(b.kode)}" style="padding:3px 10px;font-size:11.5px">Ubah</button></td></tr>`).join('') || '<tr><td colspan="5" class="samar">Tidak ada.</td></tr>'}
       </tbody></table></div>
@@ -1270,8 +1282,9 @@ function vStok(el) {
       ${lepas.length ? `<p class="samar" style="font-size:13px;margin:6px 0 10px">Barang ini ada di invoice tapi tidak dikenali sebagai barang stok. Hubungkan ke barang stok supaya stoknya berkurang, atau tandai bukan barang stok kalau barangnya dibeli lalu langsung dijual.</p>
       <div class="pil-baris">${lepas.map(x => `<span class="pil" title="${esc(x.nota)} nota, terakhir ${esc(tgl(x.terakhir))}">${esc(x.barang)} <span class="samar">${esc(angkaStok(x.qty))} ${esc(x.satuan)}${x.nota > 1 ? ' · ' + x.nota + ' nota' : ''}</span></span>`).join('')}</div>` : '<p class="samar" style="font-size:13px;margin:6px 0 0">Semua nama di invoice sudah terhubung atau ditandai bukan barang stok.</p>'}
       ${lewat.length ? `<details style="margin-top:12px"><summary class="samar" style="cursor:pointer;font-size:13px">${lewat.length} nama ditandai bukan barang stok (beli langsung dijual)</summary><div class="pil-baris" style="margin-top:8px">${lewat.map(k => `<span class="pil">${esc(k)} <button type="button" class="samar" data-kembalistok="${esc(k)}" style="background:none;border:0;cursor:pointer;font:inherit;font-size:12px;text-decoration:underline;padding:0 0 0 4px">kembalikan</button></span>`).join('')}</div></details>` : ''}</section>`; })()}
-  <section class="bagian kartu">
+  <section class="bagian kartu" data-st="belanja">
     <span class="label">Catat belanja barang</span>
+    <p class="samar" style="font-size:12.5px;margin:6px 0 0">Ketik nama barang (muncul saran), jumlah, harga beli, dan supplier. Belanja menambah stok dan tercatat di tab Barang masuk.</p>
     <div class="grid g3" style="margin-top:12px">
       <label class="isian" style="grid-column:span 2">Barang<input id="bBarang" list="dlStok" autocomplete="off" placeholder="ketik nama barang, pilih dari saran atau tulis barang baru"><span id="bInfo" class="samar" style="font-weight:500;font-size:12px"></span></label>
       <datalist id="dlStok">${pilihan.map(b => `<option value="${esc(b.nama)}">${esc(b.satuan)}</option>`).join('')}</datalist>
@@ -1297,10 +1310,10 @@ function vStok(el) {
     <div class="pil-baris" style="margin-top:12px" id="bRingkas"></div>
     <div class="baris-aksi" style="margin-top:12px"><button class="tombol utama" id="bSimpanBelanja">Simpan belanja</button></div>
   </section>
-  ${Object.entries(kat).sort((x, y) => urutKategori(x[0], y[0])).map(([k, arr]) => `<section class="bagian"><h2 style="font-size:24px">${esc(k)}</h2><div class="kartu"><div class="tbl-bungkus"><table>
-    <thead><tr><th>Barang</th><th class="angka">Stok</th><th class="angka">Minimum</th><th>Status</th><th class="angka">Harga modal</th><th class="angka">Nilai</th></tr></thead>
+  ${Object.entries(kat).sort((x, y) => urutKategori(x[0], y[0])).map(([k, arr]) => `<section class="bagian" data-st="gudang" data-kat="${esc(k)}"><h2 style="font-size:24px">${esc(k)}</h2><div class="kartu"><div class="tbl-bungkus"><table>
+    <thead><tr><th>Barang</th><th class="angka">Stok</th><th class="angka">Minimum</th><th>Status</th><th class="angka">Harga modal</th><th class="angka">Nilai</th><th></th></tr></thead>
     <tbody>${arr.sort((a, b) => urut[a.status] - urut[b.status] || b.nilai - a.nilai).map(barisBarang).join('')}</tbody></table></div></div>${arr.some(b => b.kode === f.buka) ? panel(arr.find(b => b.kode === f.buka)) : ''}</section>`).join('')}
-  ${riwayatApp.length ? `<section class="bagian"><h2>Catatan stok <span class="miring">terbaru</span></h2><div class="kartu"><div class="daftar">${riwayatApp.map(x => { const b = S.barang.find(b => b.kode === x.kode) || { nama: x.kode, satuan: '' };
+  ${riwayatApp.length ? `<section class="bagian" data-st="catatan"><h2>Catatan stok <span class="miring">terbaru</span></h2><div class="kartu"><div class="daftar">${riwayatApp.map(x => { const b = S.barang.find(b => b.kode === x.kode) || { nama: x.kode, satuan: '' };
       return `<div><div style="flex:1;min-width:0"><b>${esc(b.nama)}</b> <span class="pil ${x.jenis === 'beli' ? 'hijau' : x.jenis === 'keluar' ? 'kunyit' : ''}" style="font-size:10.5px;padding:2px 8px">${x.jenis === 'beli' ? 'belanja' : x.jenis === 'keluar' ? 'keluar' : 'hitung ulang'}</span>
         <div class="samar" style="font-size:12px">${esc(tgl(x.tgl))} · ${x.jenis === 'set' ? 'stok jadi ' : x.jenis === 'keluar' ? '− ' : '+ '}${esc(angkaStok(x.jumlah))} ${esc(b.satuan)}${x.jenis === 'beli' ? ' × ' + esc(rp(x.harga)) : ''}${x.tempat ? ' · ' + esc(x.tempat) : ''}${x.ket ? ' · ' + esc(x.ket) : ''}${b.dariExcel && x.tgl <= S.patokan ? ' · sudah termasuk di Excel' : ''}</div></div>
         <span class="angka">${x.jenis === 'beli' ? esc(rp(x.jumlah * x.harga)) + '<br>' : ''}${x.app ? `<button class="tombol kecil" data-ubahgerak="${esc(x.id)}" style="padding:3px 9px;font-size:11.5px;margin-top:4px">ubah</button> <button class="tombol kecil bahaya" data-hapusgerak="${esc(x.id)}" style="padding:3px 9px;font-size:11.5px;margin-top:4px">hapus</button>` : `<a href="#invoice/${encodeURIComponent(x.inv)}" style="font-size:12px">buka invoice</a>`}</span></div>
@@ -1319,7 +1332,7 @@ function vStok(el) {
     const k = fm.cari.toLowerCase().trim(), cocok = p => (!fm.bulan || (p.tgl || '').startsWith(fm.bulan)) && (!k || (p.nama + ' ' + p.sup).toLowerCase().includes(k));
     const T = semua.filter(cocok), tampil = T.slice(0, fm.semua || k ? 999 : 15), totT = T.reduce((a, p) => a + p.total, 0);
     const perSup = Object.values(T.reduce((o, p) => { const n = p.sup || 'Tanpa keterangan', kk = n.toLowerCase().replace(/[.\s]+/g, ' ').trim(); (o[kk] ||= { nama: n, n: 0, rp: 0 }); o[kk].n++; o[kk].rp += p.total; return o; }, {})).map(x => [x.nama, x]).sort((a, c) => c[1].rp - a[1].rp);
-    return `<section class="bagian" id="riwayatMasuk"><h2>Riwayat barang <span class="miring">masuk</span></h2><div class="kartu">
+    return `<section class="bagian" id="riwayatMasuk" data-st="masuk"><h2>Riwayat barang <span class="miring">masuk</span></h2><div class="kartu">
       <div class="baris-saring" style="margin-top:0"><input id="rmCari" class="cari" value="${esc(fm.cari)}" placeholder="cari barang atau supplier">
         <select id="rmBulan" class="cari" style="max-width:200px"><option value="">Semua bulan</option>${bulanAda.map(b => `<option value="${b}" ${fm.bulan === b ? 'selected' : ''}>${esc(BLN[+b.slice(5, 7) - 1] + ' ' + b.slice(0, 4))}</option>`).join('')}</select></div>
       <div class="pil-baris" style="margin-top:10px">${perSup.slice(0, 8).map(([n, x]) => `<button class="pil" data-rmsup="${esc(n === 'Tanpa keterangan' ? '' : n)}" title="${x.n} kali masuk">${esc(n)} · ${esc(rpS(x.rp))}</button>`).join('')}</div>
@@ -1329,7 +1342,25 @@ function vStok(el) {
       ${T.length > tampil.length ? `<button class="tombol kecil" id="rmSemua" style="margin-top:10px">Tampilkan semua ${T.length} catatan</button>` : ''}</div></section>`; })()}`;
 
   const ulang = () => vStok(el);
-  { const fm = vStok.fm, kembali = () => { ulang(); const r = $('#riwayatMasuk', el); if (r) r.scrollIntoView({ block: 'start' }); };
+  // 27 Okt 2026, pemilik: "di kolom stok juga, catat belanjaan, barang beli langsung jualnya, dan yang lain agar rapi dan tidak
+  // ribet scroll; tambahkan searching". Bagian halaman dibagi tab (bagian lain disembunyikan, bukan dibuang).
+  const tabSt = vStok.tab ||= 'gudang', sg = vStok.sg ||= { cari: '', status: '', kat: '' };
+  const pasangTab = t => { vStok.tab = t; $$('[data-st]', el).forEach(x => x.classList.toggle('sembunyi-saring', x.dataset.st !== t)); $$('[data-sttab]', el).forEach(b => b.classList.toggle('aktif', b.dataset.sttab === t)); };
+  pasangTab(S.induk || tabSt !== 'langsung' ? tabSt : 'gudang');
+  $$('[data-sttab]', el).forEach(b => b.onclick = () => pasangTab(b.dataset.sttab));
+  const saringGudang = () => { const k = sg.cari.toLowerCase().trim(); let ada = 0;
+    $$('section[data-kat]', el).forEach(sec => { let n = 0; $$('tr[data-cari]', sec).forEach(tr => { const ok = (!k || tr.dataset.cari.includes(k)) && (!sg.status || tr.dataset.status === sg.status); tr.classList.toggle('sembunyi-saring', !ok); if (ok) n++; });
+      const tampil = (!sg.kat || sec.dataset.kat === sg.kat) && n > 0; sec.classList.toggle('sembunyi-saring', !tampil); if (tampil) ada += n; });
+    const ks = $('#sgKosong', el); if (ks) ks.hidden = ada > 0;
+    $$('[data-sgstatus]', el).forEach(b => b.classList.toggle('aktif', b.dataset.sgstatus === sg.status)); $$('[data-sgkat]', el).forEach(b => b.classList.toggle('aktif', b.dataset.sgkat === sg.kat)); };
+  if ($('#sgCari', el)) { $('#sgCari', el).value = sg.cari; $('#sgCari', el).oninput = e => { sg.cari = e.target.value; saringGudang(); }; }
+  $$('[data-sgstatus]', el).forEach(b => b.onclick = () => { sg.status = b.dataset.sgstatus; saringGudang(); });
+  $$('[data-sgkat]', el).forEach(b => b.onclick = () => { sg.kat = b.dataset.sgkat; saringGudang(); });
+  saringGudang();
+  if (vStok.fl) { const fl = vStok.fl;
+    $$('[data-lkat]', el).forEach(b => b.onclick = () => { fl.kat = b.dataset.lkat; ulang(); });
+    if ($('#lSemuaL', el)) $('#lSemuaL', el).onclick = () => { fl.semua = true; ulang(); }; }
+  { const fm = vStok.fm, kembali = () => ulang();
     if ($('#rmCari', el)) $('#rmCari', el).oninput = e => { clearTimeout(vStok.tRm); vStok.tRm = setTimeout(() => { fm.cari = e.target.value; kembali(); const i = $('#rmCari', el); if (i) { i.focus(); i.setSelectionRange(i.value.length, i.value.length); } }, 350); };
     if ($('#rmBulan', el)) $('#rmBulan', el).onchange = e => { fm.bulan = e.target.value; kembali(); };
     if ($('#rmSemua', el)) $('#rmSemua', el).onclick = () => { fm.semua = true; kembali(); };
@@ -1428,7 +1459,7 @@ function vStok(el) {
     if ($('#lDetail', el)) $('#lDetail', el).ontoggle = e => { fl.terbuka = e.target.open; };
     if ($('#lbNama', el)) $('#lbNama', el).oninput = () => { const k = $('#lbKat', el); if (!k.dataset.diketik) k.value = $('#lbNama', el).value.trim() ? tebakKategori($('#lbNama', el).value) : ''; };
     if ($('#lbKat', el)) $('#lbKat', el).addEventListener('input', e => { e.target.dataset.diketik = '1'; });
-    if ($('#lCari', el)) $('#lCari', el).onchange = e => { fl.cari = e.target.value.trim(); ulang(); };
+    if ($('#lCari', el)) $('#lCari', el).oninput = e => { clearTimeout(vStok.tL); vStok.tL = setTimeout(() => { fl.cari = e.target.value.trim(); ulang(); const i = $('#lCari', el); if (i) { i.focus(); i.setSelectionRange(i.value.length, i.value.length); } }, 350); };
     $$('[data-ubahlangsung]', el).forEach(x => x.onclick = () => { fl.buka = x.dataset.ubahlangsung; ulang(); });
     const bl = fl.buka && INDUK().barang.find(x => x.kode === fl.buka);
     if (bl && $('#lSimpan', el)) {
@@ -3454,7 +3485,7 @@ muat().catch(e => { akar.innerHTML = `<div class="masuk"><div class="kotak"><h1>
 if ('serviceWorker' in navigator) addEventListener('load', () => navigator.serviceWorker.register('sw.js').catch(() => {}));
 // 23 Okt 2026 (pemilik: "masih tetap sama" setelah perubahan dipasang): aplikasi yang sudah terbuka/terpasang memeriksa
 // versi di server saat dibuka lagi dan tiap 5 menit. Kalau berbeda, muncul tombol "Perbarui NTA" (muat ulang tanpa salinan lama).
-const VERSI_NTA = 'mbg-v74';
+const VERSI_NTA = 'mbg-v76';
 async function cekVersiNta() { try { const t = await (await fetch('sw.js?cek=' + Date.now(), { cache: 'no-store' })).text(), v = (t.match(/mbg-v\d+/) || [])[0];
   if (!v || v === VERSI_NTA || document.getElementById('versiBaru')) return;
   const d = document.createElement('div'); d.id = 'versiBaru';
