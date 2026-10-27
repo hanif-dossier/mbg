@@ -357,6 +357,8 @@ table.gaji-harian tr.hari-ini td{background:rgba(95,208,143,.07)} table.gaji-har
   #cetak.lk .lk-awas{background:#fff!important;border:1px solid #000!important}
 }
 @media (prefers-reduced-motion:no-preference){ .muncul{animation:muncul .45s ease both} @keyframes muncul{from{opacity:.001;transform:translateY(8px)}to{opacity:1;transform:none}} }
+.pilih-periode{display:flex;gap:8px;align-items:center;margin-top:10px}.pilih-periode select{flex:1;max-width:340px;padding:9px 12px;border-radius:12px;border:1px solid var(--garis2);background:transparent;color:inherit;font:inherit;font-weight:600}.pilih-periode select option{background:#0f1c17}.pilih-periode .tombol{padding:7px 14px;font-size:16px}.pilih-periode .tombol[disabled]{opacity:.35}
+.baris-saring{display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin-top:10px}.baris-saring .cari{flex:1;min-width:180px;max-width:320px;margin:0}
 </style>
 </head>
 <body>
@@ -522,7 +524,7 @@ function siapkan() {
 }
 
 // ---------- rangka halaman
-const MENU = [['beranda', 'Beranda', 'rumah'], ['kas', 'Arus kas', 'neraca'], ['invoice', 'Invoice', 'nota'], ['operasional', 'Operasional', 'orang'], ['outlet', 'Outlet', 'outlet'], ['stok', 'Stok', 'stok'], ['laku', 'Barang laku', 'laku'], ['piutang', 'Piutang', 'piutang']];
+const MENU = [['beranda', 'Beranda', 'rumah'], ['kas', 'Arus kas', 'neraca'], ['invoice', 'Invoice', 'nota'], ['operasional', 'Operasional', 'orang'], ['outlet', 'Outlet', 'outlet'], ['stok', 'Stok', 'stok'], ['laku', 'Kinerja', 'laku'], ['piutang', 'Piutang', 'piutang']];
 // Di HP bilah bawah hanya muat lima: empat yang paling sering dipakai + "Lainnya".
 const MENU_HP = [['beranda', 'Beranda', 'rumah'], ['invoice', 'Invoice', 'nota'], ['operasional', 'Operasional', 'orang'], ['outlet', 'Outlet', 'outlet'], ['lainnya', 'Lainnya', 'lain']];
 function rute() { const [h, ...a] = (location.hash.slice(1) || 'beranda').split('/'); // #fee hanya untuk tarif fee (menu Fee dihapus 26 Sep 2026); alamat lama #fee dibawa ke Invoice.
@@ -1221,6 +1223,8 @@ function vStok(el) {
           <label class="isian" style="margin-top:8px">Harga modal per ${esc(b.satuan || 'satuan')}<input type="number" id="dHarga" data-rp inputmode="decimal" step="any" value="${esc(b.harga || 0)}"><small class="samar" id="dHargaKem" style="font-weight:400" data-kem="${esc(JSON.stringify(kemasanB(b).filter(k => +k.isi > 1).map(k => [k.satuan, +k.isi])))}">${esc(kemasanB(b).filter(k => +k.isi > 1).map(k => `= ${rp(Math.round((+b.harga || 0) * k.isi))} per ${k.satuan}`).join(' · '))}</small></label>
           <button class="tombol kecil" id="bDataStok" style="margin-top:10px">Simpan data</button></div>
       </div>
+      ${(() => { const M = STOK.gerak.filter(x => x.kode === b.kode && x.jenis === 'beli').sort((x, y) => (y.tgl + (y.dibuat || '')).localeCompare(x.tgl + (x.dibuat || '')));
+        return `<div class="kartu" style="padding:14px;margin-top:12px"><span class="label">Riwayat barang masuk · ${esc(b.nama)}</span>${M.length ? `<div class="tbl-bungkus" style="margin-top:6px"><table><thead><tr><th>Tanggal</th><th class="angka">Jumlah</th><th class="angka">Harga beli</th><th class="angka">Total</th><th>Supplier</th></tr></thead><tbody>${M.slice(0, 12).map(x => `<tr><td>${esc(tglP(x.tgl))}</td><td class="angka">${esc(teksStok(b, x.jumlah))}</td><td class="angka">${esc(rp(x.harga))}</td><td class="angka">${esc(rp(x.jumlah * (+x.harga || 0)))}</td><td>${x.tempat ? esc(x.tempat) : '<span class="samar">-</span>'}</td></tr>`).join('')}</tbody></table></div>${M.length > 12 ? `<p class="samar" style="font-size:12px;margin:6px 0 0">${M.length - 12} catatan lebih lama ada di Riwayat barang masuk di bawah.</p>` : ''}` : '<p class="samar" style="font-size:13px;margin:6px 0 0">Belum ada barang masuk yang dicatat di aplikasi.</p>'}</div>`; })()}
       <div class="baris-aksi" style="margin-top:10px;flex-wrap:wrap"><button class="tombol kecil" id="bTutupStok">Tutup</button><button class="tombol kecil" id="bJadiLangsung" title="Barang tetap terdaftar, tetapi tidak dihitung di stok gudang">Jadikan barang beli langsung jual</button>${!b.riwayat.length && !(+b.stok) ? '<button class="tombol kecil bahaya" id="bHapusBarang">Hapus barang</button>' : ''}</div></div>`;
   const barisBarang = b => S.induk ? `<tr><td><b>${esc(b.nama)}</b>${kemasanB(b).length ? `<div class="samar" style="font-size:11.5px">${esc(teksKemasan(b))}</div>` : ''}
         <div><button class="tombol kecil" data-ubahstok="${esc(b.kode)}" style="padding:3px 10px;font-size:11.5px;margin-top:4px">${f.buka === b.kode ? 'Tutup' : 'Ubah'}</button></div></td>
@@ -1275,7 +1279,8 @@ function vStok(el) {
       <label class="isian">Jumlah<input type="number" id="bJml" inputmode="decimal" step="any" min="0" placeholder="0"></label>
       <label class="isian" id="bSatBungkus" hidden>Satuan belanja<select id="bSat"></select></label>
       <label class="isian">Harga beli per satuan (modal)<input type="number" id="bHarga" data-rp inputmode="numeric" min="0"></label>
-      <label class="isian">Belanja di mana<input id="bTempat" placeholder="misalnya pasar Flamboyan"></label>
+      <label class="isian">Supplier / tempat belanja<input id="bTempat" list="dlSupplier" autocomplete="off" placeholder="mis. Toko Ahong, pasar Flamboyan"></label>
+      <datalist id="dlSupplier">${[...new Set(STOK.gerak.filter(x => x.jenis === 'beli' && x.tempat).sort((a, c) => (c.dibuat || c.tgl).localeCompare(a.dibuat || a.tgl)).map(x => x.tempat.trim()))].map(t => `<option value="${esc(t)}">`).join('')}</datalist>
       <label class="isian">Parkir atau ongkos saat belanja (Rp)<input type="number" id="bParkir" data-rp inputmode="numeric" min="0" placeholder="boleh kosong"></label>
     </div>
     <div id="formBaru" hidden style="margin-top:12px;padding:12px;border:1px dashed var(--garis2);border-radius:14px">
@@ -1305,9 +1310,30 @@ function vStok(el) {
           <label class="isian">Tanggal<input type="date" id="ugTgl" value="${esc(x.tgl)}"></label>
           ${x.jenis === 'beli' ? `<label class="isian">Belanja di mana<input id="ugTempat" value="${esc(x.tempat || '')}"></label>` : `<label class="isian">Keterangan<input id="ugKet" value="${esc(x.ket || '')}"></label>`}</div>
           <div class="baris-aksi" style="margin-top:10px"><button class="tombol utama kecil" id="ugSimpan">Simpan perubahan</button><button class="tombol kecil" id="ugBatal">Batal</button></div></div>` : ''}`; }).join('')}</div></div></section>` : ''}
-  <section class="bagian"><h2>Belanja <span class="miring">terakhir</span></h2><div class="kartu"><div class="daftar">${[...beliApp, ...beliExcel].sort((a, b) => b.tgl.localeCompare(a.tgl)).slice(0, 20).map(p => `<div><div><b>${esc(p.nama)}</b><div class="samar" style="font-size:12px">${esc(tgl(p.tgl))} · ${esc(angkaStok(p.jumlah))} × ${esc(rp(p.harga))}${p.tempat ? ' · ' + esc(p.tempat) : ''}${p.ket ? ' · ' + esc(p.ket) : ''}${p.app ? '' : ' · dari Excel'}</div></div><span class="angka">${esc(rp(p.jumlah * p.harga))}</span></div>`).join('') || '<div class="kosong">Belum ada belanja.</div>'}</div></div></section>`;
+  ${(() => { // 27 Okt 2026, pemilik: "stok itu biasanya saya nambah-nambah barang, dikasih riwayatnya kapan masuk, supplier dari
+    // mana, seperti minimarket". Semua barang masuk (catatan aplikasi + Excel lama) dengan supplier, bisa dicari dan disaring per bulan.
+    const fm = vStok.fm ||= { cari: '', bulan: '', semua: false };
+    const semua = [...beliApp, ...beliExcel].map(p => ({ ...p, total: (+p.jumlah || 0) * (+p.harga || 0), sup: (p.tempat || '').trim(), satuan: (S.barang.find(b => b.kode === p.kode) || {}).satuan || '' }))
+      .sort((a, b) => (b.tgl + (b.dibuat || '')).localeCompare(a.tgl + (a.dibuat || '')));
+    const bulanAda = [...new Set(semua.map(p => (p.tgl || '').slice(0, 7)).filter(Boolean))].sort().reverse();
+    const k = fm.cari.toLowerCase().trim(), cocok = p => (!fm.bulan || (p.tgl || '').startsWith(fm.bulan)) && (!k || (p.nama + ' ' + p.sup).toLowerCase().includes(k));
+    const T = semua.filter(cocok), tampil = T.slice(0, fm.semua || k ? 999 : 15), totT = T.reduce((a, p) => a + p.total, 0);
+    const perSup = Object.values(T.reduce((o, p) => { const n = p.sup || 'Tanpa keterangan', kk = n.toLowerCase().replace(/[.\s]+/g, ' ').trim(); (o[kk] ||= { nama: n, n: 0, rp: 0 }); o[kk].n++; o[kk].rp += p.total; return o; }, {})).map(x => [x.nama, x]).sort((a, c) => c[1].rp - a[1].rp);
+    return `<section class="bagian" id="riwayatMasuk"><h2>Riwayat barang <span class="miring">masuk</span></h2><div class="kartu">
+      <div class="baris-saring" style="margin-top:0"><input id="rmCari" class="cari" value="${esc(fm.cari)}" placeholder="cari barang atau supplier">
+        <select id="rmBulan" class="cari" style="max-width:200px"><option value="">Semua bulan</option>${bulanAda.map(b => `<option value="${b}" ${fm.bulan === b ? 'selected' : ''}>${esc(BLN[+b.slice(5, 7) - 1] + ' ' + b.slice(0, 4))}</option>`).join('')}</select></div>
+      <div class="pil-baris" style="margin-top:10px">${perSup.slice(0, 8).map(([n, x]) => `<button class="pil" data-rmsup="${esc(n === 'Tanpa keterangan' ? '' : n)}" title="${x.n} kali masuk">${esc(n)} · ${esc(rpS(x.rp))}</button>`).join('')}</div>
+      <div class="tbl-bungkus" style="margin-top:10px"><table><thead><tr><th>Tanggal</th><th class="kol-nama">Barang</th><th class="angka">Jumlah</th><th class="angka">Harga beli</th><th class="angka">Total</th><th>Supplier</th></tr></thead><tbody>
+      ${tampil.map(p => `<tr><td style="white-space:nowrap">${esc(tglP(p.tgl))}</td><td class="kol-nama"><b>${esc(p.nama)}</b>${p.app ? '' : ' <span class="pil mini">Excel</span>'}</td><td class="angka">${esc(angkaStok(p.jumlah))}${p.satuan ? ' ' + esc(p.satuan) : ''}</td><td class="angka">${esc(rp(p.harga))}</td><td class="angka">${esc(rp(p.total))}</td><td>${p.sup ? esc(p.sup) : '<span class="samar">-</span>'}${p.ket ? `<small class="samar blok">${esc(p.ket)}</small>` : ''}</td></tr>`).join('') || '<tr><td colspan="6" class="samar">Tidak ada barang masuk yang cocok.</td></tr>'}
+      </tbody><tfoot><tr><td colspan="4">${T.length} kali barang masuk${fm.bulan ? ' · ' + esc(BLN[+fm.bulan.slice(5, 7) - 1] + ' ' + fm.bulan.slice(0, 4)) : ''}</td><td class="angka">${esc(rp(totT))}</td><td></td></tr></tfoot></table></div>
+      ${T.length > tampil.length ? `<button class="tombol kecil" id="rmSemua" style="margin-top:10px">Tampilkan semua ${T.length} catatan</button>` : ''}</div></section>`; })()}`;
 
   const ulang = () => vStok(el);
+  { const fm = vStok.fm, kembali = () => { ulang(); const r = $('#riwayatMasuk', el); if (r) r.scrollIntoView({ block: 'start' }); };
+    if ($('#rmCari', el)) $('#rmCari', el).oninput = e => { clearTimeout(vStok.tRm); vStok.tRm = setTimeout(() => { fm.cari = e.target.value; kembali(); const i = $('#rmCari', el); if (i) { i.focus(); i.setSelectionRange(i.value.length, i.value.length); } }, 350); };
+    if ($('#rmBulan', el)) $('#rmBulan', el).onchange = e => { fm.bulan = e.target.value; kembali(); };
+    if ($('#rmSemua', el)) $('#rmSemua', el).onclick = () => { fm.semua = true; kembali(); };
+    $$('[data-rmsup]', el).forEach(b => b.onclick = () => { fm.cari = fm.cari === b.dataset.rmsup ? '' : b.dataset.rmsup; kembali(); }); }
   const bHub = $('#bHubungSemua', el); if (bHub) bHub.onclick = () => dialogHubungStok(lepasInvoice(S.barang), ulang);
   $$('[data-kembalistok]', el).forEach(b => b.onclick = async () => { const baru = salinStok(); baru.lewat = baru.lewat.filter(k => k !== b.dataset.kembalistok);
     try { await simpanStok(baru); pesan(`"${b.dataset.kembalistok}" kembali ditanyakan saat ada di invoice`); ulang(); } catch (er) { pesan(er.message, true); } });
@@ -1467,8 +1493,15 @@ function vLaku(el) {
   const P0 = f.pilih != null && periode.some(x => String(x.k) === String(f.pilih)) ? periode.find(x => String(x.k) === String(f.pilih)) : periode.at(-1), iA = periode.indexOf(P0), Psbl = periode[iA - 1];
   const ambil = (b, p) => p ? (f.mode === 'minggu' ? b.minggu[p.k] : b.bulan[p.k]) || { q: 0, rp: 0, laba: 0 } : { q: 0, rp: 0, laba: 0 };
   const teksQ = (b, q) => b.b ? teksStok(b.b, Math.round(q * 100) / 100) : angkaStok(Math.round(q * 100) / 100) + ' ' + (b.satuan || '');
+  // 27 Okt 2026, pemilik: "di kolom barang laku itu rapiin, tidak mungkin saya scroll panjang lebar minggu-minggunya".
+  // Di tabel jumlah ditulis singkat dalam satuan dasar; rincian per dus/karung muncul saat kursor diarahkan.
+  const qR = (b, q) => { const v = Math.round(q * 100) / 100, sat = b.b ? b.b.satuan : (b.satuan || ''); return `<span title="${esc(teksQ(b, q))}">${esc(angkaStok(v) + (sat ? ' ' + sat : ''))}</span>`; };
+  const BATAS = 12, cariL = String(f.cari || '').toLowerCase().trim(), cocokCari = b => !cariL || ((b.nama || '') + ' ' + ((b.b || {}).alias || '')).toLowerCase().includes(cariL);
+  const kotakCari = (n, tampil) => `<div class="baris-saring"><input id="lCari" class="cari" value="${esc(f.cari || '')}" placeholder="cari barang">${n > tampil ? `<button class="tombol kecil" id="lSemua">Tampilkan semua ${n} barang</button>` : n > BATAS && !cariL ? `<button class="tombol kecil" id="lRingkas">Ringkas (${BATAS} teratas)</button>` : ''}</div>`;
   const saring = b => f.jenis === 'semua' || (f.jenis === 'stok' ? b.jenis === 'stok' : b.jenis !== 'stok');
   const laku = barang.filter(saring).map(b => ({ b, e: ambil(b, P0), s: ambil(b, Psbl), pb: pembeliBarang(b, f.mode, P0.k) })).filter(x => x.e.q > 0).sort((a, c) => c.e.rp - a.e.rp);
+  laku.forEach((x, i) => { x.no = i + 1; });
+  const lakuT = laku.filter(x => cocokCari(x.b)), lakuTampil = lakuT.slice(0, cariL || f.semua ? 999 : BATAS);
   const totRp = jmlLK(laku, x => x.e.rp), maks = laku.length ? laku[0].e.rp : 1;
   const ubah = (a, c) => !c ? '<span class="samar">baru</span>' : (() => { const p = (a - c) / c * 100; return `<span class="${p >= 0 ? 'hijau' : 'merah'}">${p >= 0 ? '▲' : '▼'} ${Math.abs(p).toLocaleString('id-ID', { maximumFractionDigits: 0 })}%</span>`; })();
   const tanda = b => b.jenis === 'stok' ? ' <span class="pil mini">stok</span>' : b.jenis === 'lain' ? ' <span class="pil kunyit mini">belum terdaftar</span>' : '';
@@ -1486,7 +1519,9 @@ function vLaku(el) {
     <div class="kartu saring-laku">
       <div class="pil-baris"><button class="tab ${f.mode === 'minggu' ? 'aktif' : ''}" data-mode="minggu">Per minggu</button><button class="tab ${f.mode === 'bulan' ? 'aktif' : ''}" data-mode="bulan">Per bulan</button>
         <span class="pemisah"></span><button class="tab ${f.jenis === 'semua' ? 'aktif' : ''}" data-jenis="semua">Semua barang</button><button class="tab ${f.jenis === 'stok' ? 'aktif' : ''}" data-jenis="stok">Barang stok</button><button class="tab ${f.jenis === 'langsung' ? 'aktif' : ''}" data-jenis="langsung">Beli langsung jual</button></div>
-      <div class="tab-baris" style="margin-top:10px">${periode.map(p => `<button class="tab ${p === P0 ? 'aktif' : ''}" data-periode="${esc(p.k)}" title="${esc(p.ket)}">${esc(p.label)}</button>`).join('')}</div></div>
+      <div class="pilih-periode"><button class="tombol kecil" data-geser="-1" ${iA <= 0 ? 'disabled' : ''} title="Periode sebelumnya">‹</button>
+        <select id="lPeriode">${periode.slice().reverse().map(p => `<option value="${esc(p.k)}" ${p === P0 ? 'selected' : ''}>${esc(p.label)}${p.ket ? ' · ' + esc(p.ket) : ''}</option>`).join('')}</select>
+        <button class="tombol kecil" data-geser="1" ${iA >= periode.length - 1 ? 'disabled' : ''} title="Periode berikutnya">›</button></div></div>
     <div class="grid g4" style="margin-top:12px">
       <div class="kartu ubin"><span class="label">Penjualan ${esc(P0.label)}</span><div class="nilai">${esc(rpS(totRp))}</div><small>${P0.ket ? esc(P0.ket) + ' · ' : ''}${laku.length} jenis barang</small></div>
       <div class="kartu ubin"><span class="label">Terlaris</span><div class="nilai sedang">${esc(terlaris ? terlaris.b.nama : '-')}</div><small>${terlaris ? esc(rpS(terlaris.e.rp)) + ' · ' + esc(teksQ(terlaris.b, terlaris.e.q)) : ''}</small></div>
@@ -1494,27 +1529,27 @@ function vLaku(el) {
       <div class="kartu ubin"><span class="label">Laba terbesar</span><div class="nilai sedang">${esc(labaMaks ? labaMaks.b.nama : '-')}</div><small>${labaMaks ? 'laba kotor ' + esc(rpS(labaMaks.e.laba)) : ''}</small></div>
     </div>
     <div class="kartu" style="margin-top:12px"><span class="label">Peringkat ${esc(P0.label)}${Psbl ? ' · dibanding ' + esc(Psbl.label) : ''} · ketuk barang untuk melihat semua pembelinya</span>
+      ${kotakCari(lakuT.length, lakuTampil.length)}
       <div class="tbl-bungkus laku-lebar" style="margin-top:8px"><table class="tbl-laku"><thead><tr><th>#</th><th class="kol-nama">Barang</th><th class="angka">Terjual</th><th class="angka">Penjualan</th><th class="angka">Laba kotor</th><th>Pembeli</th><th class="angka">Berubah</th></tr></thead><tbody>
-      ${laku.map((x, i) => { const buka = f.buka === x.b.kunci;
-        return `<tr class="baris-laku ${buka ? 'terbuka' : ''}" data-buka="${esc(x.b.kunci)}"><td class="samar">${i + 1}</td><td class="kol-nama"><b>${esc(x.b.nama)}</b>${tanda(x.b)}<div class="batang-tipis" style="width:${Math.max(2, x.e.rp / maks * 100)}%"></div></td>
-          <td class="angka">${esc(teksQ(x.b, x.e.q))}</td><td class="angka">${esc(rp(x.e.rp))}</td><td class="angka ${x.e.laba >= 0 ? '' : 'merah'}">${esc(rp(x.e.laba))}</td>
+      ${lakuTampil.map(x => { const buka = f.buka === x.b.kunci;
+        return `<tr class="baris-laku ${buka ? 'terbuka' : ''}" data-buka="${esc(x.b.kunci)}"><td class="samar">${x.no}</td><td class="kol-nama"><b>${esc(x.b.nama)}</b>${tanda(x.b)}<div class="batang-tipis" style="width:${Math.max(2, x.e.rp / maks * 100)}%"></div></td>
+          <td class="angka">${qR(x.b, x.e.q)}</td><td class="angka">${esc(rp(x.e.rp))}</td><td class="angka ${x.e.laba >= 0 ? '' : 'merah'}">${esc(rp(x.e.laba))}</td>
           <td><div class="pembeli">${x.pb.slice(0, 3).map(p => `<span class="pil mini">${esc(judulOutlet(p.o))}</span>`).join('')}${x.pb.length > 3 ? `<span class="samar" style="font-size:12px">+${x.pb.length - 3} lagi</span>` : ''}</div></td>
           <td class="angka">${Psbl ? ubah(x.e.q, x.s.q) : '-'}</td></tr>
           ${buka ? `<tr class="rinci-pembeli"><td></td><td colspan="6"><div class="daftar-pembeli">${x.pb.map(p => `<a href="#outlet/${encodeURIComponent(p.o)}"><span><b>${esc(judulOutlet(p.o))}</b><small>${esc(pc(p.rp, x.e.rp))} dari penjualan barang ini</small></span><span class="angka">${esc(teksQ(x.b, p.q))}<small>${esc(rp(p.rp))}</small></span></a>`).join('')}</div></td></tr>` : ''}`; }).join('') || '<tr><td colspan="7" class="samar">Tidak ada penjualan.</td></tr>'}
       </tbody></table></div>
-      <div class="laku-sempit">${laku.map((x, i) => { const buka = f.buka === x.b.kunci;
-        return `<div class="laku-item ${buka ? 'terbuka' : ''}" data-buka="${esc(x.b.kunci)}"><div class="laku-atas"><span class="samar">${i + 1}</span><span style="flex:1;min-width:0"><b>${esc(x.b.nama)}</b>${tanda(x.b)}<small>${esc(teksQ(x.b, x.e.q))} · laba ${esc(rpS(x.e.laba))}</small></span><span class="angka"><b>${esc(rpS(x.e.rp))}</b><small>${Psbl ? ubah(x.e.q, x.s.q) : ''}</small></span></div>
+      <div class="laku-sempit">${lakuTampil.map(x => { const buka = f.buka === x.b.kunci;
+        return `<div class="laku-item ${buka ? 'terbuka' : ''}" data-buka="${esc(x.b.kunci)}"><div class="laku-atas"><span class="samar">${x.no}</span><span style="flex:1;min-width:0"><b>${esc(x.b.nama)}</b>${tanda(x.b)}<small>${esc(teksQ(x.b, x.e.q))} · laba ${esc(rpS(x.e.laba))}</small></span><span class="angka"><b>${esc(rpS(x.e.rp))}</b><small>${Psbl ? ubah(x.e.q, x.s.q) : ''}</small></span></div>
           ${buka ? `<div class="daftar-pembeli" style="margin-top:10px">${x.pb.map(p => `<a href="#outlet/${encodeURIComponent(p.o)}"><span><b>${esc(judulOutlet(p.o))}</b><small>${esc(pc(p.rp, x.e.rp))}</small></span><span class="angka">${esc(teksQ(x.b, p.q))}<small>${esc(rp(p.rp))}</small></span></a>`).join('')}</div>`
             : `<div class="pembeli" style="margin-top:6px">${x.pb.slice(0, 4).map(p => `<span class="pil mini">${esc(judulOutlet(p.o))}</span>`).join('')}${x.pb.length > 4 ? `<span class="samar" style="font-size:12px">+${x.pb.length - 4}</span>` : ''}</div>`}</div>`; }).join('')}</div></div>`;
   } else if (f.bagian === 'rata') {
     const mAda = minggu.filter(m => m.hari > 0), mIni = mAda.at(-1), mLalu = mAda.at(-2);
     const rataSemua = barang.filter(saring).map(b => { const h = hitung(b); return { b, D: h.D, rpD: aktif.reduce((a, m) => a + ((b.minggu[m.minggu] || {}).rp || 0), 0) / (n || 1), ini: mIni ? (b.minggu[mIni.minggu] || {}).q || 0 : 0, lalu: mLalu ? (b.minggu[mLalu.minggu] || {}).q || 0 : 0 }; })
       .filter(x => x.D || x.ini || x.lalu).sort((a, c) => c.rpD - a.rpD || c.ini - a.ini);
-    const cariK = String(f.cari || '').toLowerCase().trim(), cocokC = x => !cariK || (x.b.nama + ' ' + ((x.b.b || {}).alias || '')).toLowerCase().includes(cariK);
-    const tampilR = rataSemua.filter(cocokC).slice(0, cariK || f.semua ? 999 : 25), d = f.detail ? barang.find(b => b.kunci === f.detail) : null;
+    const rataT = rataSemua.filter(x => cocokCari(x.b)), tampilR = rataT.slice(0, cariL || f.semua ? 999 : BATAS), d = f.detail ? barang.find(b => b.kunci === f.detail) : null;
     isi = `<div class="kartu">
       <p class="ket" style="margin-top:0">Minggu ini = ${esc(mIni ? 'minggu ' + mIni.minggu + ', ' + tglP(mIni.awal) + ' - ' + tglP(mIni.akhir) : '-')}. Rata-rata dari ${n} minggu pengantaran terakhir; perkiraan sebulan = rata-rata seminggu × 4,3. Ketuk barang untuk riwayat dan pembelinya.</p>
-      <input id="rCari" class="cari" value="${esc(f.cari || '')}" placeholder="cari barang, mis. minyak sovia">
+      ${kotakCari(rataT.length, tampilR.length)}
       ${d ? (() => { const W = minggu.filter(m => d.minggu[m.minggu]), Bl = Object.keys(d.bulan).sort(), pbAll = pembeliBarang(d, 'minggu', null), totAll = jmlLK(pbAll, p => p.rp);
         return `<div class="kartu sorot-detail"><div class="kepala-kartu"><span class="label">${esc(d.nama)} · riwayat penjualan</span><button class="tombol kecil" id="rTutup">Tutup</button></div>
           <div style="margin-top:12px">${grafikBatang(minggu.filter(m => m.aktif || d.minggu[m.minggu]).map(m => ({ label: 'M' + m.minggu, v: Math.round(((d.minggu[m.minggu] || {}).q || 0) * 100) / 100 })), { seri: [{ k: 'v', warna: 'var(--hijau)' }], format: v => angkaStok(v) })}</div>
@@ -1524,15 +1559,17 @@ function vLaku(el) {
               <table style="margin-top:10px"><thead><tr><th>Bulan</th><th class="angka">Terjual</th><th class="angka">Penjualan</th></tr></thead><tbody>${Bl.slice().reverse().map(k => `<tr><td>${esc(namaBln(k))}</td><td class="angka">${esc(teksQ(d, d.bulan[k].q))}</td><td class="angka">${esc(rp(d.bulan[k].rp))}</td></tr>`).join('')}</tbody></table></div></div></div>`; })() : ''}
       <div class="tbl-bungkus" style="margin-top:12px"><table><thead><tr><th class="kol-nama">Barang</th><th class="angka">Minggu ini</th><th class="angka">Minggu lalu</th><th class="angka">Rata-rata / minggu</th><th class="angka">Perkiraan sebulan</th><th class="angka">Rupiah / minggu</th></tr></thead><tbody>
       ${tampilR.map(x => `<tr data-detail="${esc(x.b.kunci)}" class="bisa-ketuk"><td class="kol-nama"><b>${esc(x.b.nama)}</b>${tanda(x.b)}</td>
-        <td class="angka">${x.ini ? esc(teksQ(x.b, x.ini)) : '<span class="samar">-</span>'}</td><td class="angka">${x.lalu ? esc(teksQ(x.b, x.lalu)) : '<span class="samar">-</span>'}</td>
-        <td class="angka"><b>${x.D ? esc(teksQ(x.b, Math.round(x.D * 10) / 10)) : '-'}</b></td><td class="angka">${x.D ? esc(teksQ(x.b, Math.round(x.D * 4.3))) : '-'}</td><td class="angka">${esc(rp(x.rpD))}</td></tr>`).join('') || '<tr><td colspan="6" class="samar">Tidak ada barang yang cocok.</td></tr>'}
+        <td class="angka">${x.ini ? qR(x.b, x.ini) : '<span class="samar">-</span>'}</td><td class="angka">${x.lalu ? qR(x.b, x.lalu) : '<span class="samar">-</span>'}</td>
+        <td class="angka"><b>${x.D ? qR(x.b, Math.round(x.D * 10) / 10) : '-'}</b></td><td class="angka">${x.D ? qR(x.b, Math.round(x.D * 4.3)) : '-'}</td><td class="angka">${esc(rp(x.rpD))}</td></tr>`).join('') || '<tr><td colspan="6" class="samar">Tidak ada barang yang cocok.</td></tr>'}
       </tbody></table></div>
-      ${rataSemua.length > tampilR.length ? `<button class="tombol kecil" id="rSemua" style="margin-top:10px">Tampilkan semua ${rataSemua.length} barang</button>` : ''}</div>`;
+</div>`;
   } else if (f.bagian === 'stok') {
     const saran = S.barang.map(sb => { const b = barang.find(x => x.kunci === sb.kode) || { minggu: {} }, h = hitung(b), beli = Math.max(0, h.target - Math.max(0, sb.stok)), hari = h.D > 0 ? Math.max(0, sb.stok) / (h.D / 7) : Infinity;
       return { sb, ...h, beli: beli > 0 ? bulatKemasan(sb, beli) : 0, hari, status: h.D <= 0 ? 'diam' : sb.stok <= h.ROP ? 'belanja' : sb.stok <= h.target ? 'siap' : 'aman' }; })
       .sort((a, c) => ({ belanja: 0, siap: 1, aman: 2, diam: 3 })[a.status] - ({ belanja: 0, siap: 1, aman: 2, diam: 3 })[c.status] || c.D * (+c.sb.harga || 0) - a.D * (+a.sb.harga || 0));
     const nilaiBeli = jmlLK(saran, x => x.beli * (+x.sb.harga || 0)), jmlSt = st => saran.filter(x => x.status === st).length;
+    const saranT = saran.filter(x => cocokCari({ nama: x.sb.nama, b: x.sb })), perlu = saranT.filter(x => x.status === 'belanja' || x.status === 'siap').length;
+    const saranTampil = saranT.slice(0, cariL || f.semua ? 999 : Math.max(BATAS, perlu));
     isi = `<div class="grid g4">
         <div class="kartu ubin"><span class="label">Belanja sekarang</span><div class="nilai merah">${jmlSt('belanja')}</div><small>barang di bawah titik belanja</small></div>
         <div class="kartu ubin"><span class="label">Siapkan belanja</span><div class="nilai kunyit">${jmlSt('siap')}</div><small>di bawah stok ideal</small></div>
@@ -1544,9 +1581,10 @@ function vLaku(el) {
         <label class="isian">Belanja ulang tiap berapa hari<input type="number" id="aR" min="1" step="1" value="${esc(f.R)}"></label>
         <label class="isian">Tingkat aman<select id="aZ">${[[1.28, '90% (lebih hemat)'], [1.65, '95% (disarankan)'], [2.33, '99% (hampir tidak pernah habis)']].map(([z, t]) => `<option value="${z}" ${+f.Z === z ? 'selected' : ''}>${t}</option>`).join('')}</select></label>
       </div>
+      ${kotakCari(saranT.length, saranTampil.length)}
       <div class="tbl-bungkus" style="margin-top:12px"><table><thead><tr><th class="kol-nama">Barang</th><th>Status</th><th class="angka">Stok sekarang</th><th class="angka">Rata-rata / minggu</th><th class="angka">Saran belanja</th><th class="angka">Cukup untuk</th></tr></thead><tbody>
-      ${saran.map(x => `<tr><td class="kol-nama"><b>${esc(x.sb.nama)}</b></td><td>${pil(x.status)}</td><td class="angka">${esc(teksStok(x.sb))}</td>
-        <td class="angka">${x.D > 0 ? esc(teksStok(x.sb, Math.round(x.D * 10) / 10)) : '-'}</td><td class="angka"><b>${x.beli > 0 ? esc(teksStok(x.sb, x.beli)) : '-'}</b>${x.beli > 0 && +x.sb.harga ? `<small class="samar blok">± ${esc(rp(x.beli * x.sb.harga))}</small>` : ''}</td>
+      ${saranTampil.map(x => `<tr><td class="kol-nama"><b>${esc(x.sb.nama)}</b></td><td>${pil(x.status)}</td><td class="angka">${qR({ b: x.sb }, x.sb.stok)}</td>
+        <td class="angka">${x.D > 0 ? qR({ b: x.sb }, Math.round(x.D * 10) / 10) : '-'}</td><td class="angka"><b>${x.beli > 0 ? esc(teksStok(x.sb, x.beli)) : '-'}</b>${x.beli > 0 && +x.sb.harga ? `<small class="samar blok">± ${esc(rp(x.beli * x.sb.harga))}</small>` : ''}</td>
         <td class="angka">${x.hari === Infinity ? '-' : esc(angkaStok(Math.floor(x.hari))) + ' hari'}</td></tr>`).join('')}
       </tbody></table></div>
       <details style="margin-top:12px"><summary style="cursor:pointer;font-weight:600">Cara menghitung</summary>
@@ -1554,8 +1592,10 @@ function vLaku(el) {
           <p>Dihitung dari ${n} minggu pengantaran terakhir (${n ? esc(aktif.map(m => 'M' + m.minggu).join(', ')) : '-'}); minggu dengan kurang dari tiga hari pengantaran tidak dipakai.</p>
           <p><b>Stok pengaman</b> = Z × naik-turun penjualan mingguan × √((hari tunggu + hari belanja ulang) ÷ 7). <b>Titik belanja</b> = rata-rata × hari tunggu ÷ 7 + stok pengaman. <b>Stok ideal</b> = rata-rata × (hari tunggu + hari belanja ulang) ÷ 7 + stok pengaman. <b>Saran belanja</b> = stok ideal − stok sekarang, dibulatkan per dus atau karung.</p></div></details></div>`;
   } else {
-    const butuh = barang.filter(b => b.jenis !== 'stok').map(b => ({ b, ...hitung(b) })).filter(x => x.D > 0).sort((a, c) => jmlLK(aktif, m => (c.b.minggu[m.minggu] || {}).rp || 0) - jmlLK(aktif, m => (a.b.minggu[m.minggu] || {}).rp || 0)).slice(0, 30);
+    const butuhSemua = barang.filter(b => b.jenis !== 'stok').map(b => ({ b, ...hitung(b) })).filter(x => x.D > 0 && cocokCari(x.b)).sort((a, c) => jmlLK(aktif, m => (c.b.minggu[m.minggu] || {}).rp || 0) - jmlLK(aktif, m => (a.b.minggu[m.minggu] || {}).rp || 0));
+    const butuh = butuhSemua.slice(0, cariL || f.semua ? 999 : BATAS);
     isi = `<div class="kartu"><p class="ket" style="margin-top:0">Barang yang tidak disimpan di gudang tetapi rutin dipesan dapur: perkiraan jumlah yang perlu dibeli ke pemasok dalam seminggu.</p>
+      ${kotakCari(butuhSemua.length, butuh.length)}
       <div class="tbl-bungkus"><table><thead><tr><th class="kol-nama">Barang</th><th class="angka">Rata-rata / minggu</th><th class="angka">Minggu paling ramai</th><th class="angka">Siapkan untuk seminggu</th><th>Pembeli tetap</th></tr></thead><tbody>
       ${butuh.map(x => { const pb = pembeliBarang(x.b, 'minggu', null); return `<tr><td class="kol-nama"><b>${esc(x.b.nama)}</b>${tanda(x.b)}</td><td class="angka">${esc(angkaStok(Math.round(x.D * 10) / 10))} ${esc(x.b.satuan)}</td><td class="angka">${esc(angkaStok(Math.max(...x.xs)))} ${esc(x.b.satuan)}</td><td class="angka"><b>${esc(angkaStok(Math.ceil(x.D * f.R / 7 + f.Z * x.sd * Math.sqrt(f.R / 7))))} ${esc(x.b.satuan)}</b></td>
         <td><div class="pembeli">${pb.slice(0, 3).map(p => `<span class="pil mini">${esc(judulOutlet(p.o))}</span>`).join('')}${pb.length > 3 ? `<span class="samar" style="font-size:12px">+${pb.length - 3}</span>` : ''}</div></td></tr>`; }).join('') || '<tr><td colspan="5" class="samar">Belum ada.</td></tr>'}
@@ -1563,19 +1603,22 @@ function vLaku(el) {
   }
   el.innerHTML = `
   <section class="bagian" style="margin-top:6px">
-    <h2>Barang <span class="miring">laku</span></h2>
-    <p class="ket">Penjualan per barang dari laporan mingguan dan invoice, lengkap dengan dapur pembelinya. Nama barang disatukan menurut daftar barang.</p>
+    <h2>Kinerja <span class="miring">barang</span></h2>
+    <p class="ket">Barang yang paling laku, pembelinya, rata-rata penjualan, dan saran belanja. Pilih periode di bawah; daftar menampilkan ${BATAS} teratas dulu.</p>
     <div class="tab-baris tab-bagian">${TAB.map(([k, l]) => `<button class="tab ${f.bagian === k ? 'aktif' : ''}" data-bagian="${k}">${l}</button>`).join('')}</div>
   </section>
   <section class="bagian" style="margin-top:10px">${isi}</section>`;
   const ulang = () => vLaku(el);
-  $$('[data-bagian]', el).forEach(b => b.onclick = () => { f.bagian = b.dataset.bagian; simpanAtur(); ulang(); });
+  $$('[data-bagian]', el).forEach(b => b.onclick = () => { f.bagian = b.dataset.bagian; f.semua = false; f.cari = ''; simpanAtur(); ulang(); });
   $$('[data-mode]', el).forEach(b => b.onclick = () => { f.mode = b.dataset.mode; f.pilih = null; f.buka = null; ulang(); });
   $$('[data-jenis]', el).forEach(b => b.onclick = () => { f.jenis = b.dataset.jenis; ulang(); });
   $$('[data-periode]', el).forEach(b => b.onclick = () => { f.pilih = b.dataset.periode; f.buka = null; ulang(); });
+  if ($('#lPeriode', el)) $('#lPeriode', el).onchange = e => { f.pilih = e.target.value; f.buka = null; ulang(); };
+  $$('[data-geser]', el).forEach(b => b.onclick = () => { const p = periode[iA + +b.dataset.geser]; if (p) { f.pilih = p.k; f.buka = null; ulang(); } });
+  if ($('#lCari', el)) $('#lCari', el).oninput = e => { clearTimeout(vLaku.tCari); vLaku.tCari = setTimeout(() => { f.cari = e.target.value; ulang(); const i = $('#lCari', el); if (i) { i.focus(); i.setSelectionRange(i.value.length, i.value.length); } }, 350); };
+  if ($('#lSemua', el)) $('#lSemua', el).onclick = () => { f.semua = true; ulang(); };
+  if ($('#lRingkas', el)) $('#lRingkas', el).onclick = () => { f.semua = false; ulang(); };
   $$('[data-buka]', el).forEach(tr => tr.onclick = () => { f.buka = f.buka === tr.dataset.buka ? null : tr.dataset.buka; ulang(); });
-  if ($('#rCari', el)) $('#rCari', el).onchange = e => { f.cari = e.target.value; ulang(); setTimeout(() => { const i = $('#rCari', el); if (i) { i.focus(); i.setSelectionRange(i.value.length, i.value.length); } }, 0); };
-  if ($('#rSemua', el)) $('#rSemua', el).onclick = () => { f.semua = true; ulang(); };
   $$('[data-detail]', el).forEach(tr => tr.onclick = () => { f.detail = tr.dataset.detail; ulang(); scrollTo({ top: 0, behavior: 'smooth' }); });
   if ($('#rTutup', el)) $('#rTutup', el).onclick = () => { f.detail = null; ulang(); };
   const atur = () => { f.L = Math.max(0, +$('#aL', el).value || 0); f.R = Math.max(1, +$('#aR', el).value || 7); f.Z = +$('#aZ', el).value || 1.65; simpanAtur(); ulang(); };
@@ -3363,7 +3406,7 @@ function vTarifFee(el) {
 
 // ---------- LAINNYA (HP)
 function vLainnya(el) {
-  const L = [['kas', 'Arus kas', 'neraca', 'Uang masuk dan keluar tiap minggu, laba rugi, aset per minggu, serta laporan bulanan dan tahunan'], ['fee/tarif', 'Tarif fee', 'fee', 'Fee per satuan tiap barang untuk empat dapur fee'], ['stok', 'Stok', 'stok', 'Barang habis, menipis, dan nilai gudang'], ['laku', 'Barang laku', 'laku', 'Barang terlaris per minggu dan per bulan, serta saran jumlah stok'], ['piutang', 'Piutang', 'piutang', 'Tagihan dapur yang belum dibayar'], ['kabar', 'Catatan pembaruan', 'kabar', 'Kapan terakhir diperbarui dari laptop']];
+  const L = [['kas', 'Arus kas', 'neraca', 'Uang masuk dan keluar tiap minggu, laba rugi, aset per minggu, serta laporan bulanan dan tahunan'], ['fee/tarif', 'Tarif fee', 'fee', 'Fee per satuan tiap barang untuk empat dapur fee'], ['stok', 'Stok', 'stok', 'Barang habis, menipis, dan nilai gudang'], ['laku', 'Kinerja barang', 'laku', 'Barang terlaris per minggu dan per bulan, serta saran jumlah stok'], ['piutang', 'Piutang', 'piutang', 'Tagihan dapur yang belum dibayar'], ['kabar', 'Catatan pembaruan', 'kabar', 'Kapan terakhir diperbarui dari laptop']];
   el.innerHTML = `<section class="bagian" style="margin-top:6px"><h2>Lainnya</h2><div class="grid g2">${sudahTerpasang() ? '' : `<button class="kartu" id="kPasang" style="text-align:left;display:flex;gap:14px;align-items:center;font:inherit;color:inherit;cursor:pointer"><span class="ik" style="flex:none;width:42px;height:42px;border-radius:50%;display:grid;place-items:center;background:var(--hijau-bg);color:var(--hijau)">${ik('unduh', 20)}</span><span><b>Pasang di HP</b><div class="redup" style="font-size:13px">Jadikan aplikasi dengan ikon sendiri di layar utama</div></span></button>`}${L.map(x => `<a class="kartu" href="#${x[0]}" style="text-decoration:none;display:flex;gap:14px;align-items:center"><span class="ik" style="flex:none;width:42px;height:42px;border-radius:50%;display:grid;place-items:center;background:var(--hijau-bg);color:var(--hijau)">${ik(x[2], 20)}</span><span><b>${esc(x[1])}</b><div class="redup" style="font-size:13px">${esc(x[3])}</div></span></a>`).join('')}</div></section>`;
   if ($('#kPasang', el)) $('#kPasang', el).onclick = pasangAplikasi;
 }
@@ -3411,7 +3454,7 @@ muat().catch(e => { akar.innerHTML = `<div class="masuk"><div class="kotak"><h1>
 if ('serviceWorker' in navigator) addEventListener('load', () => navigator.serviceWorker.register('sw.js').catch(() => {}));
 // 23 Okt 2026 (pemilik: "masih tetap sama" setelah perubahan dipasang): aplikasi yang sudah terbuka/terpasang memeriksa
 // versi di server saat dibuka lagi dan tiap 5 menit. Kalau berbeda, muncul tombol "Perbarui NTA" (muat ulang tanpa salinan lama).
-const VERSI_NTA = 'mbg-v72';
+const VERSI_NTA = 'mbg-v74';
 async function cekVersiNta() { try { const t = await (await fetch('sw.js?cek=' + Date.now(), { cache: 'no-store' })).text(), v = (t.match(/mbg-v\d+/) || [])[0];
   if (!v || v === VERSI_NTA || document.getElementById('versiBaru')) return;
   const d = document.createElement('div'); d.id = 'versiBaru';
