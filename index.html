@@ -360,6 +360,8 @@ table.gaji-harian tr.hari-ini td{background:rgba(95,208,143,.07)} table.gaji-har
 .pilih-periode{display:flex;gap:8px;align-items:center;margin-top:10px}.pilih-periode select{flex:1;max-width:340px;padding:9px 12px;border-radius:12px;border:1px solid var(--garis2);background:transparent;color:inherit;font:inherit;font-weight:600}.pilih-periode select option{background:#0f1c17}.pilih-periode .tombol{padding:7px 14px;font-size:16px}.pilih-periode .tombol[disabled]{opacity:.35}
 .baris-saring{display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin-top:10px}.baris-saring .cari{flex:1;min-width:180px;max-width:320px;margin:0}
 .sembunyi-saring{display:none!important}.pil.aktif{background:var(--hijau,#5fd08f);color:#08130d;border-color:transparent}
+.grup-piu{border-bottom:1px solid var(--garis)}.grup-kepala{all:unset;box-sizing:border-box;display:flex;gap:12px;align-items:center;width:100%;padding:12px 4px;cursor:pointer}.grup-kepala:hover{background:rgba(255,255,255,.03)}
+.gk-nama{flex:1;min-width:0;display:flex;flex-direction:column;gap:2px}.gk-panah{opacity:.6;width:16px;text-align:center}.grup-piu.buka{background:rgba(95,208,143,.04);border-radius:12px}.grup-isi{padding:0 8px 10px}
 </style>
 </head>
 <body>
@@ -1905,7 +1907,7 @@ function vPiutang(el, a = []) {
   const blm = P.filter(p => !p.lunas), usaha = blm.filter(p => p.usaha), lain = blm.filter(p => !p.usaha);
   const namaP = p => p.usaha ? judulOutlet(p.outlet) : p.pihak;
   const dapur = daftarDapur(), DANA = Object.values(danaDapur()).sort((a, b) => b.sisa - a.sisa), danaSisa = DANA.reduce((a, o) => a + o.sisa, 0);
-  const baris = arr => arr.sort((a, b) => b.nominal - a.nominal).map(p => { const u = umur(p);
+  const baris = (arr, grup) => arr.sort((a, b) => b.nominal - a.nominal).map(p => { const u = umur(p);
     return `<div style="flex-wrap:wrap"><div style="flex:1;min-width:0"><b>${esc(namaP(p))}</b><div class="samar" style="font-size:12px">${p.tanggal ? 'faktur ' + esc(tgl(p.tanggal, true)) : 'tanpa tanggal faktur'}${p.jatuhTempo ? ' · jatuh tempo ' + esc(tgl(p.jatuhTempo, true)) : ''}${p.catatan ? ' · ' + esc(p.catatan) : ''}${p.sumber === 'app' ? ' · dicatat di aplikasi' : ''}${p.sumber === 'invoice' ? ` · <a href="#invoice/${encodeURIComponent(p.invId)}">buka invoice</a>` : ''}</div>
       ${p.dibayar ? `<div style="font-size:12.5px;margin-top:3px">dari <span class="redup">${esc(rp(p.awal))}</span>, sudah dibayar <span class="hijau">${esc(rp(p.dibayar))}</span></div>
         <div class="pil-baris" style="margin-top:5px">${p.riwayat.map(b => `<span class="pil hijau" title="${esc(b.ket || '')}">${esc(tglP(b.tgl))} · ${esc(rpS(b.jumlah))}${b.dana ? ' <span class="samar">dana lebih</span>' : `<button data-batalbayar="${esc(b.id)}" aria-label="Batalkan pembayaran ini" style="border:0;background:none;color:inherit;font:inherit;cursor:pointer;padding:0 0 0 4px">×</button>`}</span>`).join('')}</div>` : ''}
@@ -1914,13 +1916,13 @@ function vPiutang(el, a = []) {
           <label class="isian">Tanggal<input type="date" id="byTgl" value="${hIni}"></label>
           <label class="isian">Keterangan<input id="byKet" placeholder="transfer, tunai"></label></div>
         <div class="baris-aksi" style="margin-top:10px"><button class="tombol utama kecil" id="bySimpan" data-ref="${esc(p.ref)}">Simpan pembayaran</button><button class="tombol kecil" id="byTutup">Batal</button></div>`
-      : `<div class="baris-aksi" style="margin-top:8px">${p.usaha ? `<a class="tombol kecil" href="#piutang/dana/${encodeURIComponent(p.outlet)}">Rincian setoran ${esc(judulOutlet(p.outlet))}</a>` : ''}<a class="tombol kecil" href="#piutang/${encodeURIComponent(p.ref)}">${p.cicilan ? 'Rincian cicilan' : p.sumber === 'invoice' ? 'Rincian nota ini' : 'Rincian & ubah'}</a><button class="tombol kecil" data-buka="${esc(p.ref)}">Catat pembayaran</button>${p.sumber === 'invoice' ? `<button class="tombol kecil" data-lunasinv="${esc(p.invId)}">Tandai lunas</button>` : `<button class="tombol kecil" data-lunas="${esc(p.ref)}">Tandai lunas</button>`}${p.sumber === 'app' && !p.dibayar ? `<button class="tombol kecil bahaya" data-hapuspiu="${esc(p.id)}">hapus</button>` : ''}</div>`}
+      : `<div class="baris-aksi" style="margin-top:8px">${p.usaha && !grup ? `<a class="tombol kecil" href="#piutang/dana/${encodeURIComponent(p.outlet)}">Rincian setoran ${esc(judulOutlet(p.outlet))}</a>` : ''}<a class="tombol kecil" href="#piutang/${encodeURIComponent(p.ref)}">${p.cicilan ? 'Rincian cicilan' : p.sumber === 'invoice' ? 'Rincian nota ini' : 'Rincian & ubah'}</a><button class="tombol kecil" data-buka="${esc(p.ref)}">Catat pembayaran</button>${p.sumber === 'invoice' ? `<button class="tombol kecil" data-lunasinv="${esc(p.invId)}">Tandai lunas</button>` : `<button class="tombol kecil" data-lunas="${esc(p.ref)}">Tandai lunas</button>`}${p.sumber === 'app' && !p.dibayar ? `<button class="tombol kecil bahaya" data-hapuspiu="${esc(p.id)}">hapus</button>` : ''}</div>`}
       </div>
       <span class="angka">${esc(rp(p.nominal))}${p.dibayar ? '<div class="samar" style="font-size:11.5px">sisa</div>' : ''}${u != null && u >= 0 ? `<br><span class="pil ${u > 30 ? 'merah' : u > 14 ? 'kunyit' : ''}" style="margin-top:4px">${u} hari</span>` : ''}</span></div>`; }).join('');
   el.innerHTML = `
   <section class="bagian" style="margin-top:6px">
     <h2>Piutang <span class="miring">belum dibayar</span></h2>
-    <p class="ket">Dari buku piutang Excel, invoice yang belum lunas, dan yang kamu catat di sini. Pembayaran boleh sebagian; sisanya tetap tercatat sampai lunas. Tagihan ke dapur dipisah dari piutang ke keluarga atau kenalan, karena yang kedua bukan hasil jualan.</p>
+    <details class="ket-lipat"><summary class="samar" style="cursor:pointer;font-size:13px">Tentang piutang</summary><p class="ket">Dari buku piutang Excel, invoice yang belum lunas, dan yang kamu catat di sini. Pembayaran boleh sebagian; sisanya tetap tercatat sampai lunas. Tagihan ke dapur dipisah dari piutang ke keluarga atau kenalan, karena yang kedua bukan hasil jualan.</p></details>
     ${(semuaPiutang.kembar || []).length ? `<p class="samar" style="font-size:12.5px;margin:-4px 0 12px">${semuaPiutang.kembar.length} baris di buku piutang Excel sama dengan invoice aplikasi (${esc(semuaPiutang.kembar.map(k => judulOutlet(k.excel.outlet) + ' ' + rpS(k.excel.nominal)).join(', '))}), jadi hanya dihitung sekali lewat invoicenya.</p>` : ''}
     <div class="grid ${DANA.length ? 'g4' : 'g3'}">
       <div class="kartu ubin"><span class="label">Total belum dibayar</span><div class="nilai">${esc(rpS(blm.reduce((a, p) => a + p.nominal, 0)))}</div><small>${blm.length} tagihan</small></div>
@@ -1929,7 +1931,18 @@ function vPiutang(el, a = []) {
       ${DANA.length ? `<div class="kartu ubin"><span class="label">Dana lebih dapur</span><div class="nilai ${danaSisa > 0 ? 'kunyit' : ''}">${esc(rpS(danaSisa))}</div><small>uang dapur yang masih di kita</small></div>` : ''}
     </div>
   </section>
-  <section class="bagian kartu" id="bagianDana">
+  ${(() => { // 27 Okt 2026, pemilik: "rapikan halaman invoice dan piutang". Tab + kelompok per dapur + cari.
+    const tab = f.tab ||= 'dapur';
+    return `<section class="bagian" style="margin-top:0"><div class="tab-baris tab-bagian">${[['dapur', 'Dapur', usaha.length], ['lain', 'Lain-lain', lain.length], ['catat', 'Catat piutang'], ['dana', 'Dana lebih dapur', DANA.length || null], ['lunas', 'Sudah lunas']].map(([k, l, n]) => `<button class="tab ${tab === k ? 'aktif' : ''}" data-pttab="${k}">${l}${n ? ` <span class="samar">${n}</span>` : ''}</button>`).join('')}</div></section>`; })()}
+  ${(() => { const G = Object.values(usaha.reduce((o, p) => { const g = o[p.outlet] ||= { outlet: p.outlet, list: [], total: 0, tua: 0 }; g.list.push(p); g.total += p.nominal; const u = umur(p); if (u != null) g.tua = Math.max(g.tua, u); return o; }, {})).sort((a, b) => b.total - a.total);
+    if (f.buka) { const pb = usaha.find(p => p.ref === f.buka); if (pb) f.grup = pb.outlet; }
+    return `<section class="bagian kartu" data-pt="dapur"><div class="baris-saring" style="margin-top:0"><input id="ptCari" class="cari" placeholder="cari dapur atau nomor nota" autocomplete="off"><span class="samar" style="font-size:12.5px">${G.length} dapur · ketuk dapur untuk melihat notanya</span></div>
+      <div class="grup-piu-daftar">${G.map(g => `<div class="grup-piu ${f.grup === g.outlet ? 'buka' : ''}" data-carip="${esc((judulOutlet(g.outlet) + ' ' + g.list.map(p => (p.catatan || '') + ' ' + (p.tanggal || '')).join(' ')).toLowerCase())}">
+        <button type="button" class="grup-kepala" data-grup="${esc(g.outlet)}"><span class="gk-nama"><b>${esc(judulOutlet(g.outlet))}</b><small class="samar">${g.list.length} tagihan${g.tua ? ` · tertua <span class="${g.tua > 30 ? 'merah' : g.tua > 14 ? 'kunyit' : ''}">${g.tua} hari</span>` : ''}</small></span><b class="angka merah">${esc(rp(g.total))}</b><span class="gk-panah">${f.grup === g.outlet ? '▴' : '▾'}</span></button>
+        ${f.grup === g.outlet ? `<div class="grup-isi"><div class="baris-aksi" style="margin:4px 0 6px"><a class="tombol kecil utama" href="#piutang/dana/${encodeURIComponent(g.outlet)}">Rincian setoran ${esc(judulOutlet(g.outlet))}</a><a class="tombol kecil" href="#invoice" data-invdapur="${esc(g.outlet)}">Lihat invoice dapur ini</a></div><div class="daftar">${baris(g.list, true)}</div></div>` : ''}</div>`).join('') || '<div class="kosong">Semua tagihan dapur sudah dibayar.</div>'}</div>
+      <p class="samar" id="ptKosong" hidden style="font-size:13px;margin:10px 0 0">Tidak ada dapur atau nota yang cocok.</p></section>
+    <section class="bagian kartu" data-pt="lain"><span class="label">Piutang lain-lain</span><div class="daftar" style="margin-top:6px">${baris(lain) || '<div class="kosong">Tidak ada.</div>'}</div></section>`; })()}
+  <section class="bagian kartu" id="bagianDana" data-pt="dana">
     <div style="display:flex;justify-content:space-between;gap:10px;align-items:center;flex-wrap:wrap"><span class="label">Dana lebih dapur</span><button class="tombol kecil ${f.danaForm ? '' : 'utama'}" id="bDanaForm">${f.danaForm ? 'Tutup' : '+ Catat dana lebih'}</button></div>
     <p class="samar" style="font-size:13px;margin:6px 0 0">Kalau dapur mentransfer lebih dari tagihannya, kelebihannya dicatat di sini. Setiap invoice baru untuk dapur itu otomatis dipotong dari dana ini sampai habis; sisanya baru jadi piutang.</p>
     ${f.danaForm ? `<div class="grid g3" style="margin-top:12px">
@@ -1943,7 +1956,7 @@ function vPiutang(el, a = []) {
         <div class="baris-aksi" style="margin-top:8px"><a class="tombol kecil" href="#piutang/dana/${encodeURIComponent(o.outlet)}">Rincian setoran</a></div></div>
         ${(() => { const P = susunDana(o).posisi; return `<span class="angka ${P > 0 ? 'kunyit' : P < 0 ? 'merah' : ''}">${esc(rp(Math.abs(P)))}<div class="samar" style="font-size:11.5px">${P > 0 ? 'dana lebih' : P < 0 ? 'piutang' : 'impas'}</div></span>`; })()}</div>`).join('')}</div>` : ''}
   </section>
-  <section class="bagian kartu">
+  <section class="bagian kartu" data-pt="catat">
     <span class="label">Catat piutang baru</span>
     <div class="pilih" style="margin-top:10px"><button class="tab ${f.usaha ? 'aktif' : ''}" data-jenispiu="1">Dapur</button><button class="tab ${f.usaha ? '' : 'aktif'}" data-jenispiu="0">Lain-lain (orang)</button></div>
     <div class="grid g3" style="margin-top:12px">
@@ -1956,12 +1969,15 @@ function vPiutang(el, a = []) {
     </div>
     <div class="baris-aksi" style="margin-top:14px"><button class="tombol utama" id="bSimpanPiu">Simpan piutang</button></div>
   </section>
-  <section class="bagian grid g2" style="align-items:start">
-    <div class="kartu"><span class="label">Dapur</span><div class="daftar" style="margin-top:6px">${baris(usaha) || '<div class="kosong">Semua sudah dibayar.</div>'}</div></div>
-    <div class="kartu"><span class="label">Lain-lain</span><div class="daftar" style="margin-top:6px">${baris(lain) || '<div class="kosong">Tidak ada.</div>'}</div></div>
-  </section>
-  ${P.filter(p => p.lunas && p.sumber !== 'invoice').length ? `<section class="bagian kartu"><span class="label">Sudah lunas</span><div class="daftar">${P.filter(p => p.lunas && p.sumber !== 'invoice').map(p => `<div><span>${esc(namaP(p))} <span class="samar">${esc(p.diterima ? 'lunas ' + tgl(p.diterima) : '')}</span>${p.riwayat.length ? `<div class="samar" style="font-size:12px">${p.riwayat.length} kali bayar di aplikasi</div>` : ''}</span><span class="angka hijau">${esc(rp(p.awal))}${p.riwayat.length ? `<br><button class="tombol kecil" data-bukalagi="${esc(p.ref)}" style="padding:3px 9px;font-size:11.5px;margin-top:4px">batalkan pembayaran terakhir</button>` : ''}</span></div>`).join('')}</div></section>` : ''}`;
+  ${P.filter(p => p.lunas && p.sumber !== 'invoice').length ? `<section class="bagian kartu" data-pt="lunas"><span class="label">Sudah lunas</span><div class="daftar">${P.filter(p => p.lunas && p.sumber !== 'invoice').map(p => `<div><span>${esc(namaP(p))} <span class="samar">${esc(p.diterima ? 'lunas ' + tgl(p.diterima) : '')}</span>${p.riwayat.length ? `<div class="samar" style="font-size:12px">${p.riwayat.length} kali bayar di aplikasi</div>` : ''}</span><span class="angka hijau">${esc(rp(p.awal))}${p.riwayat.length ? `<br><button class="tombol kecil" data-bukalagi="${esc(p.ref)}" style="padding:3px 9px;font-size:11.5px;margin-top:4px">batalkan pembayaran terakhir</button>` : ''}</span></div>`).join('')}</div></section>` : ''}`;
   const ulang = () => vPiutang(el);
+  const tampilPt = t => { f.tab = t; $$('[data-pt]', el).forEach(x => x.classList.toggle('sembunyi-saring', x.dataset.pt !== t)); $$('[data-pttab]', el).forEach(b => b.classList.toggle('aktif', b.dataset.pttab === t)); };
+  tampilPt(f.tab || 'dapur'); $$('[data-pttab]', el).forEach(b => b.onclick = () => tampilPt(b.dataset.pttab));
+  $$('[data-grup]', el).forEach(b => b.onclick = () => { f.grup = f.grup === b.dataset.grup ? null : b.dataset.grup; f.buka = null; ulang(); });
+  $$('[data-invdapur]', el).forEach(a => a.onclick = () => { SARING_INV = { ...(SARING_INV || {}), dapur: a.dataset.invdapur }; });
+  if ($('#ptCari', el)) { const c = $('#ptCari', el); c.value = f.cari || '';
+    const saring = () => { const k = (f.cari || '').toLowerCase().trim(); let n = 0; $$('.grup-piu', el).forEach(g => { const ok = !k || g.dataset.carip.includes(k); g.classList.toggle('sembunyi-saring', !ok); if (ok) n++; }); $('#ptKosong', el).hidden = n > 0; };
+    c.oninput = () => { f.cari = c.value; saring(); }; saring(); }
   $('#bDanaForm', el).onclick = () => { f.danaForm = !f.danaForm; ulang(); if (f.danaForm) $('#dnJumlah', el).focus(); };
   if ($('#bDanaSimpan', el)) $('#bDanaSimpan', el).onclick = async () => { const jumlah = +$('#dnJumlah', el).value || 0, t = $('#dnTgl', el).value, outlet = $('#dnDapur', el).value; f.danaDapur = outlet;
     if (jumlah <= 0) return pesan('Jumlah dana lebih belum diisi.', true); if (!t) return pesan('Tanggal belum diisi.', true);
@@ -2819,14 +2835,14 @@ function daftarInvoice(el) {
   el.innerHTML = `
   <section class="bagian" style="margin-top:6px">
     <h2>Invoice <span class="miring">ke dapur</span></h2>
-    <p class="ket">Nota pengajuan tagihan ke dapur dengan kop ${esc(PENERBIT.nama)}. Nomor melanjutkan nota terakhir tiap dapur dan harga terisi dari nota sebelumnya. Buat satu invoice untuk tiap hari pengantaran. Kalau fee diisi (${esc(daftarFee())}), keluar juga lembar terpisah untuk mitra yang mengumpulkan fee seminggu, dirinci per hari. Invoice di sini tidak mengubah berkas Excel; unduh Excel-nya kalau mau disimpan ke folder dapur.</p>
+    <details class="ket-lipat"><summary class="samar" style="cursor:pointer;font-size:13px">Tentang invoice</summary><p class="ket">Nota pengajuan tagihan ke dapur dengan kop ${esc(PENERBIT.nama)}. Nomor melanjutkan nota terakhir tiap dapur dan harga terisi dari nota sebelumnya. Buat satu invoice untuk tiap hari pengantaran. Kalau fee diisi (${esc(daftarFee())}), keluar juga lembar terpisah untuk mitra yang mengumpulkan fee seminggu, dirinci per hari. Invoice di sini tidak mengubah berkas Excel; unduh Excel-nya kalau mau disimpan ke folder dapur.</p></details>
     <div class="baris-aksi" style="margin-bottom:16px"><a class="tombol utama" href="#invoice/baru" id="bBaru">+ Buat invoice baru</a><a class="tombol" href="#fee/tarif">Tarif fee</a><a class="tombol" href="#fee/gabung">${ik('fee', 16)} Fee mitra gabungan</a></div>
     <details class="kartu" style="margin-bottom:16px" id="feeDapur"><summary style="cursor:pointer"><span class="label" style="display:inline">Fee per dapur</span> <span class="redup" style="font-size:13px">· ${OUTLET_FEE.length} dapur ber-fee dari ${daftarDapur().length}</span></summary>
       <p class="samar" style="font-size:12.5px;margin:8px 0 4px">Centang dapur yang minta fee untuk mitra. Berlaku untuk invoice baru; invoice lama tidak berubah.</p>
       <div class="daftar">${daftarDapur().map(d => `<div><label style="display:flex;gap:10px;align-items:center;cursor:pointer;flex:1"><input type="checkbox" data-fee="${esc(d.outlet)}" ${OUTLET_FEE.includes(d.outlet) ? 'checked' : ''}><span><b>${esc(judulOutlet(d.outlet))}</b>${d.aktif === false ? ' <span class="samar" style="font-size:12px">(tidak aktif)</span>' : ''}</span></label><span class="pil ${OUTLET_FEE.includes(d.outlet) ? 'kunyit' : ''}" style="font-size:11px;padding:2px 9px">${OUTLET_FEE.includes(d.outlet) ? 'fee aktif' : 'tanpa fee'}</span></div>`).join('')}</div></details>
-    ${DAPUR_T.length ? `<div class="kartu" style="margin-bottom:16px"><span class="label">Dapur yang ditambah di aplikasi</span><div class="daftar" style="margin-top:4px">${DAPUR_T.map(d => { const n = INVOICE.filter(v => v.outlet === d.outlet).length;
+    ${DAPUR_T.length ? `<details class="kartu" style="margin-bottom:16px"><summary style="cursor:pointer"><span class="label" style="display:inline">Dapur yang ditambah di aplikasi</span> <span class="redup" style="font-size:13px">· ${DAPUR_T.length} dapur</span></summary><div class="daftar" style="margin-top:4px">${DAPUR_T.map(d => { const n = INVOICE.filter(v => v.outlet === d.outlet).length;
       return `<div><div><b>${esc(judulOutlet(d.outlet))}</b>${d.fee ? ' <span class="pil kunyit" style="font-size:10.5px;padding:2px 8px">fee</span>' : ''}<div class="samar" style="font-size:12px">${esc(d.toko)}${d.alamat ? ' · ' + esc(d.alamat) : ''} · ${n} invoice</div></div>${n ? '' : `<button class="tombol kecil bahaya" data-hapusdapur="${esc(d.outlet)}" style="padding:4px 11px;font-size:12px">hapus</button>`}</div>`; }).join('')}</div>
-      <p class="samar" style="font-size:12px;margin:8px 0 0">Dapur yang sudah punya invoice tidak bisa dihapus.</p></div>` : ''}
+      <p class="samar" style="font-size:12px;margin:8px 0 0">Dapur yang sudah punya invoice tidak bisa dihapus.</p></details>` : ''}
     <div id="invDaftar"></div>
   </section>`;
   $('#bBaru', el).onclick = () => { INV = null; }; gambarDaftarInv(el);
@@ -2876,12 +2892,16 @@ function gambarDaftarInv(el) {
         ${(() => { const ST = setoranInv(v), setor = ST.reduce((a, b) => a + b.jumlah, 0), kali = ST.filter(b => !b.dana && !b.maya).length;
           return `<div class="bi-setor"><span class="samar">Setoran</span><b class="${setor ? 'hijau' : 'redup'}">${setor ? esc(rp(setor)) : 'Belum ada'}</b><span class="bar"><i style="width:${total ? Math.min(100, setor / total * 100) : 0}%"></i></span><span class="samar">${kali ? kali + ' kali setor' : ST.length ? (ST[0].dana ? 'dari dana lebih' : 'ditandai lunas') : 'belum dicicil'}${setor && sisa > 0 ? ' · sisa ' + esc(rpS(sisa)) : ''}</span></div>`; })()}
         <div class="bi-kanan"><b>${esc(rp(h.total))}</b>${notaTitip(v) ? '<span class="pil" title="Titipan: tidak masuk piutang, arus kas, dan laba">Nota titip</span>' : v.lunas ? `<span class="pil hijau">Lunas${v.tglLunas ? ' ' + esc(tglP(v.tglLunas)) : ''}</span>` : invLunas(v) ? '<span class="pil hijau">Lunas · dana lebih</span>' : `<span class="pil merah">Belum lunas${sisa < total ? ' · sisa ' + esc(rpS(sisa)) : ''}</span>`}</div></a>`; };
-    $('#invKelompok', el).innerHTML = kunci.length ? kunci.map(k => { const L = K[k], tot = L.reduce((a, v) => a + tagihInv(v), 0), bl = L.filter(v => !notaTitip(v) && !invLunas(v)), sb = bl.reduce((a, v) => a + sisaInv(v), 0);
-      return `<div class="kelompok-judul"><b>${S.mode === 'tanggal' ? esc(hariNama(k) + ', ' + tgl(k, true)) : esc(judulOutlet(k))}</b><span class="samar">${L.length} invoice · ${esc(rp(tot))}${bl.length ? ` · <span class="merah">belum lunas ${esc(rpS(sb))}</span>` : ' · semua lunas'}${S.mode === 'dapur' ? ` · <a href="#piutang/dana/${encodeURIComponent(k)}">rincian setoran</a>` : ''}</span></div>${L.map(baris).join('')}`; }).join('')
-      : `<div class="kartu kosong">Tidak ada invoice yang cocok dengan saringan.</div>`; };
+    // 27 Okt 2026: daftar dibatasi beberapa hari (atau dapur) terakhir, sisanya lewat tombol; saringan apa pun tetap berlaku
+    const batas = kelompok.batas ||= 5, kunciT = kunci.slice(0, batas), sisaK = kunci.length - kunciT.length, perDapur = S.mode === 'dapur' && !S.dapur;
+    $('#invKelompok', el).innerHTML = (kunciT.length ? kunciT.map(k => { const L0 = K[k], L = perDapur ? L0.slice(0, 5) : L0, tot = L.reduce((a, v) => a + tagihInv(v), 0), bl = L.filter(v => !notaTitip(v) && !invLunas(v)), sb = bl.reduce((a, v) => a + sisaInv(v), 0);
+      return `<div class="kelompok-judul"><b>${S.mode === 'tanggal' ? esc(hariNama(k) + ', ' + tgl(k, true)) : esc(judulOutlet(k))}</b><span class="samar">${L.length} invoice · ${esc(rp(tot))}${bl.length ? ` · <span class="merah">belum lunas ${esc(rpS(sb))}</span>` : ' · semua lunas'}${S.mode === 'dapur' ? ` · <a href="#piutang/dana/${encodeURIComponent(k)}">rincian setoran</a>` : ''}</span></div>${L.map(baris).join('')}${perDapur && L0.length > L.length ? `<button class="tombol kecil" data-invsemua="${esc(k)}" style="margin:6px 0 4px">Lihat semua ${L0.length} nota ${esc(judulOutlet(k))}</button>` : ''}`; }).join('')
+      : `<div class="kartu kosong">Tidak ada invoice yang cocok dengan saringan.</div>`) + (sisaK > 0 ? `<div class="baris-aksi" style="justify-content:center;margin:14px 0"><button class="tombol" id="invLagi">Tampilkan ${Math.min(5, sisaK)} ${S.mode === 'dapur' ? 'dapur' : 'hari'} sebelumnya <span class="samar">(${sisaK} lagi)</span></button></div>` : '');
+    if ($('#invLagi', el)) $('#invLagi', el).onclick = () => { kelompok.batas = batas + 5; kelompok(); };
+    $$('[data-invsemua]', el).forEach(b => b.onclick = () => { const c = [...wadah.querySelectorAll('[data-s="dapur"]')].find(x => x.dataset.v === b.dataset.invsemua); if (c) c.click(); }); };
   kelompok();
-  $$('[data-s]', wadah).forEach(b => b.onclick = () => { S[b.dataset.s] = b.dataset.v; simpanS(); $$(`[data-s="${b.dataset.s}"]`, wadah).forEach(x => x.classList.toggle('aktif', x.dataset.v === b.dataset.v)); kelompok(); });
-  $('#invCari', wadah).oninput = e => { S.teks = e.target.value; simpanS(); kelompok(); };
+  $$('[data-s]', wadah).forEach(b => b.onclick = () => { kelompok.batas = 5; S[b.dataset.s] = b.dataset.v; simpanS(); $$(`[data-s="${b.dataset.s}"]`, wadah).forEach(x => x.classList.toggle('aktif', x.dataset.v === b.dataset.v)); kelompok(); });
+  $('#invCari', wadah).oninput = e => { S.teks = e.target.value; simpanS(); kelompok.batas = 5; kelompok(); };
 }
 // Dialog menghubungkan nama barang di invoice ke barang stok: pilihannya disimpan sebagai "nama lain" barang stok itu,
 // jadi berlaku untuk semua invoice (lama dan baru) dan stoknya langsung berkurang. Bisa juga membuat barang stok baru.
@@ -3485,7 +3505,7 @@ muat().catch(e => { akar.innerHTML = `<div class="masuk"><div class="kotak"><h1>
 if ('serviceWorker' in navigator) addEventListener('load', () => navigator.serviceWorker.register('sw.js').catch(() => {}));
 // 23 Okt 2026 (pemilik: "masih tetap sama" setelah perubahan dipasang): aplikasi yang sudah terbuka/terpasang memeriksa
 // versi di server saat dibuka lagi dan tiap 5 menit. Kalau berbeda, muncul tombol "Perbarui NTA" (muat ulang tanpa salinan lama).
-const VERSI_NTA = 'mbg-v76';
+const VERSI_NTA = 'mbg-v77';
 async function cekVersiNta() { try { const t = await (await fetch('sw.js?cek=' + Date.now(), { cache: 'no-store' })).text(), v = (t.match(/mbg-v\d+/) || [])[0];
   if (!v || v === VERSI_NTA || document.getElementById('versiBaru')) return;
   const d = document.createElement('div'); d.id = 'versiBaru';
