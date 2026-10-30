@@ -362,6 +362,7 @@ table.gaji-harian tr.hari-ini td{background:rgba(95,208,143,.07)} table.gaji-har
 .sembunyi-saring{display:none!important}.pil.aktif{background:var(--hijau,#5fd08f);color:#08130d;border-color:transparent}
 .grup-piu{border-bottom:1px solid var(--garis)}.grup-kepala{all:unset;box-sizing:border-box;display:flex;gap:12px;align-items:center;width:100%;padding:12px 4px;cursor:pointer}.grup-kepala:hover{background:rgba(255,255,255,.03)}
 .gk-nama{flex:1;min-width:0;display:flex;flex-direction:column;gap:2px}.gk-panah{opacity:.6;width:16px;text-align:center}.grup-piu.buka{background:rgba(95,208,143,.04);border-radius:12px}.grup-isi{padding:0 8px 10px}
+.tbl-ringkas td,.tbl-ringkas th{padding:9px 10px}.tbl-ringkas tr.sub td{border-top:1px solid var(--garis2);background:rgba(255,255,255,.025)}.tbl-ringkas tr.jumlah td{border-top:2px solid var(--garis2);font-weight:700}
 </style>
 </head>
 <body>
@@ -641,7 +642,7 @@ function vBeranda(el) {
     <div class="grid g4 ringkas-minggu">
       <div><span class="label">Omzet</span><b>${esc(rpS(t.omzet))}</b>${lalu ? `<small class="${naik >= 0 ? 'hijau' : 'kunyit'}">${naik >= 0 ? '▲ naik' : '▼ turun'} ${esc(pc(Math.abs(naik), lalu.total.omzet))} dari minggu lalu</small>` : ''}</div>
       <div><span class="label">Laba kotor</span><b>${esc(rpS(t.labaKotor))}</b><small>margin ${esc(pc(t.labaKotor, t.omzet))}</small></div>
-      <div><span class="label">Biaya operasional</span><b>${esc(rpS(t.biayaOps))}</b><small>gaji, transport, dan lainnya</small></div>
+      <div><span class="label">Biaya operasional</span><b>${esc(rpS(t.biayaOps))}</b><small>${(() => { const B = (w.biaya || []).filter(b => b.operasional), tt = B.filter(b => sifatBiaya(b) === 'tetap').reduce((a, b) => a + b.jumlah, 0); return `tetap ${esc(rpS(tt))} · tidak tetap ${esc(rpS(t.biayaOps - tt))}`; })()}</small></div>
       <div><span class="label">Laba bersih</span><b class="${t.labaBersih >= 0 ? 'hijau' : 'merah'}">${esc(rpS(t.labaBersih))}</b><small>${lalu ? 'minggu lalu ' + esc(rpS(lalu.total.labaBersih)) : ''}</small></div>
     </div></div></section>` : ''}
 
@@ -669,24 +670,27 @@ function vBeranda(el) {
   </section>
 
   <section class="bagian grid g2" style="align-items:start">
-    <div class="kartu"><span class="label">Omzet harian · 14 hari pengantaran terakhir</span>
-      <div style="margin-top:12px">${grafikBatang(harian, { seri: [{ k: 'v', warna: 'var(--kunyit)' }] })}</div></div>
+    ${(() => { // 30 Okt 2026, pemilik: "biaya tetap dan tidak tetapnya pakai tabel"
+      const tetapP = kel.filter(x => sifatBiaya(x) === 'tetap'), tidakP = kel.filter(x => sifatBiaya(x) !== 'tetap'), jml = a => a.reduce((s, x) => s + x.jumlah, 0);
+      return `<div class="kartu"><span class="label">Keadaan pekan ini · ${esc(rentang(senin, minggu))}</span>
+      <div class="tbl-bungkus" style="margin-top:8px"><table class="tbl-ringkas"><tbody>
+        <tr><td>Invoice ke dapur</td><td class="samar">${invPekan.length} nota</td><td class="angka"><b>${invPekan.length ? esc(rp(tagihPekan)) : '-'}</b></td></tr>
+        <tr><td>Belanja barang</td><td></td><td class="angka">${belanjaPekan ? esc(rp(belanjaPekan)) : '-'}</td></tr>
+        <tr><td>Fee mitra</td><td></td><td class="angka">${feePekan ? esc(rp(feePekan)) : '-'}</td></tr>
+        <tr class="sub"><td><b>Biaya tetap</b></td><td class="samar">gaji${KRY.orang.length ? ' ' + hadirTot.toLocaleString('id-ID') + ' hari kerja' : ''}, langganan</td><td class="angka"><b>${esc(rp(jml(tetapP)))}</b></td></tr>
+        <tr class="sub"><td><b>Biaya tidak tetap</b></td><td class="samar">bensin, parkir, makan, lainnya</td><td class="angka"><b>${esc(rp(jml(tidakP)))}</b></td></tr>
+        <tr class="jumlah"><td>Jumlah biaya operasional</td><td></td><td class="angka">${esc(rp(kelTot))}</td></tr>
+        <tr><td>Nilai stok gudang</td><td></td><td class="angka">${esc(rpS(S.nilai))}</td></tr>
+      </tbody></table></div><a class="tombol kecil" href="#operasional/biaya" style="margin-top:10px">Rincian pengeluaran</a></div>`; })()}
     <div class="kartu"><span class="label">Porsi omzet per dapur</span>
-      <div class="daftar" style="margin-top:6px">${dapur.slice(0, 8).map(o => `<div><div style="flex:1;min-width:0"><b>${esc(judulOutlet(o.nama))}</b> <span class="samar" style="font-size:12px">${esc(pc(o.total, total))}</span>
+      <div class="daftar" style="margin-top:6px">${dapur.slice(0, 6).map(o => `<div><div style="flex:1;min-width:0"><b>${esc(judulOutlet(o.nama))}</b> <span class="samar" style="font-size:12px">${esc(pc(o.total, total))}</span>
         <div class="batang"><i style="width:${Math.max(1, Math.round(o.total / maks * 100))}%"></i></div></div><span class="angka">${esc(rpS(o.total))}</span></div>`).join('')}</div>
-      ${dapur.length > 8 ? `<p class="samar" style="font-size:12.5px;margin:8px 0 0">${dapur.length - 8} dapur lain ${esc(rpS(dapur.slice(8).reduce((a, o) => a + o.total, 0)))}.</p>` : ''}</div>
+      ${dapur.length > 6 ? `<p class="samar" style="font-size:12.5px;margin:8px 0 0">${dapur.length - 6} dapur lain ${esc(rpS(dapur.slice(6).reduce((a, o) => a + o.total, 0)))} · <a href="#outlet">lihat semua dapur</a></p>` : ''}</div>
   </section>
 
   <section class="bagian grid g2" style="align-items:start">
-    <div class="kartu"><span class="label">Keadaan pekan ini · ${esc(rentang(senin, minggu))}</span>
-      <div class="daftar" style="margin-top:6px">
-        <div><span class="redup">Invoice</span><span class="angka">${invPekan.length ? `${invPekan.length} nota · ${esc(rpS(tagihPekan))}` : 'belum ada'}</span></div>
-        <div><span class="redup">Fee mitra</span><span class="angka">${feePekan ? esc(rp(feePekan)) : '-'}</span></div>
-        <div><span class="redup">Gaji karyawan${KRY.orang.length ? `<div class="samar" style="font-size:12px">${hadirTot.toLocaleString('id-ID')} hari kerja</div>` : ''}</span><span class="angka">${gajiTot ? esc(rp(gajiTot)) : '-'}</span></div>
-        <div><span class="redup">Pengeluaran${parkirBelanja ? `<div class="samar" style="font-size:12px">${esc(rp(parkirBelanja))} terkait belanja barang</div>` : ''}</span><span class="angka">${kelTot ? esc(rp(kelTot)) : '-'}</span></div>
-        <div><span class="redup">Belanja barang</span><span class="angka">${belanjaPekan ? esc(rp(belanjaPekan)) : '-'}</span></div>
-        <div><span class="redup">Nilai stok gudang</span><span class="angka">${esc(rpS(S.nilai))}</span></div>
-      </div></div>
+    <div class="kartu"><span class="label">Omzet harian · 14 hari pengantaran terakhir</span>
+      <div style="margin-top:12px">${grafikBatang(harian, { seri: [{ k: 'v', warna: 'var(--kunyit)' }] })}</div></div>
     <div class="kartu"><span class="label">Rata-rata omzet menurut hari</span>
       <div class="daftar" style="margin-top:6px">${hari.map(x => `<div><div style="flex:1;min-width:0"><b>${esc(x.n)}</b> <span class="samar" style="font-size:12px">${x.kali} kali</span>
         <div class="batang"><i style="width:${Math.max(1, Math.round(x.rata / hariMaks * 100))}%${x === ramai ? ';background:var(--kunyit)' : ''}"></i></div></div><span class="angka">${esc(rpS(x.rata))}</span></div>`).join('') || '<div class="kosong">Belum ada data.</div>'}</div></div>
@@ -860,13 +864,30 @@ function opBiaya(el, senin, hariIni) {
     <div class="baris-aksi" style="margin-top:14px"><button class="tombol utama" id="bSimpanKeluar">Simpan pengeluaran</button></div>
   </div>
   ${(opBiaya.rt = kotakRutin(el, () => opBiaya(el, senin, hariIni))).html}
-  <div class="grid g4" style="margin-top:14px">
+  <div class="grid g4 sembunyi-saring" style="margin-top:14px">
     <div class="kartu ubin"><span class="label">Biaya usaha pekan ini</span><div class="nilai kecil">${esc(rpS(jml(ops)))}</div><small>tetap ${esc(rpS(jml(ops.filter(x => sifatBiaya(x) === 'tetap'))))} · tidak tetap ${esc(rpS(jml(ops.filter(x => sifatBiaya(x) !== 'tetap'))))}</small></div>
     <div class="kartu ubin"><span class="label">Terkait belanja</span><div class="nilai kecil">${esc(rpS(per('belanja')))}</div><small>parkir dan lainnya saat belanja</small></div>
     <div class="kartu ubin"><span class="label">Antar ke dapur</span><div class="nilai kecil">${esc(rpS(per('antar')))}</div><small>bensin, parkir, ongkos antar</small></div>
     <div class="kartu ubin"><span class="label">Gaji dibayar</span><div class="nilai kecil">${esc(rpS(per('gaji')))}</div><small>dari absensi${per('pribadi') ? ` · pribadi ${esc(rpS(per('pribadi')))}` : ''}</small></div>
   </div>
-  <div class="kartu" style="margin-top:14px"><span class="label">Rincian pekan ini</span>
+  ${(() => { const usaha = L.filter(x => x.terkait !== 'pribadi'), pribadi = L.filter(x => x.terkait === 'pribadi');
+    const grup = sf => { const o = {}; for (const x of usaha.filter(x => (sifatBiaya(x) === 'tetap') === (sf === 'tetap'))) { const k = x.jenis || 'Lainnya'; (o[k] ||= { n: 0, rp: 0 }); o[k].n++; o[k].rp += x.jumlah; } return Object.entries(o).sort((a, b) => b[1].rp - a[1].rp); };
+    const T = grup('tetap'), V = grup('tidak tetap'), jT = T.reduce((a, [, x]) => a + x.rp, 0), jV = V.reduce((a, [, x]) => a + x.rp, 0);
+    const blok = (judul, ket, R, j) => `<tr class="sub"><td colspan="2"><b>${judul}</b> <span class="samar">${ket}</span></td><td class="angka"><b>${esc(rp(j))}</b></td></tr>${R.map(([k, x]) => `<tr><td style="padding-left:22px">${esc(k)}</td><td class="angka samar">${x.n} catatan</td><td class="angka">${esc(rp(x.rp))}</td></tr>`).join('') || '<tr><td colspan="3" class="samar" style="padding-left:22px">-</td></tr>'}`;
+    return `<div class="kartu" style="margin-top:14px"><span class="label">Biaya tetap dan tidak tetap pekan ini</span>
+      <div class="tbl-bungkus" style="margin-top:8px"><table class="tbl-ringkas"><thead><tr><th>Jenis biaya</th><th class="angka">Catatan</th><th class="angka">Jumlah</th></tr></thead><tbody>
+        ${blok('Biaya tetap', 'gaji, langganan, tagihan rutin', T, jT)}
+        ${blok('Biaya tidak tetap', 'bensin, parkir, makan, ongkos antar, lainnya', V, jV)}
+        <tr class="jumlah"><td colspan="2">Jumlah biaya usaha</td><td class="angka">${esc(rp(jT + jV))}</td></tr>
+        ${pribadi.length ? `<tr><td colspan="2" class="samar">Pribadi (dicatat, tidak dihitung biaya usaha)</td><td class="angka samar">${esc(rp(jml(pribadi)))}</td></tr>` : ''}
+      </tbody></table></div></div>
+    <div class="kartu" style="margin-top:14px"><span class="label">Rincian pengeluaran pekan ini</span>
+      <div class="tbl-bungkus" style="margin-top:8px"><table class="tbl-ringkas"><thead><tr><th>Tanggal</th><th>Jenis</th><th>Keterangan</th><th>Terkait</th><th>Sifat</th><th class="angka">Jumlah</th><th></th></tr></thead><tbody>
+      ${L.slice().sort((a, b) => b.tgl.localeCompare(a.tgl)).map(x => `<tr><td style="white-space:nowrap">${esc(tglP(x.tgl))}</td><td><b>${esc(x.jenis)}</b></td><td class="samar">${esc(x.ket && x.ket !== x.jenis ? x.ket : '')}${x.sumber !== 'app' ? ` <span class="pil mini">${x.sumber === 'laporan' ? 'Excel' : 'absensi'}</span>` : ''}</td><td>${esc(namaTerkait(x))}</td>
+        <td>${x.terkait === 'pribadi' ? '<span class="samar">pribadi</span>' : `<span class="pil mini ${sifatBiaya(x) === 'tetap' ? 'hijau' : ''}">${sifatBiaya(x)}</span>`}</td><td class="angka ${x.terkait === 'pribadi' ? 'samar' : ''}">${esc(rp(x.jumlah))}</td>
+        <td>${x.sumber === 'app' ? `<button class="tombol kecil bahaya" data-hapus="${esc(x.id)}" style="padding:3px 9px;font-size:11.5px">hapus</button>` : ''}</td></tr>`).join('') || '<tr><td colspan="7" class="samar">Belum ada pengeluaran pekan ini.</td></tr>'}
+      </tbody></table></div></div>`; })()}
+  <div class="kartu sembunyi-saring" style="margin-top:14px"><span class="label">Rincian pekan ini</span>
     ${Object.keys(hari).length ? Object.entries(hari).map(([t, arr]) => `<div style="margin-top:12px"><b style="font-size:13.5px">${esc(hariNama(t) + ', ' + tgl(t))}</b><span class="samar" style="font-size:12.5px"> · ${esc(rp(jml(arr.filter(x => x.terkait !== 'pribadi'))))}</span>
       <div class="daftar">${arr.map(x => `<div><div style="flex:1;min-width:0"><b>${esc(x.jenis)}</b>${x.ket && x.ket !== x.jenis ? ` <span class="redup">${esc(x.ket)}</span>` : ''}
         <div class="pil-baris" style="margin-top:4px"><span class="pil ${x.terkait === 'belanja' ? 'kunyit' : x.terkait === 'antar' || x.terkait === 'gaji' ? 'hijau' : ''}">${esc(namaTerkait(x))}</span>${x.terkait !== 'pribadi' ? `<span class="pil mini">${sifatBiaya(x) === 'tetap' ? 'tetap' : 'tidak tetap'}</span>` : ''}${x.sumber !== 'app' ? `<span class="pil">dari ${x.sumber === 'laporan' ? 'laporan Excel' : 'absensi'}</span>` : ''}</div></div>
@@ -3519,7 +3540,7 @@ muat().catch(e => { akar.innerHTML = `<div class="masuk"><div class="kotak"><h1>
 if ('serviceWorker' in navigator) addEventListener('load', () => navigator.serviceWorker.register('sw.js').catch(() => {}));
 // 23 Okt 2026 (pemilik: "masih tetap sama" setelah perubahan dipasang): aplikasi yang sudah terbuka/terpasang memeriksa
 // versi di server saat dibuka lagi dan tiap 5 menit. Kalau berbeda, muncul tombol "Perbarui NTA" (muat ulang tanpa salinan lama).
-const VERSI_NTA = 'mbg-v78';
+const VERSI_NTA = 'mbg-v79';
 async function cekVersiNta() { try { const t = await (await fetch('sw.js?cek=' + Date.now(), { cache: 'no-store' })).text(), v = (t.match(/mbg-v\d+/) || [])[0];
   if (!v || v === VERSI_NTA || document.getElementById('versiBaru')) return;
   const d = document.createElement('div'); d.id = 'versiBaru';
