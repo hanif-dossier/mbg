@@ -479,6 +479,11 @@ async function muat() {
 // dicatat di aplikasi setelah laporan Excel terakhir dikelompokkan Minggu sampai Sabtu dan disusun dalam bentuk yang
 // sama dengan laporan mingguan Excel, nomornya melanjutkan. Ditandai sumber 'aplikasi' supaya biayanya tidak dihitung
 // dua kali di halaman Operasional. Biaya operasional dibagi ke dapur sebanding laba kotor, seperti laporan Excel.
+// 30 Okt 2026, pemilik: "masukkan biaya tetap dan tidak tetap di NTA". Biaya tetap = jumlahnya sama tiap periode, tidak
+// ikut naik-turun penjualan (gaji, langganan, tagihan rutin, sewa, listrik, internet). Biaya tidak tetap = mengikuti kegiatan
+// (bensin, parkir, makan, ongkos antar, perlengkapan, lainnya). Bisa dipilih sendiri per catatan (x.sifat).
+const SIFAT_TETAP = /gaji|upah|langganan|sewa|listrik|internet|wifi|pulsa paket|asuransi|cicilan|rutin bulanan/i;
+const sifatBiaya = b => b.sifat || (b.rutin || SIFAT_TETAP.test(`${b.jenis || ''} ${b.kategori || ''} ${b.ket || ''}`) ? 'tetap' : 'tidak tetap');
 const KAT_KELUAR = { Langganan: 'Langganan & Aplikasi', Parkir: 'Transportasi', Bensin: 'Transportasi', 'Ongkos antar': 'Transportasi', Makan: 'Konsumsi', Perlengkapan: 'Perlengkapan & Perbaikan', Gaji: 'Gaji & Upah' };
 function mingguAplikasi(dasar) {
   const akhirExcel = dasar.at(-1)?.akhir || '0000-00-00', per = {}, jml = (A, f) => A.reduce((a, x) => a + f(x), 0);
@@ -492,8 +497,8 @@ function mingguAplikasi(dasar) {
       for (const x of h.b) { const q = qtyMilik(x), l = q * ((+x.harga || 0) - (+x.modal || 0) - (+x.fee || 0));
         if (q > 0) rincian.push({ t: v.tanggal, o: v.outlet, n: 'NOTA ' + nomorNota(v.nomor), b: x.barang, q, s: x.satuan || '', h: +x.harga || 0, m: +x.modal || 0, f: +x.fee || 0, l });
         const bb = barang[kunciB(x.barang)] ||= { barang: x.barang, qty: 0, omzet: 0, laba: 0, satuan: x.satuan || '' }; bb.qty += q; bb.omzet += q * (+x.harga || 0); bb.laba += l; } }
-    const biaya = (KELUAR.daftar || []).filter(x => x.tgl >= g.awal && x.tgl <= akhir).map(x => ({ tanggal: x.tgl, ket: [x.jenis || 'Lainnya', x.ket].filter(Boolean).join(' · '), kategori: x.terkait === 'pribadi' ? 'Pribadi' : KAT_KELUAR[x.jenis] || 'Lainnya', jumlah: +x.jumlah || 0, operasional: x.terkait !== 'pribadi' }));
-    for (const o of KRY.orang || []) { const gp = gajiPekan(o, g.awal); if (gp.gaji > 0) biaya.push({ tanggal: akhir, ket: 'Gaji ' + o.nama, kategori: 'Gaji & Upah', jumlah: gp.gaji, operasional: true }); }
+    const biaya = (KELUAR.daftar || []).filter(x => x.tgl >= g.awal && x.tgl <= akhir).map(x => ({ tanggal: x.tgl, ket: [x.jenis || 'Lainnya', x.ket].filter(Boolean).join(' · '), kategori: x.terkait === 'pribadi' ? 'Pribadi' : KAT_KELUAR[x.jenis] || 'Lainnya', jumlah: +x.jumlah || 0, operasional: x.terkait !== 'pribadi', sifat: sifatBiaya(x) }));
+    for (const o of KRY.orang || []) { const gp = gajiPekan(o, g.awal); if (gp.gaji > 0) biaya.push({ tanggal: akhir, ket: 'Gaji ' + o.nama, kategori: 'Gaji & Upah', jumlah: gp.gaji, operasional: true, sifat: 'tetap' }); }
     const O = Object.values(out), omzet = jml(O, o => o.omzet), modal = jml(O, o => o.modal), fee = jml(O, o => o.fee), labaKotor = omzet - modal - fee;
     const biayaOps = jml(biaya.filter(b => b.operasional), b => b.jumlah), nonOps = jml(biaya.filter(b => !b.operasional), b => b.jumlah);
     for (const o of O) { o.labaKotor = o.omzet - o.modal - o.fee; o.biayaOps = labaKotor > 0 ? Math.round(biayaOps * o.labaKotor / labaKotor) : 0; o.labaBersih = o.labaKotor - o.biayaOps; o.tanggal.sort(); o.terakhir = o.tanggal.at(-1); }
@@ -752,7 +757,7 @@ async function jalankanRutin() {
     for (let n = 0; n < 24; n++) { const b = `${y}-${String(m).padStart(2, '0')}`; if (b > bulanIni) break;
       const tgl = `${b}-${String(Math.min(28, Math.max(1, +r.hari || 1))).padStart(2, '0')}`;
       if (tgl <= hari && !KELUAR.daftar.some(x => x.rutin === r.id && x.bulan === b))
-        baru.push({ id: idBaru(), tgl, jenis: r.jenis || 'Langganan', ket: (r.ket || '') + ' (rutin bulanan)', jumlah: +r.jumlah, terkait: r.terkait || 'umum', rutin: r.id, bulan: b });
+        baru.push({ id: idBaru(), tgl, jenis: r.jenis || 'Langganan', ket: (r.ket || '') + ' (rutin bulanan)', jumlah: +r.jumlah, terkait: r.terkait || 'umum', rutin: r.id, bulan: b, sifat: 'tetap' });
       if (++m > 12) { m = 1; y++; } } }
   if (!baru.length) return;
   const isi = { ...KELUAR, daftar: [...baru, ...KELUAR.daftar] };
@@ -848,6 +853,7 @@ function opBiaya(el, senin, hariIni) {
       <label class="isian">Jumlah (Rp)<input type="number" id="kJumlah" data-rp inputmode="numeric" min="0" placeholder="0"></label>
       <label class="isian">Keterangan<input id="kKet" placeholder="${f.jenis === 'Lainnya' ? 'wajib diisi' : 'boleh kosong'}"></label>
     </div>
+    <div style="margin-top:12px"><span class="isian">Sifat biaya</span><div class="pilih" style="margin-top:6px">${['tetap', 'tidak tetap'].map(k => `<button class="tab ${(f.sifat || sifatBiaya({ jenis: f.jenis })) === k ? 'aktif' : ''}" data-sifat="${k}" title="${k === 'tetap' ? 'Jumlahnya sama tiap periode: gaji, langganan, sewa' : 'Mengikuti kegiatan: bensin, parkir, makan'}">${k === 'tetap' ? 'Biaya tetap' : 'Biaya tidak tetap'}</button>`).join('')}</div></div>
     <div style="margin-top:12px"><span class="isian">Terkait dengan</span><div class="pilih" style="margin-top:6px" id="pTerkait">${TERKAIT.map(([k, n]) => `<button class="tab ${f.terkait === k ? 'aktif' : ''}" data-terkait="${k}">${esc(n)}</button>`).join('')}</div></div>
     ${f.terkait === 'belanja' ? `<label class="isian" style="margin-top:12px">Belanja di mana atau belanja apa<input id="kTempat" placeholder="misalnya pasar Flamboyan, beli beras"></label>` : ''}
     ${f.terkait === 'antar' ? `<label class="isian" style="margin-top:12px">Dapur<select id="kDapur">${dapur.map(d => `<option value="${esc(d.outlet)}">${esc(judulOutlet(d.outlet))}</option>`).join('')}</select></label>` : ''}
@@ -855,7 +861,7 @@ function opBiaya(el, senin, hariIni) {
   </div>
   ${(opBiaya.rt = kotakRutin(el, () => opBiaya(el, senin, hariIni))).html}
   <div class="grid g4" style="margin-top:14px">
-    <div class="kartu ubin"><span class="label">Biaya usaha pekan ini</span><div class="nilai kecil">${esc(rpS(jml(ops)))}</div><small>${ops.length} catatan</small></div>
+    <div class="kartu ubin"><span class="label">Biaya usaha pekan ini</span><div class="nilai kecil">${esc(rpS(jml(ops)))}</div><small>tetap ${esc(rpS(jml(ops.filter(x => sifatBiaya(x) === 'tetap'))))} · tidak tetap ${esc(rpS(jml(ops.filter(x => sifatBiaya(x) !== 'tetap'))))}</small></div>
     <div class="kartu ubin"><span class="label">Terkait belanja</span><div class="nilai kecil">${esc(rpS(per('belanja')))}</div><small>parkir dan lainnya saat belanja</small></div>
     <div class="kartu ubin"><span class="label">Antar ke dapur</span><div class="nilai kecil">${esc(rpS(per('antar')))}</div><small>bensin, parkir, ongkos antar</small></div>
     <div class="kartu ubin"><span class="label">Gaji dibayar</span><div class="nilai kecil">${esc(rpS(per('gaji')))}</div><small>dari absensi${per('pribadi') ? ` · pribadi ${esc(rpS(per('pribadi')))}` : ''}</small></div>
@@ -863,19 +869,20 @@ function opBiaya(el, senin, hariIni) {
   <div class="kartu" style="margin-top:14px"><span class="label">Rincian pekan ini</span>
     ${Object.keys(hari).length ? Object.entries(hari).map(([t, arr]) => `<div style="margin-top:12px"><b style="font-size:13.5px">${esc(hariNama(t) + ', ' + tgl(t))}</b><span class="samar" style="font-size:12.5px"> · ${esc(rp(jml(arr.filter(x => x.terkait !== 'pribadi'))))}</span>
       <div class="daftar">${arr.map(x => `<div><div style="flex:1;min-width:0"><b>${esc(x.jenis)}</b>${x.ket && x.ket !== x.jenis ? ` <span class="redup">${esc(x.ket)}</span>` : ''}
-        <div class="pil-baris" style="margin-top:4px"><span class="pil ${x.terkait === 'belanja' ? 'kunyit' : x.terkait === 'antar' || x.terkait === 'gaji' ? 'hijau' : ''}">${esc(namaTerkait(x))}</span>${x.sumber !== 'app' ? `<span class="pil">dari ${x.sumber === 'laporan' ? 'laporan Excel' : 'absensi'}</span>` : ''}</div></div>
+        <div class="pil-baris" style="margin-top:4px"><span class="pil ${x.terkait === 'belanja' ? 'kunyit' : x.terkait === 'antar' || x.terkait === 'gaji' ? 'hijau' : ''}">${esc(namaTerkait(x))}</span>${x.terkait !== 'pribadi' ? `<span class="pil mini">${sifatBiaya(x) === 'tetap' ? 'tetap' : 'tidak tetap'}</span>` : ''}${x.sumber !== 'app' ? `<span class="pil">dari ${x.sumber === 'laporan' ? 'laporan Excel' : 'absensi'}</span>` : ''}</div></div>
         <span class="angka ${x.terkait === 'pribadi' ? 'samar' : ''}">${esc(rp(x.jumlah))}${x.sumber === 'app' ? `<br><button class="tombol kecil bahaya" data-hapus="${esc(x.id)}" style="padding:3px 9px;font-size:11.5px;margin-top:4px">hapus</button>` : ''}</span></div>`).join('')}</div></div>`).join('')
       : '<div class="kosong">Belum ada pengeluaran pekan ini.</div>'}
   </div>`;
   opBiaya.rt.pasang();
-  $$('[data-jenis]', el).forEach(b => b.onclick = () => { f.jenis = b.dataset.jenis; if (f.jenis === 'Ongkos antar') f.terkait = 'antar'; opBiaya(el, senin, hariIni); });
+  $$('[data-jenis]', el).forEach(b => b.onclick = () => { f.jenis = b.dataset.jenis; f.sifat = null; if (f.jenis === 'Ongkos antar') f.terkait = 'antar'; opBiaya(el, senin, hariIni); });
+  $$('[data-sifat]', el).forEach(b => b.onclick = () => { f.sifat = b.dataset.sifat; opBiaya(el, senin, hariIni); });
   $$('[data-terkait]', el).forEach(b => b.onclick = () => { f.terkait = b.dataset.terkait; opBiaya(el, senin, hariIni); });
   $('#bSimpanKeluar', el).onclick = async () => {
     const jumlah = +$('#kJumlah', el).value || 0, ket = $('#kKet', el).value.trim(), t = $('#kTgl', el).value;
     if (!t) return pesan('Tanggal belum diisi.', true);
     if (jumlah <= 0) return pesan('Jumlah belum diisi.', true);
     if (f.jenis === 'Lainnya' && !ket) return pesan('Isi keterangan untuk pengeluaran lainnya.', true);
-    const x = { id: idBaru(), tgl: t, jenis: f.jenis, ket, jumlah, terkait: f.terkait };
+    const x = { id: idBaru(), tgl: t, jenis: f.jenis, ket, jumlah, terkait: f.terkait, sifat: f.sifat || sifatBiaya({ jenis: f.jenis, ket }) };
     if (f.terkait === 'belanja') x.tempat = ($('#kTempat', el).value || '').trim();
     if (f.terkait === 'antar') x.dapur = $('#kDapur', el).value;
     const baru = { ...KELUAR, daftar: [x, ...KELUAR.daftar] };
@@ -1676,7 +1683,8 @@ function arusMinggu(w) { const a = w.awal, z = w.akhir, dalam = t => t && t >= a
   const beliLangsung = jmlLK(w.rincian.filter(r => !cocokStok(daftar, r.b, r.s)), r => (+r.q || 0) * (+r.m || 0));
   const ops = jmlLK(w.biaya.filter(b => b.operasional), b => b.jumlah), prive = jmlLK(w.biaya.filter(b => !b.operasional), b => b.jumlah), gaji = jmlLK(w.biaya.filter(b => b.operasional && /gaji/i.test(b.kategori || '')), b => b.jumlah);
   const masuk = dapur + lunasTanpaCatat + dana + lain, keluar = beliStok + beliLangsung + (w.total.fee || 0) + ops + prive;
-  return { dapur, lunasTanpaCatat, dana, lain, masuk, beliStok, beliLangsung, fee: w.total.fee || 0, gaji, ops, opsLain: ops - gaji, prive, keluar }; }
+  const tetap = jmlLK(w.biaya.filter(b => b.operasional && sifatBiaya(b) === 'tetap'), b => b.jumlah);
+  return { dapur, lunasTanpaCatat, dana, lain, masuk, beliStok, beliLangsung, fee: w.total.fee || 0, gaji, ops, opsLain: ops - gaji, tetap, tidakTetap: ops - tetap, prive, keluar }; }
 // posisi aset pada tanggal t (akhir minggu)
 function asetPer(t) { const sk = saldoPer(t), P = piutangPer(t), st = stokPer(t), dana = jmlLK(danaPer(t), o => o.sisa);
   const piuU = jmlLK(P.filter(p => p.usaha), p => p.sisa), piuL = jmlLK(P.filter(p => !p.usaha), p => p.sisa), stok = st ? st.nilai : null;
@@ -1703,7 +1711,7 @@ function vKas(el, [no]) {
     { t: 'jumlah', l: 'Jumlah uang masuk', v: [A.masuk] },
     { t: 'judul', l: 'Uang keluar' },
     baris('Belanja stok gudang', -A.beliStok, { ket: 'belanja yang dicatat di menu Stok' }), baris('Belanja barang beli langsung jual', -A.beliLangsung, { ket: 'modal barang di nota yang tidak disimpan di gudang' }),
-    baris('Fee mitra dapur', -A.fee), baris('Gaji karyawan', -A.gaji), baris('Biaya operasional lain', -A.opsLain), baris('Pengambilan pribadi (prive)', -A.prive),
+    baris('Fee mitra dapur', -A.fee), baris('Biaya tetap', -A.tetap, { ket: 'gaji, langganan, tagihan rutin' }), baris('Biaya tidak tetap', -A.tidakTetap, { ket: 'bensin, parkir, makan, ongkos antar, lainnya' }), baris('Pengambilan pribadi (prive)', -A.prive),
     { t: 'jumlah', l: 'Jumlah uang keluar', v: [-A.keluar] },
     ...(dUtang ? [baris(dUtang > 0 ? 'Belanja yang belum dibayar (utang bertambah)' : 'Pembayaran utang ke pemasok', dUtang)] : []),
     { t: 'total', l: 'Kenaikan (penurunan) uang minggu ini', v: [bersih] },
@@ -1712,10 +1720,13 @@ function vKas(el, [no]) {
     baris('Saldo akhir menurut catatan', akhirCatat != null ? akhirCatat : '-'), baris('Saldo akhir sebenarnya', akhirNyata != null ? akhirNyata : '-', { ket: skAkhir ? 'isian ' + tglPanjang(w.akhir) : 'isi di bawah' }),
     ...(akhirCatat != null && akhirNyata != null ? [{ t: 'memo', l: 'Selisih yang belum tercatat', v: [akhirNyata - akhirCatat] }] : [])]);
   const kat = {}; for (const b of w.biaya.filter(b => b.operasional)) kat[b.kategori || 'Lainnya'] = (kat[b.kategori || 'Lainnya'] || 0) + b.jumlah;
+  const katS = { tetap: {}, 'tidak tetap': {} }; for (const b of w.biaya.filter(b => b.operasional)) { const g = katS[sifatBiaya(b)], k = b.kategori || 'Lainnya'; g[k] = (g[k] || 0) + b.jumlah; }
+  const jmlS = o => Object.values(o).reduce((a, x) => a + x, 0), urutS = o => Object.entries(o).sort((x, y) => y[1] - x[1]);
   const lr = tabelLK(['Minggu ' + w.minggu], [
     baris('Pendapatan (penjualan ke dapur)', R.omzet), baris('Modal barang terjual', -R.modal), baris('Fee mitra dapur', -R.fee), ...(R.pengeluaran ? [baris('Pengeluaran di nota', -R.pengeluaran)] : []),
     { t: 'jumlah', l: 'Laba kotor', v: [R.labaKotor] },
-    ...Object.entries(kat).sort((x, y) => y[1] - x[1]).map(([k, j]) => baris(k, -j)),
+    { t: 'judul', l: 'Biaya tetap' }, ...urutS(katS.tetap).map(([k, j]) => baris(k, -j)), { t: 'jumlah', l: 'Jumlah biaya tetap', v: [-jmlS(katS.tetap)] },
+    { t: 'judul', l: 'Biaya tidak tetap' }, ...urutS(katS['tidak tetap']).map(([k, j]) => baris(k, -j)), { t: 'jumlah', l: 'Jumlah biaya tidak tetap', v: [-jmlS(katS['tidak tetap'])] },
     { t: 'total', l: 'Laba bersih', v: [R.labaBersih] }, { t: 'memo', l: 'Pengambilan pribadi (tidak memotong laba)', v: [R.nonOps || 0] }]);
   const aset = tabelLK(kol, [
     { t: 'judul', l: 'Aset' }, baris('Uang tunai', S.sk ? S.sk.tunai : '-'), ...BANK_KAS.filter(b => S.sk && +(S.sk.bank || {})[b]).map(b => baris('Saldo ' + b, +(S.sk.bank || {})[b])),
@@ -1732,11 +1743,14 @@ function vKas(el, [no]) {
   const daftar = daftarRp;
   const masukR = [{ l: 'Pembayaran dari dapur', ket: 'setoran dan transfer yang dicatat', v: A.dapur }, { l: 'Nota ditandai lunas', ket: 'tanpa catatan setoran', v: A.lunasTanpaCatat },
     { l: 'Transfer dana lebih dapur', v: A.dana }, { l: 'Piutang lain-lain dibayar', v: A.lain }, { l: 'Jumlah uang masuk', v: A.masuk, jml: 1, warna: 'hijau' }];
-  const keluarR = [{ l: 'Belanja stok gudang', v: A.beliStok }, { l: 'Belanja barang beli langsung jual', v: A.beliLangsung }, { l: 'Fee mitra dapur', v: A.fee }, { l: 'Gaji karyawan', v: A.gaji },
-    { l: 'Biaya operasional lain', v: A.opsLain }, { l: 'Pengambilan pribadi', v: A.prive }, ...(dUtang ? [{ l: dUtang > 0 ? 'Dikurangi belanja yang belum dibayar' : 'Pembayaran utang ke pemasok', v: -dUtang }] : []),
+  const keluarR = [{ l: 'Belanja stok gudang', v: A.beliStok }, { l: 'Belanja barang beli langsung jual', v: A.beliLangsung }, { l: 'Fee mitra dapur', v: A.fee }, { l: 'Biaya tetap', ket: 'gaji, langganan, tagihan rutin', v: A.tetap },
+    { l: 'Biaya tidak tetap', ket: 'bensin, parkir, makan, ongkos antar', v: A.tidakTetap }, { l: 'Pengambilan pribadi', v: A.prive }, ...(dUtang ? [{ l: dUtang > 0 ? 'Dikurangi belanja yang belum dibayar' : 'Pembayaran utang ke pemasok', v: -dUtang }] : []),
     { l: 'Jumlah uang keluar', v: A.keluar - dUtang, jml: 1, warna: 'kunyit' }];
   const lrR = [{ l: 'Penjualan ke dapur', v: R.omzet, selalu: 1 }, { l: 'Modal barang terjual', v: -R.modal }, { l: 'Fee mitra dapur', v: -R.fee }, { l: 'Pengeluaran di nota', v: -(R.pengeluaran || 0) },
-    { l: 'Laba kotor', v: R.labaKotor, jml: 1 }, ...Object.entries(kat).sort((x, y) => y[1] - x[1]).map(([k, j]) => ({ l: k, v: -j })), { l: 'Laba bersih', v: R.labaBersih, jml: 1, warna: R.labaBersih >= 0 ? 'hijau' : 'merah' }];
+    { l: 'Laba kotor', v: R.labaKotor, jml: 1 },
+    { l: 'Biaya tetap', ket: 'gaji, langganan, tagihan rutin', v: -jmlS(katS.tetap), jml: 1, selalu: 1 }, ...urutS(katS.tetap).map(([k, j]) => ({ l: '· ' + k, v: -j })),
+    { l: 'Biaya tidak tetap', ket: 'bensin, parkir, makan, ongkos antar, lainnya', v: -jmlS(katS['tidak tetap']), jml: 1, selalu: 1 }, ...urutS(katS['tidak tetap']).map(([k, j]) => ({ l: '· ' + k, v: -j })),
+    { l: 'Laba bersih', v: R.labaBersih, jml: 1, warna: R.labaBersih >= 0 ? 'hijau' : 'merah' }];
   const asetR = [...(S.sk ? [{ l: 'Uang tunai', v: S.sk.tunai }, ...BANK_KAS.map(b => ({ l: 'Saldo ' + b, v: +(S.sk.bank || {})[b] || 0 }))] : [{ l: 'Saldo bank dan tunai', v: 'belum diisi', selalu: 1 }]),
     { l: 'Piutang dapur', v: S.piuU }, { l: 'Piutang lain-lain', v: S.piuL }, { l: 'Stok gudang', v: S.stok != null ? S.stok : '-', selalu: 1 }, { l: 'Jumlah aset', v: S.TA != null ? S.TA : '-', jml: 1 },
     { l: 'Utang ke pemasok', v: S.sk ? S.sk.utang : '-', selalu: 1 }, { l: 'Dana lebih dapur', v: S.dana }, { l: 'Kekayaan bersih', ket: 'aset dikurangi utang', v: S.TE != null ? S.TE : '-', jml: 1, warna: 'hijau' }];
@@ -3505,7 +3519,7 @@ muat().catch(e => { akar.innerHTML = `<div class="masuk"><div class="kotak"><h1>
 if ('serviceWorker' in navigator) addEventListener('load', () => navigator.serviceWorker.register('sw.js').catch(() => {}));
 // 23 Okt 2026 (pemilik: "masih tetap sama" setelah perubahan dipasang): aplikasi yang sudah terbuka/terpasang memeriksa
 // versi di server saat dibuka lagi dan tiap 5 menit. Kalau berbeda, muncul tombol "Perbarui NTA" (muat ulang tanpa salinan lama).
-const VERSI_NTA = 'mbg-v77';
+const VERSI_NTA = 'mbg-v78';
 async function cekVersiNta() { try { const t = await (await fetch('sw.js?cek=' + Date.now(), { cache: 'no-store' })).text(), v = (t.match(/mbg-v\d+/) || [])[0];
   if (!v || v === VERSI_NTA || document.getElementById('versiBaru')) return;
   const d = document.createElement('div'); d.id = 'versiBaru';
