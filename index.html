@@ -372,6 +372,10 @@ table.gaji-harian tr.hari-ini td{background:rgba(95,208,143,.07)} table.gaji-har
 @media (max-width:560px){.gaji-orang{grid-template-columns:repeat(2,minmax(0,1fr))}.gaji-total{font-size:32px}}
 .belum-lunas{display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap;margin-bottom:12px;border-left:3px solid var(--merah)}
 .belum-lunas .nilai-blm{font-family:var(--serif);font-size:30px;line-height:1.1;margin:4px 0 2px}
+.untung-inv{margin-top:16px;padding-top:14px;border-top:1px solid var(--garis2)}
+.untung-kepala{display:flex;justify-content:space-between;align-items:flex-start;gap:10px;flex-wrap:wrap}
+.untung-total{font-family:var(--serif);font-size:30px;line-height:1.1;margin:4px 0 2px}
+.untung-pil{font-size:12px;font-weight:600;font-variant-numeric:tabular-nums}
 </style>
 </head>
 <body>
@@ -2820,6 +2824,18 @@ const namaMitra = b => b.barang + (b.titip && !/titip/i.test(b.barang) ? ' (titi
 // 2 Okt 2026: kata "titipan" TIDAK ditulis di nota ke dapur (bisa disalahpahami); penandaan tetap ada di dalam aplikasi dan lembar mitra.
 const namaNota = x => String(x.barang || '').replace(/\s*\(\s*titipan[^)]*\)/ig, '').trim() || x.barang;
 const omzetInv = v => hitungInv(v).omzet;
+function htmlUntungInv(v) { const h = hitungInv(v), B = h.b.filter(x => qtyMilik(x) > 0);
+  if (notaTitip(v)) return '<p class="samar" style="font-size:12.5px;margin:14px 0 0">Nota titip: bukan penjualan sendiri, jadi tidak ada untungnya.</p>';
+  if (!B.length) return '';
+  const R = B.map(x => { const q = qtyMilik(x), jual = +x.harga || 0, m = +x.modal || 0, f = +x.fee || 0; return { x, q, jual, m, f, u1: jual - m - f, u: q * (jual - m - f) }; });
+  const kosong = R.filter(r => !r.m).length, adaTitip = h.b.some(x => qtyTitip(x) > 0), nk = h.fee ? 6 : 5;
+  return `<div class="untung-inv"><div class="untung-kepala"><div><span class="label">Untung nota ini</span><div class="untung-total ${h.laba >= 0 ? 'hijau' : 'merah'}">${esc(rp(h.laba))}</div>
+      <small class="samar">penjualan ${esc(rp(h.omzet))} − modal ${esc(rp(h.modal))}${h.fee ? ' − fee ' + esc(rp(h.fee)) : ''} · margin ${esc(pc(h.laba, h.omzet))}</small></div>
+      ${kosong ? `<span class="pil merah">${kosong} barang belum ada modalnya, untung jadi terlalu besar</span>` : ''}</div>
+    <div class="tbl-bungkus" style="margin-top:10px"><table><thead><tr><th class="kol-nama">Barang</th><th class="angka">Jumlah</th><th class="angka">Harga jual</th><th class="angka">Modal</th>${h.fee ? '<th class="angka">Fee</th>' : ''}<th class="angka">Untung / satuan</th><th class="angka">Untung</th><th class="angka">Margin</th></tr></thead><tbody>
+    ${R.map(r => `<tr><td class="kol-nama">${esc(r.x.barang)}</td><td class="angka">${esc(angkaStok(r.q))} ${esc(r.x.satuan || '')}</td><td class="angka">${esc(rp(r.jual))}</td><td class="angka ${r.m ? '' : 'merah'}">${r.m ? esc(rp(r.m)) : 'belum diisi'}</td>${h.fee ? `<td class="angka">${r.f ? esc(rp(r.f)) : '-'}</td>` : ''}<td class="angka ${r.u1 < 0 ? 'merah' : ''}">${esc(rp(r.u1))}</td><td class="angka ${r.u < 0 ? 'merah' : 'hijau'}"><b>${esc(rp(r.u))}</b></td><td class="angka">${esc(pc(r.u, r.q * r.jual))}</td></tr>`).join('')}
+    </tbody><tfoot>${h.disk ? `<tr><td colspan="${nk}">Diskon ${esc(String(v.diskon))}%</td><td class="angka merah">− ${esc(rp(h.disk))}</td><td></td></tr>` : ''}<tr><td colspan="${nk}">Untung nota ini</td><td class="angka"><b>${esc(rp(h.laba))}</b></td><td class="angka">${esc(pc(h.laba, h.omzet))}</td></tr></tfoot></table></div>
+    ${adaTitip ? '<p class="samar" style="font-size:12px;margin:8px 0 0">Barang titipan tidak dihitung karena bukan penjualan sendiri.</p>' : ''}</div>`; }
 const rekeningInv = v => semuaRek()[+v.rek] || null;
 
 // ---------- lembar nota (tampil di layar dan dicetak)
@@ -2964,14 +2980,14 @@ function gambarDaftarInv(el) {
     const kunci = Object.keys(K).sort((a, b) => S.mode === 'tanggal' ? b.localeCompare(a) : judulOutlet(a).localeCompare(judulOutlet(b)));
     const baris = v => { const h = hitungInv(v), sisa = sisaInv(v), total = totalInv(v);
       return `<a class="baris-inv ${notaTitip(v) || invLunas(v) ? 'lunas' : 'belum'}" href="#invoice/${encodeURIComponent(v.id)}"${notaTitip(v) ? ' style="opacity:.72"' : ''}>
-        <div class="bi-kiri"><b>${S.mode === 'tanggal' ? esc(judulOutlet(v.outlet)) : esc(hariNama(v.tanggal) + ', ' + tgl(v.tanggal, true))}</b><span class="samar">nota ${esc(nomorNota(v.nomor))} · ${h.b.length} barang${h.fee ? ` · fee ${esc(rpS(h.fee))}${v.mitra ? ' (' + esc(v.mitra) + ')' : ''}` : ''}${h.modal ? ` · laba kotor ${esc(rpS(h.laba))}` : ''}</span></div>
+        <div class="bi-kiri"><b>${S.mode === 'tanggal' ? esc(judulOutlet(v.outlet)) : esc(hariNama(v.tanggal) + ', ' + tgl(v.tanggal, true))}</b><span class="samar">nota ${esc(nomorNota(v.nomor))} · ${h.b.length} barang${h.fee ? ` · fee ${esc(rpS(h.fee))}${v.mitra ? ' (' + esc(v.mitra) + ')' : ''}` : ''}</span></div>
         ${(() => { const ST = setoranInv(v), setor = ST.reduce((a, b) => a + b.jumlah, 0), kali = ST.filter(b => !b.dana && !b.maya).length;
           return `<div class="bi-setor"><span class="samar">Setoran</span><b class="${setor ? 'hijau' : 'redup'}">${setor ? esc(rp(setor)) : 'Belum ada'}</b><span class="bar"><i style="width:${total ? Math.min(100, setor / total * 100) : 0}%"></i></span><span class="samar">${kali ? kali + ' kali setor' : ST.length ? (ST[0].dana ? 'dari dana lebih' : 'ditandai lunas') : 'belum dicicil'}${setor && sisa > 0 ? ' · sisa ' + esc(rpS(sisa)) : ''}</span></div>`; })()}
-        <div class="bi-kanan"><b>${esc(rp(h.total))}</b>${notaTitip(v) ? '<span class="pil" title="Titipan: tidak masuk piutang, arus kas, dan laba">Nota titip</span>' : v.lunas ? `<span class="pil hijau">Lunas${v.tglLunas ? ' ' + esc(tglP(v.tglLunas)) : ''}</span>` : invLunas(v) ? '<span class="pil hijau">Lunas · dana lebih</span>' : `<span class="pil merah">Belum lunas${sisa < total ? ' · sisa ' + esc(rpS(sisa)) : ''}</span>`}</div></a>`; };
+        <div class="bi-kanan"><b>${esc(rp(h.total))}</b>${!notaTitip(v) && h.modal ? `<span class="untung-pil ${h.laba >= 0 ? 'hijau' : 'merah'}">untung ${esc(rp(h.laba))} · ${esc(pc(h.laba, h.omzet))}</span>` : ''}${notaTitip(v) ? '<span class="pil" title="Titipan: tidak masuk piutang, arus kas, dan laba">Nota titip</span>' : v.lunas ? `<span class="pil hijau">Lunas${v.tglLunas ? ' ' + esc(tglP(v.tglLunas)) : ''}</span>` : invLunas(v) ? '<span class="pil hijau">Lunas · dana lebih</span>' : `<span class="pil merah">Belum lunas${sisa < total ? ' · sisa ' + esc(rpS(sisa)) : ''}</span>`}</div></a>`; };
     // 27 Okt 2026: daftar dibatasi beberapa hari (atau dapur) terakhir, sisanya lewat tombol; saringan apa pun tetap berlaku
     const batas = kelompok.batas ||= 5, kunciT = kunci.slice(0, batas), sisaK = kunci.length - kunciT.length, perDapur = S.mode === 'dapur' && !S.dapur;
-    $('#invKelompok', el).innerHTML = (kunciT.length ? kunciT.map(k => { const L0 = K[k], L = perDapur ? L0.slice(0, 5) : L0, tot = L.reduce((a, v) => a + tagihInv(v), 0), bl = L.filter(v => !notaTitip(v) && !invLunas(v)), sb = bl.reduce((a, v) => a + sisaInv(v), 0);
-      return `<div class="kelompok-judul"><b>${S.mode === 'tanggal' ? esc(hariNama(k) + ', ' + tgl(k, true)) : esc(judulOutlet(k))}</b><span class="samar">${L.length} invoice · ${esc(rp(tot))}${bl.length ? ` · <span class="merah">belum lunas ${esc(rpS(sb))}</span>` : ' · semua lunas'}${S.mode === 'dapur' ? ` · <a href="#piutang/dana/${encodeURIComponent(k)}">rincian setoran</a>` : ''}</span></div>${L.map(baris).join('')}${perDapur && L0.length > L.length ? `<button class="tombol kecil" data-invsemua="${esc(k)}" style="margin:6px 0 4px">Lihat semua ${L0.length} nota ${esc(judulOutlet(k))}</button>` : ''}`; }).join('')
+    $('#invKelompok', el).innerHTML = (kunciT.length ? kunciT.map(k => { const L0 = K[k], L = perDapur ? L0.slice(0, 5) : L0, tot = L.reduce((a, v) => a + tagihInv(v), 0), bl = L.filter(v => !notaTitip(v) && !invLunas(v)), sb = bl.reduce((a, v) => a + sisaInv(v), 0), un = L.filter(v => !notaTitip(v)).reduce((a, v) => a + hitungInv(v).laba, 0);
+      return `<div class="kelompok-judul"><b>${S.mode === 'tanggal' ? esc(hariNama(k) + ', ' + tgl(k, true)) : esc(judulOutlet(k))}</b><span class="samar">${L.length} invoice · ${esc(rp(tot))} · <span class="hijau">untung ${esc(rpS(un))}</span>${bl.length ? ` · <span class="merah">belum lunas ${esc(rpS(sb))}</span>` : ' · semua lunas'}${S.mode === 'dapur' ? ` · <a href="#piutang/dana/${encodeURIComponent(k)}">rincian setoran</a>` : ''}</span></div>${L.map(baris).join('')}${perDapur && L0.length > L.length ? `<button class="tombol kecil" data-invsemua="${esc(k)}" style="margin:6px 0 4px">Lihat semua ${L0.length} nota ${esc(judulOutlet(k))}</button>` : ''}`; }).join('')
       : `<div class="kartu kosong">Tidak ada invoice yang cocok dengan saringan.</div>`) + (sisaK > 0 ? `<div class="baris-aksi" style="justify-content:center;margin:14px 0"><button class="tombol" id="invLagi">Tampilkan ${Math.min(5, sisaK)} ${S.mode === 'dapur' ? 'dapur' : 'hari'} sebelumnya <span class="samar">(${sisaK} lagi)</span></button></div>` : '');
     if ($('#invLagi', el)) $('#invLagi', el).onclick = () => { kelompok.batas = batas + 5; kelompok(); };
     $$('[data-invsemua]', el).forEach(b => b.onclick = () => { const c = [...wadah.querySelectorAll('[data-s="dapur"]')].find(x => x.dataset.v === b.dataset.invsemua); if (c) c.click(); }); };
@@ -3088,6 +3104,7 @@ function editorInvoice(el) {
         <label class="isian" style="flex-direction:row;align-items:center;gap:8px">Diskon %<input type="number" id="iDiskon" min="0" max="100" step="0.5" value="${esc(v.diskon || 0)}" style="width:90px"></label>
       </div>
       <div class="pil-baris" id="ringkasInv" style="margin-top:14px"></div>
+      <div id="untungInv"></div>
       <p class="samar" style="font-size:12.5px;margin:10px 0 0">${adaFee ? 'Nota ke dapur tidak memuat fee. Kalau kolom fee diisi, keluar lembar terpisah untuk mitra yang dirinci per hari seminggu (dari invoice-invoice dapur ini minggu itu); kalau dikosongkan, lembar mitra tidak dibuat. Angka samar di kolom fee adalah tarif terakhir. ' : ''}Kolom modal hanya untuk hitungan laba di aplikasi. Harga terisi dari nota terakhir dapur ini; tarif fee bisa diubah lewat tombol Tarif fee di halaman Invoice.</p>
     </div>
     <div class="baris-aksi aksi-lekat" style="margin-top:14px">
@@ -3118,7 +3135,8 @@ function editorInvoice(el) {
     $('#bCetakFee').hidden = !adaIsiFee; $('#bExcelFee').hidden = !adaIsiFee; $('#bPdfFee').hidden = !adaIsiFee;
     $('#cetak').innerHTML = adaIsiFee && v._tampil === 'fee' ? lembarMitraInvoice(v) : v._tampil === 'sj' ? lembarSuratJalan(v) : lembarInvoice(v);
     $('#ringkasInv').innerHTML = `<span class="pil hijau">Total ${esc(rp(h.total))}</span>${h.titipMitra ? `<span class="pil">Titipan mitra ${esc(rp(h.titipMitra))}: ikut ditagih, masuk ke mitra, bukan omzet</span>` : ''}${h.titipDapur ? `<span class="pil">Titipan dapur ${esc(rp(h.titipDapur))}: ikut ditagih, bukan omzet, tidak masuk ke mitra</span>` : ''}${adaFee ? `<span class="pil kunyit">Fee dapur ${esc(rp(h.fee))}</span>` : '<button type="button" class="pil" data-aktiffee style="cursor:pointer;border:1px dashed var(--kunyit)">Dapur ini tanpa fee · ketuk untuk aktifkan</button>'}${(() => { const B = stokKini().barang, lepas = lepasInvoice(B, [v]), nLewat = h.b.filter(x => qtyMilik(x) > 0 && bukanStok(x.barang)).length, nStok = h.b.filter(x => qtyMilik(x) > 0 && !bukanStok(x.barang) && cocokStok(B, x.barang, x.satuan)).length;
-        return lepas.length ? `<button type="button" class="pil" data-hubungstok style="cursor:pointer;border:1px dashed var(--merah);color:var(--merah)">${lepas.length} barang belum ${INDUK() ? 'terdaftar · ketuk untuk daftarkan' : 'terhubung ke stok · ketuk untuk hubungkan'}</button>` : `<span class="pil">${nStok ? `${nStok} barang mengurangi stok` : 'Tidak ada barang stok'}${nLewat ? ` · ${nLewat} ${INDUK() ? 'beli langsung jual' : 'bukan barang stok'}` : ''}</span>`; })()}${h.modal ? `<span class="pil">Modal ${esc(rp(h.modal))}</span><span class="pil ${h.laba >= 0 ? 'hijau' : 'merah'}">Laba kotor ${esc(rp(h.laba))} · ${esc(pc(h.laba, h.total))}</span>` : '<span class="pil">Isi modal untuk melihat laba</span>'}`;
+        return lepas.length ? `<button type="button" class="pil" data-hubungstok style="cursor:pointer;border:1px dashed var(--merah);color:var(--merah)">${lepas.length} barang belum ${INDUK() ? 'terdaftar · ketuk untuk daftarkan' : 'terhubung ke stok · ketuk untuk hubungkan'}</button>` : `<span class="pil">${nStok ? `${nStok} barang mengurangi stok` : 'Tidak ada barang stok'}${nLewat ? ` · ${nLewat} ${INDUK() ? 'beli langsung jual' : 'bukan barang stok'}` : ''}</span>`; })()}${h.modal ? `<span class="pil">Modal ${esc(rp(h.modal))}</span><span class="pil ${h.laba >= 0 ? 'hijau' : 'merah'}">Untung ${esc(rp(h.laba))} · ${esc(pc(h.laba, h.omzet))}</span>` : '<span class="pil">Isi modal untuk melihat untung</span>'}`;
+    $('#untungInv').innerHTML = h.modal ? htmlUntungInv(v) : '';
     $$('#tBaris tr').forEach((tr, i) => { const x = v.baris[i]; const j = tr.querySelector('[data-jumlah]'); if (j) j.textContent = x && +x.qty && +x.harga ? rp(+x.qty * +x.harga) : '-'; });
   };
   const ulang = () => editorInvoice(el);
@@ -3581,7 +3599,7 @@ muat().catch(e => { akar.innerHTML = `<div class="masuk"><div class="kotak"><h1>
 if ('serviceWorker' in navigator) addEventListener('load', () => navigator.serviceWorker.register('sw.js').catch(() => {}));
 // 23 Okt 2026 (pemilik: "masih tetap sama" setelah perubahan dipasang): aplikasi yang sudah terbuka/terpasang memeriksa
 // versi di server saat dibuka lagi dan tiap 5 menit. Kalau berbeda, muncul tombol "Perbarui NTA" (muat ulang tanpa salinan lama).
-const VERSI_NTA = 'mbg-v83';
+const VERSI_NTA = 'mbg-v84';
 async function cekVersiNta() { try { const t = await (await fetch('sw.js?cek=' + Date.now(), { cache: 'no-store' })).text(), v = (t.match(/mbg-v\d+/) || [])[0];
   if (!v || v === VERSI_NTA || document.getElementById('versiBaru')) return;
   const d = document.createElement('div'); d.id = 'versiBaru';
