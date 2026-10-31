@@ -370,6 +370,8 @@ table.gaji-harian tr.hari-ini td{background:rgba(95,208,143,.07)} table.gaji-har
 .gaji-ubin .nama{font-size:13px;color:var(--redup)} .gaji-ubin b{font-size:19px;font-variant-numeric:tabular-nums} .gaji-ubin small{font-size:12px;color:var(--redup)}
 .gaji-ubin small.kunyit{color:var(--kunyit)} .gaji-ubin.kosong-gaji{opacity:.5}
 @media (max-width:560px){.gaji-orang{grid-template-columns:repeat(2,minmax(0,1fr))}.gaji-total{font-size:32px}}
+.belum-lunas{display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap;margin-bottom:12px;border-left:3px solid var(--merah)}
+.belum-lunas .nilai-blm{font-family:var(--serif);font-size:30px;line-height:1.1;margin:4px 0 2px}
 </style>
 </head>
 <body>
@@ -1197,6 +1199,9 @@ function stokLama() {
 }
 const barangStok = (nama, satuan) => cocokStok(stokKini().barang, nama, satuan);
 async function simpanStok(baru) { baru.lewat ||= []; if (STOK.induk && !baru.induk) baru.induk = STOK.induk; await simpanNilai('stok', baru); STOK = baru; }
+const belumLunasPada = (x, t) => x.jenis === 'beli' && x.tgl <= t && (!!x.belum || (!!x.tglLunas && x.tglLunas > t));
+// utang ke supplier dari belanja yang dicatat belum lunas, posisi tanggal t
+const utangBelanja = t => (STOK.gerak || []).filter(x => belumLunasPada(x, t)).reduce((a, x) => a + x.jumlah * (+x.harga || 0), 0);
 const salinStok = () => ({ ...STOK, gerak: [...STOK.gerak], ubah: { ...STOK.ubah }, baru: STOK.baru.map(b => ({ ...b })), lewat: [...(STOK.lewat || [])],
   ...(STOK.induk ? { induk: { ...STOK.induk, barang: STOK.induk.barang.map(b => ({ ...b, kemasan: (b.kemasan || []).map(k => ({ ...k })) })) } } : {}) });
 // ubah satu barang di daftar induk (data barang, jenis, nama lain) lalu simpan
@@ -1339,6 +1344,7 @@ function vStok(el) {
       <label class="isian">Supplier / tempat belanja<input id="bTempat" list="dlSupplier" autocomplete="off" placeholder="mis. Toko Ahong, pasar Flamboyan"></label>
       <datalist id="dlSupplier">${[...new Set(STOK.gerak.filter(x => x.jenis === 'beli' && x.tempat).sort((a, c) => (c.dibuat || c.tgl).localeCompare(a.dibuat || a.tgl)).map(x => x.tempat.trim()))].map(t => `<option value="${esc(t)}">`).join('')}</datalist>
       <label class="isian">Parkir atau ongkos saat belanja (Rp)<input type="number" id="bParkir" data-rp inputmode="numeric" min="0" placeholder="boleh kosong"></label>
+      <label class="isian">Pembayaran ke supplier<select id="bBayar"><option value="lunas">Sudah lunas</option><option value="belum">Belum lunas (utang)</option></select></label>
     </div>
     <div id="formBaru" hidden style="margin-top:12px;padding:12px;border:1px dashed var(--garis2);border-radius:14px">
       <span class="label">Barang baru</span>
@@ -1358,31 +1364,38 @@ function vStok(el) {
     <thead><tr><th>Barang</th><th class="angka">Stok</th><th class="angka">Minimum</th><th>Status</th><th class="angka">Harga modal</th><th class="angka">Nilai</th><th></th></tr></thead>
     <tbody>${arr.sort((a, b) => urut[a.status] - urut[b.status] || b.nilai - a.nilai).map(barisBarang).join('')}</tbody></table></div></div>${arr.some(b => b.kode === f.buka) ? panel(arr.find(b => b.kode === f.buka)) : ''}</section>`).join('')}
   ${riwayatApp.length ? `<section class="bagian" data-st="catatan"><h2>Catatan stok <span class="miring">terbaru</span></h2><div class="kartu"><div class="daftar">${riwayatApp.map(x => { const b = S.barang.find(b => b.kode === x.kode) || { nama: x.kode, satuan: '' };
-      return `<div><div style="flex:1;min-width:0"><b>${esc(b.nama)}</b> <span class="pil ${x.jenis === 'beli' ? 'hijau' : x.jenis === 'keluar' ? 'kunyit' : ''}" style="font-size:10.5px;padding:2px 8px">${x.jenis === 'beli' ? 'belanja' : x.jenis === 'keluar' ? 'keluar' : 'hitung ulang'}</span>
+      return `<div><div style="flex:1;min-width:0"><b>${esc(b.nama)}</b> <span class="pil ${x.jenis === 'beli' ? 'hijau' : x.jenis === 'keluar' ? 'kunyit' : ''}" style="font-size:10.5px;padding:2px 8px">${x.jenis === 'beli' ? 'belanja' : x.jenis === 'keluar' ? 'keluar' : 'hitung ulang'}</span>${x.belum ? ' <span class="pil merah" style="font-size:10.5px;padding:2px 8px">belum lunas</span>' : ''}
         <div class="samar" style="font-size:12px">${esc(tgl(x.tgl))} · ${x.jenis === 'set' ? 'stok jadi ' : x.jenis === 'keluar' ? '− ' : '+ '}${esc(angkaStok(x.jumlah))} ${esc(b.satuan)}${x.jenis === 'beli' ? ' × ' + esc(rp(x.harga)) : ''}${x.tempat ? ' · ' + esc(x.tempat) : ''}${x.ket ? ' · ' + esc(x.ket) : ''}${b.dariExcel && x.tgl <= S.patokan ? ' · sudah termasuk di Excel' : ''}</div></div>
         <span class="angka">${x.jenis === 'beli' ? esc(rp(x.jumlah * x.harga)) + '<br>' : ''}${x.app ? `<button class="tombol kecil" data-ubahgerak="${esc(x.id)}" style="padding:3px 9px;font-size:11.5px;margin-top:4px">ubah</button> <button class="tombol kecil bahaya" data-hapusgerak="${esc(x.id)}" style="padding:3px 9px;font-size:11.5px;margin-top:4px">hapus</button>` : `<a href="#invoice/${encodeURIComponent(x.inv)}" style="font-size:12px">buka invoice</a>`}</span></div>
         ${f2.ubah === x.id ? `<div style="display:block;border-bottom:1px solid var(--garis);padding:4px 0 14px"><div class="grid g3">
           <label class="isian">${x.jenis === 'set' ? 'Stok jadi' : 'Jumlah'} (${esc(b.satuan)})<input type="number" id="ugJml" step="any" inputmode="decimal" value="${x.jumlah}"></label>
           ${x.jenis === 'beli' ? `<label class="isian">Harga beli per satuan<input type="number" id="ugHarga" data-rp inputmode="numeric" value="${x.harga}"></label>` : ''}
           <label class="isian">Tanggal<input type="date" id="ugTgl" value="${esc(x.tgl)}"></label>
-          ${x.jenis === 'beli' ? `<label class="isian">Belanja di mana<input id="ugTempat" value="${esc(x.tempat || '')}"></label>` : `<label class="isian">Keterangan<input id="ugKet" value="${esc(x.ket || '')}"></label>`}</div>
+          ${x.jenis === 'beli' ? `<label class="isian">Belanja di mana<input id="ugTempat" value="${esc(x.tempat || '')}"></label><label class="isian">Pembayaran ke supplier<select id="ugBayar"><option value="lunas">Sudah lunas</option><option value="belum" ${x.belum ? 'selected' : ''}>Belum lunas (utang)</option></select></label>` : `<label class="isian">Keterangan<input id="ugKet" value="${esc(x.ket || '')}"></label>`}</div>
           <div class="baris-aksi" style="margin-top:10px"><button class="tombol utama kecil" id="ugSimpan">Simpan perubahan</button><button class="tombol kecil" id="ugBatal">Batal</button></div></div>` : ''}`; }).join('')}</div></div></section>` : ''}
   ${(() => { // 27 Okt 2026, pemilik: "stok itu biasanya saya nambah-nambah barang, dikasih riwayatnya kapan masuk, supplier dari
     // mana, seperti minimarket". Semua barang masuk (catatan aplikasi + Excel lama) dengan supplier, bisa dicari dan disaring per bulan.
-    const fm = vStok.fm ||= { cari: '', bulan: '', semua: false };
+    const fm = vStok.fm ||= { cari: '', bulan: '', semua: false, bayar: '' };
     const semua = [...beliApp, ...beliExcel].map(p => ({ ...p, total: (+p.jumlah || 0) * (+p.harga || 0), sup: (p.tempat || '').trim(), satuan: (S.barang.find(b => b.kode === p.kode) || {}).satuan || '' }))
       .sort((a, b) => (b.tgl + (b.dibuat || '')).localeCompare(a.tgl + (a.dibuat || '')));
     const bulanAda = [...new Set(semua.map(p => (p.tgl || '').slice(0, 7)).filter(Boolean))].sort().reverse();
-    const k = fm.cari.toLowerCase().trim(), cocok = p => (!fm.bulan || (p.tgl || '').startsWith(fm.bulan)) && (!k || (p.nama + ' ' + p.sup).toLowerCase().includes(k));
+    const blm = semua.filter(p => p.belum), totBlm = blm.reduce((a, p) => a + p.total, 0);
+    const k = fm.cari.toLowerCase().trim(), cocok = p => (!fm.bayar || p.belum) && (!fm.bulan || (p.tgl || '').startsWith(fm.bulan)) && (!k || (p.nama + ' ' + p.sup).toLowerCase().includes(k));
     const T = semua.filter(cocok), tampil = T.slice(0, fm.semua || k ? 999 : 15), totT = T.reduce((a, p) => a + p.total, 0);
     const perSup = Object.values(T.reduce((o, p) => { const n = p.sup || 'Tanpa keterangan', kk = n.toLowerCase().replace(/[.\s]+/g, ' ').trim(); (o[kk] ||= { nama: n, n: 0, rp: 0 }); o[kk].n++; o[kk].rp += p.total; return o; }, {})).map(x => [x.nama, x]).sort((a, c) => c[1].rp - a[1].rp);
-    return `<section class="bagian" id="riwayatMasuk" data-st="masuk"><h2>Riwayat barang <span class="miring">masuk</span></h2><div class="kartu">
+    return `<section class="bagian" id="riwayatMasuk" data-st="masuk"><h2>Riwayat barang <span class="miring">masuk</span></h2>
+      ${blm.length ? `<div class="kartu belum-lunas"><div><span class="label">Belum lunas ke supplier</span><div class="nilai-blm">${esc(rp(totBlm))}</div>
+        <small class="samar">${blm.length} catatan belanja · dihitung sebagai utang ke pemasok di Arus kas, uangnya keluar saat dilunasi</small></div>
+        <button class="tombol kecil" data-rmbayar>${fm.bayar ? 'Tampilkan semua' : 'Lihat yang belum lunas'}</button></div>` : ''}
+      <div class="kartu">
       <div class="baris-saring" style="margin-top:0"><input id="rmCari" class="cari" value="${esc(fm.cari)}" placeholder="cari barang atau supplier">
         <select id="rmBulan" class="cari" style="max-width:200px"><option value="">Semua bulan</option>${bulanAda.map(b => `<option value="${b}" ${fm.bulan === b ? 'selected' : ''}>${esc(BLN[+b.slice(5, 7) - 1] + ' ' + b.slice(0, 4))}</option>`).join('')}</select></div>
       <div class="pil-baris" style="margin-top:10px">${perSup.slice(0, 8).map(([n, x]) => `<button class="pil" data-rmsup="${esc(n === 'Tanpa keterangan' ? '' : n)}" title="${x.n} kali masuk">${esc(n)} · ${esc(rpS(x.rp))}</button>`).join('')}</div>
-      <div class="tbl-bungkus" style="margin-top:10px"><table><thead><tr><th>Tanggal</th><th class="kol-nama">Barang</th><th class="angka">Jumlah</th><th class="angka">Harga beli</th><th class="angka">Total</th><th>Supplier</th></tr></thead><tbody>
-      ${tampil.map(p => `<tr><td style="white-space:nowrap">${esc(tglP(p.tgl))}</td><td class="kol-nama"><b>${esc(p.nama)}</b>${p.app ? '' : ' <span class="pil mini">Excel</span>'}</td><td class="angka">${esc(angkaStok(p.jumlah))}${p.satuan ? ' ' + esc(p.satuan) : ''}</td><td class="angka">${esc(rp(p.harga))}</td><td class="angka">${esc(rp(p.total))}</td><td>${p.sup ? esc(p.sup) : '<span class="samar">-</span>'}${p.ket ? `<small class="samar blok">${esc(p.ket)}</small>` : ''}</td></tr>`).join('') || '<tr><td colspan="6" class="samar">Tidak ada barang masuk yang cocok.</td></tr>'}
-      </tbody><tfoot><tr><td colspan="4">${T.length} kali barang masuk${fm.bulan ? ' · ' + esc(BLN[+fm.bulan.slice(5, 7) - 1] + ' ' + fm.bulan.slice(0, 4)) : ''}</td><td class="angka">${esc(rp(totT))}</td><td></td></tr></tfoot></table></div>
+      <div class="tbl-bungkus" style="margin-top:10px"><table><thead><tr><th>Tanggal</th><th class="kol-nama">Barang</th><th class="angka">Jumlah</th><th class="angka">Harga beli</th><th class="angka">Total</th><th>Supplier</th><th>Pembayaran</th></tr></thead><tbody>
+      ${tampil.map(p => `<tr><td style="white-space:nowrap">${esc(tglP(p.tgl))}</td><td class="kol-nama"><b>${esc(p.nama)}</b>${p.app ? '' : ' <span class="pil mini">Excel</span>'}</td><td class="angka">${esc(angkaStok(p.jumlah))}${p.satuan ? ' ' + esc(p.satuan) : ''}</td><td class="angka">${esc(rp(p.harga))}</td><td class="angka">${esc(rp(p.total))}</td><td>${p.sup ? esc(p.sup) : '<span class="samar">-</span>'}${p.ket ? `<small class="samar blok">${esc(p.ket)}</small>` : ''}</td>
+        <td style="white-space:nowrap">${p.belum ? `<span class="pil merah mini">belum lunas</span>${p.app ? ` <button class="tombol kecil" data-lunasbeli="${esc(p.id)}" style="padding:3px 9px;font-size:11.5px">Tandai lunas</button>` : ''}`
+          : `<span class="pil hijau mini">lunas</span>${p.tglLunas ? `<small class="samar blok">dibayar ${esc(tglP(p.tglLunas))}</small>` : ''}`}</td></tr>`).join('') || '<tr><td colspan="7" class="samar">Tidak ada barang masuk yang cocok.</td></tr>'}
+      </tbody><tfoot><tr><td colspan="4">${T.length} kali barang masuk${fm.bulan ? ' · ' + esc(BLN[+fm.bulan.slice(5, 7) - 1] + ' ' + fm.bulan.slice(0, 4)) : ''}</td><td class="angka">${esc(rp(totT))}</td><td></td><td></td></tr></tfoot></table></div>
       ${T.length > tampil.length ? `<button class="tombol kecil" id="rmSemua" style="margin-top:10px">Tampilkan semua ${T.length} catatan</button>` : ''}</div></section>`; })()}`;
 
   const ulang = () => vStok(el);
@@ -1408,7 +1421,13 @@ function vStok(el) {
     if ($('#rmCari', el)) $('#rmCari', el).oninput = e => { clearTimeout(vStok.tRm); vStok.tRm = setTimeout(() => { fm.cari = e.target.value; kembali(); const i = $('#rmCari', el); if (i) { i.focus(); i.setSelectionRange(i.value.length, i.value.length); } }, 350); };
     if ($('#rmBulan', el)) $('#rmBulan', el).onchange = e => { fm.bulan = e.target.value; kembali(); };
     if ($('#rmSemua', el)) $('#rmSemua', el).onclick = () => { fm.semua = true; kembali(); };
-    $$('[data-rmsup]', el).forEach(b => b.onclick = () => { fm.cari = fm.cari === b.dataset.rmsup ? '' : b.dataset.rmsup; kembali(); }); }
+    $$('[data-rmsup]', el).forEach(b => b.onclick = () => { fm.cari = fm.cari === b.dataset.rmsup ? '' : b.dataset.rmsup; kembali(); });
+    $$('[data-rmbayar]', el).forEach(b => b.onclick = () => { fm.bayar = fm.bayar ? '' : 'belum'; kembali(); });
+    $$('[data-lunasbeli]', el).forEach(b => b.onclick = async () => { const x = STOK.gerak.find(g => g.id === b.dataset.lunasbeli); if (!x) return;
+      const nm = (S.barang.find(c => c.kode === x.kode) || {}).nama || x.kode;
+      const t = prompt(`Belanja ${nm} ${angkaStok(x.jumlah)} × ${rp(x.harga)} = ${rp(x.jumlah * x.harga)} dilunasi tanggal berapa? (tahun-bulan-tanggal)`, hIni); if (t == null) return;
+      if (!/^\d{4}-\d{2}-\d{2}$/.test(t.trim()) || t.trim() < x.tgl) return pesan('Tanggal lunas tidak dikenali atau lebih awal dari tanggal belanja.', true);
+      try { await simpanStok({ ...STOK, gerak: STOK.gerak.map(g => g.id === x.id ? { ...g, belum: false, tglLunas: t.trim() } : g) }); pesan(`Belanja ${nm} ditandai lunas ${tglP(t.trim())}`); ulang(); } catch (er) { pesan(er.message, true); } }); }
   const bHub = $('#bHubungSemua', el); if (bHub) bHub.onclick = () => dialogHubungStok(lepasInvoice(S.barang), ulang);
   $$('[data-kembalistok]', el).forEach(b => b.onclick = async () => { const baru = salinStok(); baru.lewat = baru.lewat.filter(k => k !== b.dataset.kembalistok);
     try { await simpanStok(baru); pesan(`"${b.dataset.kembalistok}" kembali ditanyakan saat ada di invoice`); ulang(); } catch (er) { pesan(er.message, true); } });
@@ -1455,12 +1474,12 @@ function vStok(el) {
       if (S.induk) baru.induk.barang.push({ ...b0, jenis: 'stok', stok: 0, kemasan: bacaKemasan(($('#nbKemasan', el) || {}).value), alias: '' }); else baru.baru.push(b0);
     } else { const b = S.barang.find(b => b.kode === kode); nama = b.nama; fk = faktorBelanja(b); }
     const dibuat = new Date().toISOString();
-    baru.gerak.push({ id: idBaru(), kode, jenis: 'beli', jumlah: Math.round(jumlah * fk * 1000) / 1000, harga: Math.round(harga / fk * 100) / 100, tgl: t, tempat, dibuat });
+    baru.gerak.push({ id: idBaru(), kode, jenis: 'beli', jumlah: Math.round(jumlah * fk * 1000) / 1000, harga: Math.round(harga / fk * 100) / 100, tgl: t, tempat, dibuat, ...($('#bBayar', el).value === 'belum' ? { belum: true } : {}) });
     try {
       await simpanStok(baru);
       // parkir/ongkos saat belanja masuk ke Pengeluaran, terkait belanja di tempat itu
       if (parkir > 0) { const kel = { ...KELUAR, daftar: [{ id: idBaru(), tgl: t, jenis: 'Parkir', ket: 'belanja ' + nama, jumlah: parkir, terkait: 'belanja', tempat }, ...KELUAR.daftar] }; await simpanNilai('pengeluaran', kel); KELUAR = kel; }
-      pesan(`Belanja ${nama} ${rp(jumlah * harga)} tersimpan${parkir ? ', parkir ' + rp(parkir) + ' masuk Pengeluaran' : ''}`); ulang();
+      pesan(`Belanja ${nama} ${rp(jumlah * harga)} tersimpan${$('#bBayar', el).value === 'belum' ? ', belum lunas' : ''}${parkir ? ', parkir ' + rp(parkir) + ' masuk Pengeluaran' : ''}`); ulang();
     } catch (er) { pesan(er.message, true); } };
   // ----- ubah per barang
   $$('[data-ubahstok]', el).forEach(b => b.onclick = () => { f.buka = f.buka === b.dataset.ubahstok ? null : b.dataset.ubahstok; ulang(); const p = $('.panel-stok', el); if (p) p.scrollIntoView({ block: 'nearest' }); });
@@ -1523,7 +1542,8 @@ function vStok(el) {
   $$('[data-ubahgerak]', el).forEach(x => x.onclick = () => { f2.ubah = x.dataset.ubahgerak; ulang(); const e = $('#ugJml', el); if (e) { e.scrollIntoView({ block: 'center' }); e.focus(); } });
   if ($('#ugBatal', el)) $('#ugBatal', el).onclick = () => { f2.ubah = null; ulang(); };
   if ($('#ugSimpan', el)) $('#ugSimpan', el).onclick = async () => { const jumlah = +$('#ugJml', el).value; if (!(jumlah >= 0) || $('#ugJml', el).value === '') return pesan('Jumlah belum diisi.', true);
-    const gantiNilai = x => ({ ...x, jumlah, tgl: $('#ugTgl', el).value || x.tgl, ...($('#ugHarga', el) ? { harga: +$('#ugHarga', el).value || x.harga } : {}), ...($('#ugTempat', el) ? { tempat: $('#ugTempat', el).value.trim() } : {}), ...($('#ugKet', el) ? { ket: $('#ugKet', el).value.trim() } : {}) });
+    const gantiNilai = x => ({ ...x, jumlah, tgl: $('#ugTgl', el).value || x.tgl, ...($('#ugHarga', el) ? { harga: +$('#ugHarga', el).value || x.harga } : {}), ...($('#ugTempat', el) ? { tempat: $('#ugTempat', el).value.trim() } : {}), ...($('#ugKet', el) ? { ket: $('#ugKet', el).value.trim() } : {}),
+      ...($('#ugBayar', el) ? ($('#ugBayar', el).value === 'belum' ? { belum: true, tglLunas: null } : { belum: false, tglLunas: x.belum ? hIni : x.tglLunas || null }) : {}) });
     try { await simpanStok({ ...STOK, gerak: STOK.gerak.map(x => x.id === f2.ubah ? gantiNilai(x) : x) }); f2.ubah = null; pesan('Catatan stok diubah'); ulang(); } catch (er) { pesan(er.message, true); } };
   $$('[data-hapusgerak]', el).forEach(x => x.onclick = async () => { if (!confirm('Hapus catatan stok ini? Stok kembali seperti sebelum dicatat.')) return;
     try { await simpanStok({ ...STOK, gerak: STOK.gerak.filter(g => g.id !== x.dataset.hapusgerak) }); pesan('Catatan dihapus'); ulang(); } catch (er) { pesan(er.message, true); } });
@@ -1723,8 +1743,8 @@ function arusMinggu(w) { const a = w.awal, z = w.akhir, dalam = t => t && t >= a
 // posisi aset pada tanggal t (akhir minggu)
 function asetPer(t) { const sk = saldoPer(t), P = piutangPer(t), st = stokPer(t), dana = jmlLK(danaPer(t), o => o.sisa);
   const piuU = jmlLK(P.filter(p => p.usaha), p => p.sisa), piuL = jmlLK(P.filter(p => !p.usaha), p => p.sisa), stok = st ? st.nilai : null;
-  const TA = sk && stok != null ? sk.tunai + sk.bankJml + piuU + piuL + stok : null, TL = sk ? sk.utang + dana : null;
-  return { sk, piuU, piuL, stok, dana, TA, TL, TE: TA != null && TL != null ? TA - TL : null }; }
+  const TA = sk && stok != null ? sk.tunai + sk.bankJml + piuU + piuL + stok : null, uB = utangBelanja(t), TL = sk ? sk.utang + uB + dana : null;
+  return { sk, uB, piuU, piuL, stok, dana, TA, TL, TE: TA != null && TL != null ? TA - TL : null }; }
 // daftar angka berkartu: [{judul}] atau [{l, v, ket, jml, warna, selalu}]; baris bernilai 0 disembunyikan kecuali jml/selalu
 const daftarRp = R0 => `<div class="kas-daftar">${R0.filter(r => r.judul || r.jml || r.selalu || (typeof r.v === 'number' && Math.round(r.v))).map(r => r.judul ? `<div class="kas-sub">${esc(r.judul)}</div>`
   : `<div class="kas-baris${r.jml ? ' jml' : ''}"><span>${esc(r.l)}${r.ket ? `<small>${esc(r.ket)}</small>` : ''}</span><b class="${r.warna || ''}">${typeof r.v === 'number' ? (Math.round(r.v) < 0 ? '− ' : '') + esc(rp(Math.abs(r.v))) : esc(r.v)}</b></div>`).join('')}</div>`;
@@ -1735,7 +1755,7 @@ function vKas(el, [no]) {
   // tanggal hari ini, sehingga belanja stok bertanggal Sabtu sudah jadi uang keluar tetapi belum jadi stok (kekayaan tampak turun).
   const iW = W.indexOf(w), wl = W[iW - 1], t = w.akhir, A = arusMinggu(w), R = w.total, S = asetPer(t);
   const skAwal = saldoPer(tambahHari(w.awal, -1)), skAkhir = KAS.minggu[w.akhir] ? saldoPer(w.akhir, w.akhir) : null;
-  const dUtang = skAwal && skAkhir ? skAkhir.utang - skAwal.utang : 0, bersih = A.masuk - A.keluar + dUtang;
+  const dUtang = (skAwal && skAkhir ? skAkhir.utang - skAwal.utang : 0) + utangBelanja(w.akhir) - utangBelanja(tambahHari(w.awal, -1)), bersih = A.masuk - A.keluar + dUtang;
   const awalKas = skAwal ? skAwal.tunai + skAwal.bankJml : null, akhirCatat = awalKas != null ? awalKas + bersih : null, akhirNyata = skAkhir ? skAkhir.tunai + skAkhir.bankJml : null;
   const kol = [tglPendek(t)];
   const baris = (l, v, o = {}) => ({ t: 'pos', l, v: [v], ...o });
@@ -1768,7 +1788,7 @@ function vKas(el, [no]) {
     ...(S.sk ? [] : [baris('Saldo bank', '-', { ket: 'belum diisi' })]),
     baris('Piutang dapur', S.piuU), baris('Piutang lain-lain', S.piuL), baris('Stok gudang', S.stok != null ? S.stok : '-'),
     { t: 'jumlah', l: 'Jumlah aset', v: [S.TA != null ? S.TA : '-'] },
-    { t: 'judul', l: 'Utang' }, baris('Utang ke pemasok', S.sk ? S.sk.utang : '-'), baris('Dana lebih dapur', S.dana, { ket: 'uang dapur yang dititipkan' }),
+    { t: 'judul', l: 'Utang' }, baris('Utang ke pemasok', S.sk ? S.sk.utang + S.uB : '-', S.uB ? { ket: 'termasuk belanja belum lunas di Stok ' + rp(S.uB) } : {}), baris('Dana lebih dapur', S.dana, { ket: 'uang dapur yang dititipkan' }),
     { t: 'jumlah', l: 'Jumlah utang', v: [S.TL != null ? S.TL : '-'] },
     { t: 'total', l: 'Kekayaan bersih (aset dikurangi utang)', v: [S.TE != null ? S.TE : '-'] }]);
   // ----- tampilan layar (10 Okt 2026, pemilik: "dirapikan, kalau sudah lama panjangnya sampai mana, tata letaknya
@@ -1788,7 +1808,7 @@ function vKas(el, [no]) {
     { l: 'Laba bersih', v: R.labaBersih, jml: 1, warna: R.labaBersih >= 0 ? 'hijau' : 'merah' }];
   const asetR = [...(S.sk ? [{ l: 'Uang tunai', v: S.sk.tunai }, ...BANK_KAS.map(b => ({ l: 'Saldo ' + b, v: +(S.sk.bank || {})[b] || 0 }))] : [{ l: 'Saldo bank dan tunai', v: 'belum diisi', selalu: 1 }]),
     { l: 'Piutang dapur', v: S.piuU }, { l: 'Piutang lain-lain', v: S.piuL }, { l: 'Stok gudang', v: S.stok != null ? S.stok : '-', selalu: 1 }, { l: 'Jumlah aset', v: S.TA != null ? S.TA : '-', jml: 1 },
-    { l: 'Utang ke pemasok', v: S.sk ? S.sk.utang : '-', selalu: 1 }, { l: 'Dana lebih dapur', v: S.dana }, { l: 'Kekayaan bersih', ket: 'aset dikurangi utang', v: S.TE != null ? S.TE : '-', jml: 1, warna: 'hijau' }];
+    { l: 'Utang ke pemasok', ket: S.uB ? 'termasuk belanja belum lunas di Stok ' + rp(S.uB) : '', v: S.sk ? S.sk.utang + S.uB : '-', selalu: 1 }, { l: 'Dana lebih dapur', v: S.dana }, { l: 'Kekayaan bersih', ket: 'aset dikurangi utang', v: S.TE != null ? S.TE : '-', jml: 1, warna: 'hijau' }];
   // pilihan minggu: kotak pilihan dikelompokkan per bulan
   const perBulan = {}; for (const x of W) (perBulan[x.awal.slice(0, 7)] ||= []).push(x);
   const pilihMinggu = `<select id="kPilih" aria-label="Pilih minggu" style="padding:9px 12px;border-radius:12px;border:1px solid var(--garis2);background:var(--panel);color:var(--teks);font:inherit;font-weight:600;max-width:100%">${Object.keys(perBulan).sort().reverse().map(k => `<optgroup label="${esc(BLN[+k.slice(5, 7) - 1] + ' ' + k.slice(0, 4))}">${perBulan[k].slice().reverse().map(x => `<option value="${x.minggu}" ${x === w ? 'selected' : ''}>Minggu ${x.minggu} · ${esc(tglP(x.awal))} - ${esc(tglP(x.akhir))}</option>`).join('')}</optgroup>`).join('')}</select>`;
@@ -1822,7 +1842,7 @@ function vKas(el, [no]) {
     <p class="samar" style="font-size:12.5px;margin:8px 0 0">Isi tiap Sabtu dari m-banking dan hitungan uang tunai. Piutang dan stok dihitung aplikasi.</p>
     <div class="grid g3" style="margin-top:10px">${BANK_KAS.map(b => `<label class="isian">Saldo ${esc(b)}<input type="number" inputmode="numeric" data-bank="${esc(b)}" data-rp value="${esc((isi.bank || {})[b] ?? '')}"></label>`).join('')}
       <label class="isian">Uang tunai<input type="number" inputmode="numeric" id="kTunai" data-rp value="${esc(isi.tunai ?? '')}"></label>
-      <label class="isian">Utang ke pemasok yang belum dibayar<input type="number" inputmode="numeric" id="kUtang" data-rp value="${esc(isi.utang ?? '')}"></label></div>
+      <label class="isian">Utang lain ke pemasok <span class="samar" style="font-weight:400">(di luar belanja belum lunas di Stok)</span><input type="number" inputmode="numeric" id="kUtang" data-rp value="${esc(isi.utang ?? '')}"></label></div>
     <div class="baris-aksi" style="margin-top:10px"><button class="tombol utama" id="kSimpan">Simpan saldo</button></div></details></section>
   <section class="bagian"><div class="grid g2" style="align-items:start">
     <div class="kartu"><span class="label">Uang masuk</span>${daftar(masukR)}</div>
@@ -3554,7 +3574,7 @@ muat().catch(e => { akar.innerHTML = `<div class="masuk"><div class="kotak"><h1>
 if ('serviceWorker' in navigator) addEventListener('load', () => navigator.serviceWorker.register('sw.js').catch(() => {}));
 // 23 Okt 2026 (pemilik: "masih tetap sama" setelah perubahan dipasang): aplikasi yang sudah terbuka/terpasang memeriksa
 // versi di server saat dibuka lagi dan tiap 5 menit. Kalau berbeda, muncul tombol "Perbarui NTA" (muat ulang tanpa salinan lama).
-const VERSI_NTA = 'mbg-v80';
+const VERSI_NTA = 'mbg-v81';
 async function cekVersiNta() { try { const t = await (await fetch('sw.js?cek=' + Date.now(), { cache: 'no-store' })).text(), v = (t.match(/mbg-v\d+/) || [])[0];
   if (!v || v === VERSI_NTA || document.getElementById('versiBaru')) return;
   const d = document.createElement('div'); d.id = 'versiBaru';
