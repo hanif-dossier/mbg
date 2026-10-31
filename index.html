@@ -1740,6 +1740,9 @@ function arusMinggu(w) { const a = w.awal, z = w.akhir, dalam = t => t && t >= a
   const masuk = dapur + lunasTanpaCatat + dana + lain, keluar = beliStok + beliLangsung + (w.total.fee || 0) + ops + prive;
   const tetap = jmlLK(w.biaya.filter(b => b.operasional && sifatBiaya(b) === 'tetap'), b => b.jumlah);
   return { dapur, lunasTanpaCatat, dana, lain, masuk, beliStok, beliLangsung, fee: w.total.fee || 0, gaji, ops, opsLain: ops - gaji, tetap, tidakTetap: ops - tetap, prive, keluar }; }
+// perubahan utang ke pemasok selama minggu w: isian manual akhir minggu + belanja yang ditandai belum lunas di Stok
+function dUtangMinggu(w) { const skAwal = saldoPer(tambahHari(w.awal, -1)), skAkhir = KAS.minggu[w.akhir] ? saldoPer(w.akhir, w.akhir) : null;
+  return (skAwal && skAkhir ? skAkhir.utang - skAwal.utang : 0) + utangBelanja(w.akhir) - utangBelanja(tambahHari(w.awal, -1)); }
 // posisi aset pada tanggal t (akhir minggu)
 function asetPer(t) { const sk = saldoPer(t), P = piutangPer(t), st = stokPer(t), dana = jmlLK(danaPer(t), o => o.sisa);
   const piuU = jmlLK(P.filter(p => p.usaha), p => p.sisa), piuL = jmlLK(P.filter(p => !p.usaha), p => p.sisa), stok = st ? st.nilai : null;
@@ -1755,7 +1758,7 @@ function vKas(el, [no]) {
   // tanggal hari ini, sehingga belanja stok bertanggal Sabtu sudah jadi uang keluar tetapi belum jadi stok (kekayaan tampak turun).
   const iW = W.indexOf(w), wl = W[iW - 1], t = w.akhir, A = arusMinggu(w), R = w.total, S = asetPer(t);
   const skAwal = saldoPer(tambahHari(w.awal, -1)), skAkhir = KAS.minggu[w.akhir] ? saldoPer(w.akhir, w.akhir) : null;
-  const dUtang = (skAwal && skAkhir ? skAkhir.utang - skAwal.utang : 0) + utangBelanja(w.akhir) - utangBelanja(tambahHari(w.awal, -1)), bersih = A.masuk - A.keluar + dUtang;
+  const dUtang = dUtangMinggu(w), bersih = A.masuk - A.keluar + dUtang;
   const awalKas = skAwal ? skAwal.tunai + skAwal.bankJml : null, akhirCatat = awalKas != null ? awalKas + bersih : null, akhirNyata = skAkhir ? skAkhir.tunai + skAkhir.bankJml : null;
   const kol = [tglPendek(t)];
   const baris = (l, v, o = {}) => ({ t: 'pos', l, v: [v], ...o });
@@ -1820,7 +1823,7 @@ function vKas(el, [no]) {
   // saldo (awal + masuk − keluar = akhir), daftar masuk & keluar, laba rugi & aset, isian saldo dilipat, dan riwayat
   // per minggu dengan kolom yang mudah dibaca (masuk, keluar, laba bersih, kekayaan bersih).
   const selisih = akhirCatat != null && akhirNyata != null ? Math.round(akhirNyata - akhirCatat) : 0;
-  const riwK = tampilW.map(x => { const tt = x.akhir, A2 = arusMinggu(x), s2 = asetPer(tt); return { x, masuk: A2.masuk, keluar: A2.keluar, laba: x.total.labaBersih, TE: s2.TE }; });
+  const riwK = tampilW.map(x => { const tt = x.akhir, A2 = arusMinggu(x), s2 = asetPer(tt); return { x, masuk: A2.masuk, keluar: A2.keluar - dUtangMinggu(x), laba: x.total.labaBersih, TE: s2.TE }; });
   el.innerHTML = `${tabKas('minggu')}
   <section class="bagian" style="margin-top:6px">
     <div class="kas-kepala"><div><h2 style="margin:0">Arus kas <span class="miring">minggu ${esc(w.minggu)}</span></h2>
@@ -3574,7 +3577,7 @@ muat().catch(e => { akar.innerHTML = `<div class="masuk"><div class="kotak"><h1>
 if ('serviceWorker' in navigator) addEventListener('load', () => navigator.serviceWorker.register('sw.js').catch(() => {}));
 // 23 Okt 2026 (pemilik: "masih tetap sama" setelah perubahan dipasang): aplikasi yang sudah terbuka/terpasang memeriksa
 // versi di server saat dibuka lagi dan tiap 5 menit. Kalau berbeda, muncul tombol "Perbarui NTA" (muat ulang tanpa salinan lama).
-const VERSI_NTA = 'mbg-v81';
+const VERSI_NTA = 'mbg-v82';
 async function cekVersiNta() { try { const t = await (await fetch('sw.js?cek=' + Date.now(), { cache: 'no-store' })).text(), v = (t.match(/mbg-v\d+/) || [])[0];
   if (!v || v === VERSI_NTA || document.getElementById('versiBaru')) return;
   const d = document.createElement('div'); d.id = 'versiBaru';
