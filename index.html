@@ -376,6 +376,7 @@ table.gaji-harian tr.hari-ini td{background:rgba(95,208,143,.07)} table.gaji-har
 .untung-kepala{display:flex;justify-content:space-between;align-items:flex-start;gap:10px;flex-wrap:wrap}
 .untung-total{font-family:var(--serif);font-size:30px;line-height:1.1;margin:4px 0 2px}
 .untung-pil{font-size:12px;font-weight:600;font-variant-numeric:tabular-nums}
+.baris-inv.inv-terakhir{outline:2px solid var(--emas, #e2b65a);outline-offset:2px;transition:outline-color 1.5s}
 </style>
 </head>
 <body>
@@ -2911,6 +2912,7 @@ const lembarMitraInvoice = v => { const r = rekapInvoice(v, v._cakupan || 'mingg
 
 // ---------- INVOICE
 let INV = null;
+let INV_KEMBALI = null; // nota yang terakhir dibuka dari daftar: {id, batas, jarak} supaya daftar kembali ke posisinya
 function invoiceBaru() {
   const dp = daftarDapur().filter(d => d.aktif !== false), d = dp[0] || { outlet: '', toko: '', alamat: '', notaTerakhir: 0 };
   const rek = semuaRek().findIndex(r => r.usaha === (D.profil || {}).rekeningBawaan);
@@ -2991,7 +2993,14 @@ function gambarDaftarInv(el) {
       : `<div class="kartu kosong">Tidak ada invoice yang cocok dengan saringan.</div>`) + (sisaK > 0 ? `<div class="baris-aksi" style="justify-content:center;margin:14px 0"><button class="tombol" id="invLagi">Tampilkan ${Math.min(5, sisaK)} ${S.mode === 'dapur' ? 'dapur' : 'hari'} sebelumnya <span class="samar">(${sisaK} lagi)</span></button></div>` : '');
     if ($('#invLagi', el)) $('#invLagi', el).onclick = () => { kelompok.batas = batas + 5; kelompok(); };
     $$('[data-invsemua]', el).forEach(b => b.onclick = () => { const c = [...wadah.querySelectorAll('[data-s="dapur"]')].find(x => x.dataset.v === b.dataset.invsemua); if (c) c.click(); }); };
+  if (INV_KEMBALI) kelompok.batas = INV_KEMBALI.batas;
   kelompok();
+  $('#invKelompok', el).addEventListener('click', e => { const a = e.target.closest('a.baris-inv'); if (!a) return;
+    INV_KEMBALI = { id: decodeURIComponent(a.getAttribute('href').slice('#invoice/'.length)), batas: kelompok.batas, jarak: a.getBoundingClientRect().top }; });
+  if (INV_KEMBALI) { const k = INV_KEMBALI; INV_KEMBALI = null;
+    // dijalankan setelah hashchange menggulir ke atas
+    requestAnimationFrame(() => setTimeout(() => { const a = [...$$('a.baris-inv', el)].find(x => x.getAttribute('href') === '#invoice/' + encodeURIComponent(k.id)); if (!a) return;
+      scrollTo({ top: a.getBoundingClientRect().top + scrollY - k.jarak }); a.classList.add('inv-terakhir'); setTimeout(() => a.classList.remove('inv-terakhir'), 2200); }, 0)); }
   $$('[data-s]', wadah).forEach(b => b.onclick = () => { kelompok.batas = 5; S[b.dataset.s] = b.dataset.v; simpanS(); $$(`[data-s="${b.dataset.s}"]`, wadah).forEach(x => x.classList.toggle('aktif', x.dataset.v === b.dataset.v)); kelompok(); });
   $('#invCari', wadah).oninput = e => { S.teks = e.target.value; simpanS(); kelompok.batas = 5; kelompok(); };
 }
@@ -3139,7 +3148,9 @@ function editorInvoice(el) {
     $('#untungInv').innerHTML = h.modal ? htmlUntungInv(v) : '';
     $$('#tBaris tr').forEach((tr, i) => { const x = v.baris[i]; const j = tr.querySelector('[data-jumlah]'); if (j) j.textContent = x && +x.qty && +x.harga ? rp(+x.qty * +x.harga) : '-'; });
   };
-  const ulang = () => editorInvoice(el);
+  const ulang = () => { const y = scrollY, a = document.activeElement, isi = a && a.dataset && a.dataset.k != null && a.dataset.i != null ? [a.dataset.i, a.dataset.k] : null;
+    editorInvoice(el); scrollTo({ top: y });
+    if (isi) { const b = el.querySelector(`#tBaris [data-i="${isi[0]}"][data-k="${isi[1]}"]`); if (b) { b.focus({ preventScroll: true }); if (b.type === 'text') { const n = b.value.length; b.setSelectionRange(n, n); } } } };
   $('#dbBatal').onclick = () => { $('#dapurBaru').hidden = true; };
   $('#dbNama').oninput = e => { if (!$('#dbToko').dataset.diubah) $('#dbToko').value = e.target.value.trim() ? 'MBG SPPG ' + e.target.value.trim().toUpperCase() : ''; };
   $('#dbToko').oninput = e => { e.target.dataset.diubah = '1'; };
@@ -3599,7 +3610,7 @@ muat().catch(e => { akar.innerHTML = `<div class="masuk"><div class="kotak"><h1>
 if ('serviceWorker' in navigator) addEventListener('load', () => navigator.serviceWorker.register('sw.js').catch(() => {}));
 // 23 Okt 2026 (pemilik: "masih tetap sama" setelah perubahan dipasang): aplikasi yang sudah terbuka/terpasang memeriksa
 // versi di server saat dibuka lagi dan tiap 5 menit. Kalau berbeda, muncul tombol "Perbarui NTA" (muat ulang tanpa salinan lama).
-const VERSI_NTA = 'mbg-v84';
+const VERSI_NTA = 'mbg-v85';
 async function cekVersiNta() { try { const t = await (await fetch('sw.js?cek=' + Date.now(), { cache: 'no-store' })).text(), v = (t.match(/mbg-v\d+/) || [])[0];
   if (!v || v === VERSI_NTA || document.getElementById('versiBaru')) return;
   const d = document.createElement('div'); d.id = 'versiBaru';
