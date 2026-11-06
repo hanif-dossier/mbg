@@ -478,7 +478,7 @@ async function rpc(fn, args) {
 let D = null, CATATAN = null, PEMBARUAN = null, TARIF = {}, INVOICE = [];
 async function muat() {
   const s = sesi.baca(); if (!s) return layarMasuk();
-  const ambil = k => rpc('mbg_ambil_nilai', { p_token: s.token, p_kunci: k });
+  const ambil = k => rpc('mbg_ambil_nilai', { p_token: s.token, p_kunci: k }).then(r => { if (r && r.ok) ASLI[k] = kanon(r.nilai); return r; });
   const [a, b, c, t, inv, kr, kl, pu, dt, st, rkT] = await Promise.all([ambil('data'), ambil('catatan'), ambil('pembaruan'), ambil('tarif-fee'), rpc('mbg_invoice_daftar', { p_token: s.token }), rpc('mbg_gaji_nta', { p_token: s.token }).catch(() => ({ ok: false })), ambil('pengeluaran'), ambil('piutang'), ambil('dapur'), ambil('stok'), ambil('rekening')]);
   try { const ks = await ambil('kas'); KAS = { minggu: {}, ...((ks.ok && ks.nilai) || {}) }; } catch { KAS = { minggu: {} }; }
   if (!a.ok) { sesi.hapus(); return layarMasuk(a.pesan); }
@@ -732,9 +732,18 @@ const JENIS_KELUAR = ['Parkir', 'Bensin', 'Makan', 'Ongkos antar', 'Perlengkapan
 const TERKAIT = [['belanja', 'Belanja barang'], ['antar', 'Antar ke dapur'], ['umum', 'Operasional umum'], ['pribadi', 'Pribadi']];
 const namaTerkait = x => x.terkait === 'belanja' ? 'Belanja' + (x.tempat ? ' di ' + x.tempat : ' barang') : x.terkait === 'antar' ? 'Antar ke ' + (x.dapur ? judulOutlet(x.dapur) : 'dapur') : x.terkait === 'pribadi' ? 'Pribadi' : x.terkait === 'gaji' ? 'Gaji karyawan' : 'Operasional umum';
 const idBaru = () => Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
+// 6 Nov 2026: tiap kunci disimpan utuh, jadi tab/HP yang memuat data lama bisa menimpa perubahan dari tempat lain (utang
+// manual 10 Okt kembali 32,6 jt saat saldo 31 Okt disimpan dari tab lama). Sebelum menyimpan, isi server dibandingkan dengan
+// isi saat dimuat; kalau sudah berubah, penyimpanan dibatalkan dan data dimuat ulang.
+const ASLI = {};
+const kanon = v => JSON.stringify(v ?? null, (k, x) => x && typeof x === 'object' && !Array.isArray(x) ? Object.fromEntries(Object.keys(x).sort().map(i => [i, x[i]])) : x);
 async function simpanNilai(kunci, nilai) {
-  const r = await rpc('mbg_simpan_nilai', { p_token: sesi.baca().token, p_kunci: kunci, p_nilai: nilai });
+  const tk = sesi.baca().token;
+  if (kunci in ASLI) { const c = await rpc('mbg_ambil_nilai', { p_token: tk, p_kunci: kunci });
+    if (c.ok && kanon(c.nilai) !== ASLI[kunci]) { setTimeout(() => muat(), 1500); throw new Error('Data ini baru diubah dari HP atau tab lain. Halaman dimuat ulang dulu supaya tidak menimpa, lalu ulangi isianmu.'); } }
+  const r = await rpc('mbg_simpan_nilai', { p_token: tk, p_kunci: kunci, p_nilai: nilai });
   if (!r.ok) throw new Error(r.pesan || 'Gagal menyimpan.');
+  ASLI[kunci] = kanon(nilai);
 }
 // Pekan gaji karyawan: Minggu sampai Sabtu (permintaan pemilik, 27 Sep 2026).
 // Pencatatan gaji di aplikasi dimulai 27 Sep 2026 (permintaan pemilik); sebelum itu gaji ada di laporan Excel.
@@ -3610,7 +3619,7 @@ muat().catch(e => { akar.innerHTML = `<div class="masuk"><div class="kotak"><h1>
 if ('serviceWorker' in navigator) addEventListener('load', () => navigator.serviceWorker.register('sw.js').catch(() => {}));
 // 23 Okt 2026 (pemilik: "masih tetap sama" setelah perubahan dipasang): aplikasi yang sudah terbuka/terpasang memeriksa
 // versi di server saat dibuka lagi dan tiap 5 menit. Kalau berbeda, muncul tombol "Perbarui NTA" (muat ulang tanpa salinan lama).
-const VERSI_NTA = 'mbg-v85';
+const VERSI_NTA = 'mbg-v86';
 async function cekVersiNta() { try { const t = await (await fetch('sw.js?cek=' + Date.now(), { cache: 'no-store' })).text(), v = (t.match(/mbg-v\d+/) || [])[0];
   if (!v || v === VERSI_NTA || document.getElementById('versiBaru')) return;
   const d = document.createElement('div'); d.id = 'versiBaru';
