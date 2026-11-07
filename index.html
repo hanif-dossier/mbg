@@ -1826,7 +1826,7 @@ function vKas(el, [no]) {
     { l: 'Biaya tetap', ket: 'gaji, langganan, tagihan rutin', v: -jmlS(katS.tetap), jml: 1, selalu: 1 }, ...urutS(katS.tetap).map(([k, j]) => ({ l: '· ' + k, v: -j })),
     { l: 'Biaya tidak tetap', ket: 'bensin, parkir, makan, ongkos antar, lainnya', v: -jmlS(katS['tidak tetap']), jml: 1, selalu: 1 }, ...urutS(katS['tidak tetap']).map(([k, j]) => ({ l: '· ' + k, v: -j })),
     { l: 'Laba bersih', v: R.labaBersih, jml: 1, warna: R.labaBersih >= 0 ? 'hijau' : 'merah' }];
-  const asetR = [...(S.sk ? [{ l: 'Uang tunai', v: S.sk.tunai }, ...BANK_KAS.map(b => ({ l: 'Saldo ' + b, v: +(S.sk.bank || {})[b] || 0 }))] : [{ l: 'Saldo bank dan tunai', v: 'belum diisi', selalu: 1 }]),
+  const asetR = [...(S.sk ? [{ l: 'Uang tunai', v: S.sk.tunai }, ...BANK_KAS.map(b => ({ l: 'Saldo ' + b, v: +(S.sk.bank || {})[b] || 0 })), { l: 'Jumlah saldo bank dan tunai', v: S.sk.tunai + S.sk.bankJml, jml: 1 }] : [{ l: 'Saldo bank dan tunai', v: 'belum diisi', selalu: 1 }]),
     { l: 'Piutang dapur', v: S.piuU }, { l: 'Piutang lain-lain', v: S.piuL }, { l: 'Stok gudang', v: S.stok != null ? S.stok : '-', selalu: 1 }, { l: 'Jumlah aset', v: S.TA != null ? S.TA : '-', jml: 1 },
     { l: 'Utang ke pemasok', ket: S.uB ? 'termasuk belanja belum lunas di Stok ' + rp(S.uB) : '', v: S.sk ? S.sk.utang + S.uB : '-', selalu: 1 }, { l: 'Dana lebih dapur', v: S.dana }, { l: 'Kekayaan bersih', ket: 'aset dikurangi utang', v: S.TE != null ? S.TE : '-', jml: 1, warna: 'hijau' }];
   // pilihan minggu: kotak pilihan dikelompokkan per bulan
@@ -1863,6 +1863,7 @@ function vKas(el, [no]) {
     <div class="grid g3" style="margin-top:10px">${BANK_KAS.map(b => `<label class="isian">Saldo ${esc(b)}<input type="number" inputmode="numeric" data-bank="${esc(b)}" data-rp value="${esc((isi.bank || {})[b] ?? '')}"></label>`).join('')}
       <label class="isian">Uang tunai<input type="number" inputmode="numeric" id="kTunai" data-rp value="${esc(isi.tunai ?? '')}"></label>
       <label class="isian">Utang lain ke pemasok <span class="samar" style="font-weight:400">(di luar belanja belum lunas di Stok)</span><input type="number" inputmode="numeric" id="kUtang" data-rp value="${esc(isi.utang ?? '')}"></label></div>
+    <div class="kartu" style="margin-top:10px;padding:12px 14px;display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap"><span class="label">Jumlah saldo bank dan tunai</span><b id="kJumlah" style="font-size:20px;font-variant-numeric:tabular-nums"></b></div>
     <div class="baris-aksi" style="margin-top:10px"><button class="tombol utama" id="kSimpan">Simpan saldo</button></div></details></section>
   <section class="bagian"><div class="grid g2" style="align-items:start">
     <div class="kartu"><span class="label">Uang masuk</span>${daftar(masukR)}</div>
@@ -1888,6 +1889,8 @@ function vKas(el, [no]) {
   const namaKas = `ARUS KAS MINGGU ${w.minggu} ${w.awal} SD ${w.akhir}`;
   $('#bKirimKas', el).onclick = e => kirimLaporan(lembarKas, namaKas, true, e.currentTarget);
   $('#bPdfKas', el).onclick = e => kirimLaporan(lembarKas, namaKas, false, e.currentTarget);
+  const jumlahSaldo = () => { const n = [...$$('[data-bank]', el), $('#kTunai', el)].reduce((a, i) => a + (+i.value || 0), 0); $('#kJumlah', el).textContent = rp(n); };
+  jumlahSaldo(); [...$$('[data-bank]', el), $('#kTunai', el)].forEach(i => i.addEventListener('input', jumlahSaldo));
   $('#kSimpan', el).onclick = async () => { const bank = {}; $$('[data-bank]', el).forEach(i => { if (i.value !== '') bank[i.dataset.bank] = +i.value; });
     const tunai = $('#kTunai', el).value, utang = $('#kUtang', el).value;
     if (!Object.keys(bank).length && tunai === '') return pesan('Isi saldo bank atau uang tunai.', true);
@@ -3663,7 +3666,7 @@ muat().catch(e => { akar.innerHTML = `<div class="masuk"><div class="kotak"><h1>
 if ('serviceWorker' in navigator) addEventListener('load', () => navigator.serviceWorker.register('sw.js').catch(() => {}));
 // 23 Okt 2026 (pemilik: "masih tetap sama" setelah perubahan dipasang): aplikasi yang sudah terbuka/terpasang memeriksa
 // versi di server saat dibuka lagi dan tiap 5 menit. Kalau berbeda, muncul tombol "Perbarui NTA" (muat ulang tanpa salinan lama).
-const VERSI_NTA = 'mbg-v87';
+const VERSI_NTA = 'mbg-v88';
 async function cekVersiNta() { try { const t = await (await fetch('sw.js?cek=' + Date.now(), { cache: 'no-store' })).text(), v = (t.match(/mbg-v\d+/) || [])[0];
   if (!v || v === VERSI_NTA || document.getElementById('versiBaru')) return;
   const d = document.createElement('div'); d.id = 'versiBaru';
