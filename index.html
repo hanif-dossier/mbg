@@ -2919,10 +2919,7 @@ function lembarInvoice(v) {
   <tfoot><tr><td colspan="5" class="kanan"><b>Total</b></td><td class="kanan"><b>${esc(rp(h.sub))}</b></td></tr>
   ${h.disk ? `<tr><td colspan="5" class="kanan">Diskon ${esc(angkaID(v.diskon))}%</td><td class="kanan">− ${esc(rp(h.disk))}</td></tr><tr><td colspan="5" class="kanan"><b>Jumlah dibayar</b></td><td class="kanan"><b>${esc(rp(h.total))}</b></td></tr>` : ''}</tfoot></table>
   <div class="kecil" style="margin-top:8px">Terbilang: <i>${esc(terbilang(h.total))}</i></div>
-  ${(() => { const R = v.id ? setoranInv(v).filter(b => !b.maya) : []; if (!R.length) return ''; let j = 0;
-    return `<h4 style="margin:14px 0 4px">Setoran</h4><table><thead><tr><th style="width:34px">No</th><th>Tanggal setor</th><th>Keterangan</th><th class="kanan">Setoran</th><th class="kanan">Sisa tagihan</th></tr></thead>
-      <tbody>${R.map((b, i) => { j += b.jumlah; return `<tr><td>${i + 1}</td><td>${esc(b.tgl ? tgl(b.tgl, true) : '-')}</td><td>${esc(b.ket || 'setoran')}</td><td class="kanan">${esc(rp(b.jumlah))}</td><td class="kanan">${esc(rp(Math.max(0, h.total - j)))}</td></tr>`; }).join('')}</tbody>
-      <tfoot><tr><td colspan="3" class="kanan"><b>Total setoran</b></td><td class="kanan"><b>${esc(rp(j))}</b></td><td class="kanan"><b>${esc(rp(Math.max(0, h.total - j)))}</b></td></tr></tfoot></table>`; })()}
+  ${''/* tabel setoran dihapus dari lembar nota (12 Nov 2026); rincian setoran ada di kartu Setoran nota */}
   <div class="ttd"><div>Tanda terima,<br><span class="kecil">&nbsp;</span><div class="garis-ttd">( ................................ )</div></div><div>Hormat kami,<br><span class="kecil">${esc(PENERBIT.nama.toUpperCase())}</span><div class="garis-ttd">( ${esc(rk ? rk.atasNama : namaTtd())} )</div></div></div>`;
 }
 
@@ -3676,7 +3673,7 @@ muat().catch(e => { akar.innerHTML = `<div class="masuk"><div class="kotak"><h1>
 if ('serviceWorker' in navigator) addEventListener('load', () => navigator.serviceWorker.register('sw.js').catch(() => {}));
 // 23 Okt 2026 (pemilik: "masih tetap sama" setelah perubahan dipasang): aplikasi yang sudah terbuka/terpasang memeriksa
 // versi di server saat dibuka lagi dan tiap 5 menit. Kalau berbeda, muncul tombol "Perbarui NTA" (muat ulang tanpa salinan lama).
-const VERSI_NTA = 'mbg-v91';
+const VERSI_NTA = 'mbg-v92';
 async function cekVersiNta() { try { const t = await (await fetch('sw.js?cek=' + Date.now(), { cache: 'no-store' })).text(), v = (t.match(/mbg-v\d+/) || [])[0];
   if (!v || v === VERSI_NTA || document.getElementById('versiBaru')) return;
   const d = document.createElement('div'); d.id = 'versiBaru';
