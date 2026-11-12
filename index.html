@@ -1941,11 +1941,13 @@ async function catatBayarDapur(p, jumlah, t, ket) {
   return 'Pembayaran ' + rp(jumlah) + ': ' + kena.join(', ') + (sisa > 0 ? '. Kelebihan ' + rp(sisa) + ': piutang ' + judulOutlet(p.outlet) + ' jadi minus dan memotong nota berikutnya.' : '.'); }
 function dialogLunas(p, selesai) {
   const sisa = Math.max(0, Math.round(+p.nominal || 0)), hIni = new Date().toLocaleDateString('sv-SE');
+  const vInv = p.sumber === 'invoice' ? INVOICE.find(v => v.id === p.invId) : null;
+  const titip = vInv ? Math.max(0, Math.round(hitungInv(vInv).titip - (PIU.dana || []).filter(d => d.titip && d.inv === vInv.id).reduce((a, d) => a + (+d.jumlah || 0), 0))) : 0, totalNota = sisa + titip;
   const lama = $('#dialogLunas'); if (lama) lama.remove();
   const el = document.createElement('div'); el.id = 'dialogLunas'; el.className = 'tirai-dialog';
   el.innerHTML = `<div class="kartu dialog"><h3 style="margin:0 0 4px">Tandai lunas</h3>
-    <p class="samar" style="margin:0 0 12px;font-size:13px">${esc(p.outlet ? judulOutlet(p.outlet) : p.pihak || '')} · ${esc(namaTagih(p))} · sisa tagihan <b>${esc(rp(sisa))}</b>. Isi uang yang benar-benar masuk ke rekening atau kas.</p>
-    <div class="grid g2"><label class="isian">Uang yang diterima (Rp)<input type="number" id="dlJml" data-rp inputmode="numeric" min="0" value="${sisa}"></label>
+    <p class="samar" style="margin:0 0 12px;font-size:13px">${esc(p.outlet ? judulOutlet(p.outlet) : p.pihak || '')} · ${esc(namaTagih(p))} · sisa tagihan <b>${esc(rp(sisa))}</b>${titip ? ` + titipan <b>${esc(rp(titip))}</b> = <b>${esc(rp(totalNota))}</b>` : ''}. Isi uang yang benar-benar masuk ke rekening atau kas.</p>
+    <div class="grid g2"><label class="isian">Uang yang diterima (Rp)<input type="number" id="dlJml" data-rp inputmode="numeric" min="0" value="${totalNota}"></label>
       <label class="isian">Tanggal uang masuk<input type="date" id="dlTgl" value="${hIni}"></label></div>
     <label class="isian" style="margin-top:8px">Keterangan<input id="dlKet" placeholder="transfer BRI, tunai, dll. (boleh kosong)"></label>
     <div id="dlBeda" style="margin-top:10px;font-size:13px"></div>
@@ -1956,6 +1958,8 @@ function dialogLunas(p, selesai) {
     if (k >= 1) d.innerHTML = `<p style="margin:0 0 6px">Kurang <b>${esc(rp(k))}</b> dari tagihan. Sisanya:</p>
       <label style="display:flex;gap:8px;align-items:flex-start;margin:6px 0;cursor:pointer"><input type="radio" name="dlSisa" value="piutang" ${pilih === 'piutang' ? 'checked' : ''}><span>Tetap jadi piutang, ditagih lagi nanti</span></label>
       <label style="display:flex;gap:8px;align-items:flex-start;margin:6px 0;cursor:pointer"><input type="radio" name="dlSisa" value="potong" ${pilih === 'potong' ? 'checked' : ''}><span>Tidak ditagih lagi (potongan). Dicatat sebagai biaya <b>Potongan pembayaran</b> dan mengurangi laba minggu itu, bukan uang keluar.</span></label>`;
+    else if (vInv && j - totalNota >= 1) d.innerHTML = `<p class="merah" style="margin:0">Lebih <b>${esc(rp(j - totalNota))}</b> dari total nota${titip ? ' termasuk titipan' : ''} (${esc(rp(totalNota))}). Kelebihan transfer dicatat di menu Piutang, bukan di sini.</p>`;
+    else if (vInv && k <= -1) d.innerHTML = `<p class="samar" style="margin:0"><b>${esc(rp(-k))}</b> untuk titipan: dicatat sebagai bayaran titipan, tidak masuk arus kas.</p>`;
     else if (k <= -1) d.innerHTML = p.usaha ? `<p class="samar" style="margin:0">Lebih <b>${esc(rp(-k))}</b>: dipakai untuk nota ${esc(judulOutlet(p.outlet))} lain yang belum lunas, sisanya membuat piutang ${esc(judulOutlet(p.outlet))} minus.</p>`
       : `<p class="merah" style="margin:0">Lebih besar dari sisa piutang (${esc(rp(sisa))}).</p>`;
     else d.innerHTML = '';
@@ -1966,10 +1970,14 @@ function dialogLunas(p, selesai) {
     if (!t) return pesan('Tanggal uang masuk belum diisi.', true);
     if (j < 0) return pesan('Jumlah tidak boleh minus.', true);
     if (k <= -1 && !p.usaha) return pesan('Lebih besar dari sisa piutang (' + rp(sisa) + ').', true);
+    if (vInv && j - totalNota >= 1) return pesan('Lebih dari total nota (' + rp(totalNota) + '). Kelebihan transfer dicatat di menu Piutang.', true);
     if (j <= 0 && pilih !== 'potong') return pesan('Uang yang diterima belum diisi. Kalau memang tidak dibayar sama sekali, pilih "Tidak ditagih lagi".', true);
     const tb = $('#dlSimpan', el); tb.disabled = true;
     try { const hasil = [];
-      if (j > 0) hasil.push(await catatBayarDapur(p, j, t, ket));
+      const jMilik = vInv ? Math.min(j, sisa) : j, jTitip = vInv ? Math.max(0, j - sisa) : 0;
+      if (jMilik > 0) hasil.push(await catatBayarDapur(p, jMilik, t, ket));
+      if (jTitip > 0) { await simpanPiutang({ ...PIU, dana: [...(PIU.dana || []), { id: idBaru(), outlet: p.outlet, tgl: t, jumlah: jTitip, ket: ['bayaran titipan ' + namaTagih(p), ket].filter(Boolean).join(' · '), titip: true, inv: vInv.id }] });
+        hasil.push('Titipan ' + rp(jTitip) + ' dicatat terpisah, tidak masuk arus kas.'); }
       if (k >= 1 && pilih === 'potong') {
         await simpanPiutang({ ...PIU, bayar: [...PIU.bayar, { id: idBaru(), ref: p.ref, tgl: t, jumlah: k, ket: ['potongan, tidak dibayar', ket].filter(Boolean).join(' · '), potong: true }] });
         if (p.sumber === 'invoice') await setLunasInvoice(p.invId, true, t);
@@ -3668,7 +3676,7 @@ muat().catch(e => { akar.innerHTML = `<div class="masuk"><div class="kotak"><h1>
 if ('serviceWorker' in navigator) addEventListener('load', () => navigator.serviceWorker.register('sw.js').catch(() => {}));
 // 23 Okt 2026 (pemilik: "masih tetap sama" setelah perubahan dipasang): aplikasi yang sudah terbuka/terpasang memeriksa
 // versi di server saat dibuka lagi dan tiap 5 menit. Kalau berbeda, muncul tombol "Perbarui NTA" (muat ulang tanpa salinan lama).
-const VERSI_NTA = 'mbg-v90';
+const VERSI_NTA = 'mbg-v91';
 async function cekVersiNta() { try { const t = await (await fetch('sw.js?cek=' + Date.now(), { cache: 'no-store' })).text(), v = (t.match(/mbg-v\d+/) || [])[0];
   if (!v || v === VERSI_NTA || document.getElementById('versiBaru')) return;
   const d = document.createElement('div'); d.id = 'versiBaru';
