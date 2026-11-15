@@ -1180,6 +1180,7 @@ function keluarInvoice(daftar) {
   const out = [];
   for (const v of INVOICE) for (const x of hitungInv(v).b.filter(x => qtyMilik(x) > 0)) {
     const b = cocokStok(daftar, x.barang, x.satuan);
+    if (b && b.stokSejak && (v.tanggal || '') < b.stokSejak) continue;   // 15 Nov 2026: barang yang baru jadi barang stok sesudah tanggal invoice tetap beli langsung jual
     if (b) out.push({ id: 'inv:' + v.id + ':' + x.barang, kode: b.kode, jenis: 'keluar', jumlah: qtyMilik(x) * (faktorB(b, x.satuan) || 1), tgl: v.tanggal, ket: `invoice ${judulOutlet(v.outlet)} nota ${nomorNota(v.nomor)}${qtyTitip(x) ? ' (tanpa titipan ' + angkaID(qtyTitip(x)) + ')' : ''}`, dibuat: v.dibuat || '', inv: v.id });
   }
   return out;
@@ -1753,7 +1754,7 @@ function arusMinggu(w) { const a = w.awal, z = w.akhir, dalam = t => t && t >= a
   const lunasTanpaCatat = jmlLK(INVOICE.filter(v => v.lunas && dalam(v.tglLunas) && !notaTitip(v)), v => Math.max(0, tagihInv(v) - jmlLK((PIU.bayar || []).filter(b => b.ref === 'i:' + v.id), b => +b.jumlah) - potonganDana(v)));
   const dana = jmlLK((PIU.dana || []).filter(d => d.jenis !== 'pakai' && !d.titip && dalam(d.tgl)), d => +d.jumlah);
   const daftar = stokKini().barang, beliStok = jmlLK((STOK.gerak || []).filter(x => x.jenis === 'beli' && dalam(x.tgl)), x => x.jumlah * (+x.harga || 0));
-  const beliLangsung = jmlLK(w.rincian.filter(r => !cocokStok(daftar, r.b, r.s)), r => (+r.q || 0) * (+r.m || 0));
+  const beliLangsung = jmlLK(w.rincian.filter(r => { const b = cocokStok(daftar, r.b, r.s); return !b || (b.stokSejak && (r.t || '') < b.stokSejak); }), r => (+r.q || 0) * (+r.m || 0));
   const ops = jmlLK(w.biaya.filter(b => b.operasional && !b.nonkas), b => b.jumlah), prive = jmlLK(w.biaya.filter(b => !b.operasional), b => b.jumlah), gaji = jmlLK(w.biaya.filter(b => b.operasional && /gaji/i.test(b.kategori || '')), b => b.jumlah);
   const masuk = dapur + lunasTanpaCatat + dana + lain, keluar = beliStok + beliLangsung + (w.total.fee || 0) + ops + prive;
   const tetap = jmlLK(w.biaya.filter(b => b.operasional && !b.nonkas && sifatBiaya(b) === 'tetap'), b => b.jumlah);
@@ -3673,7 +3674,7 @@ muat().catch(e => { akar.innerHTML = `<div class="masuk"><div class="kotak"><h1>
 if ('serviceWorker' in navigator) addEventListener('load', () => navigator.serviceWorker.register('sw.js').catch(() => {}));
 // 23 Okt 2026 (pemilik: "masih tetap sama" setelah perubahan dipasang): aplikasi yang sudah terbuka/terpasang memeriksa
 // versi di server saat dibuka lagi dan tiap 5 menit. Kalau berbeda, muncul tombol "Perbarui NTA" (muat ulang tanpa salinan lama).
-const VERSI_NTA = 'mbg-v94';
+const VERSI_NTA = 'mbg-v95';
 async function cekVersiNta() { try { const t = await (await fetch('sw.js?cek=' + Date.now(), { cache: 'no-store' })).text(), v = (t.match(/mbg-v\d+/) || [])[0];
   if (!v || v === VERSI_NTA || document.getElementById('versiBaru')) return;
   const d = document.createElement('div'); d.id = 'versiBaru';
