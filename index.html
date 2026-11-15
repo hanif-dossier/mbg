@@ -1755,19 +1755,17 @@ function arusMinggu(w) { const a = w.awal, z = w.akhir, dalam = t => t && t >= a
   const daftar = stokKini().barang, beliStok = jmlLK((STOK.gerak || []).filter(x => x.jenis === 'beli' && dalam(x.tgl)), x => x.jumlah * (+x.harga || 0));
   const beliLangsung = jmlLK(w.rincian.filter(r => !cocokStok(daftar, r.b, r.s)), r => (+r.q || 0) * (+r.m || 0));
   const ops = jmlLK(w.biaya.filter(b => b.operasional && !b.nonkas), b => b.jumlah), prive = jmlLK(w.biaya.filter(b => !b.operasional), b => b.jumlah), gaji = jmlLK(w.biaya.filter(b => b.operasional && /gaji/i.test(b.kategori || '')), b => b.jumlah);
-  const titipKeluar = jmlLK(INVOICE.filter(v => dalam(v.tanggal)), v => nilaiTitip(v) >= 1 ? modalTitip(v) : 0);
-  const titipMasuk = jmlLK((PIU.dana || []).filter(d => d.titip && dalam(d.tgl)), d => +d.jumlah) + jmlLK(INVOICE.filter(v => v.lunas && dalam(v.tglLunas)), v => { const n = nilaiTitip(v); return n >= 1 ? Math.max(0, n - danaTitipInv(v, v.tglLunas)) : 0; });
-  const masuk = dapur + lunasTanpaCatat + dana + lain + titipMasuk, keluar = beliStok + beliLangsung + (w.total.fee || 0) + ops + prive + titipKeluar;
+  const masuk = dapur + lunasTanpaCatat + dana + lain, keluar = beliStok + beliLangsung + (w.total.fee || 0) + ops + prive;
   const tetap = jmlLK(w.biaya.filter(b => b.operasional && !b.nonkas && sifatBiaya(b) === 'tetap'), b => b.jumlah);
-  return { dapur, lunasTanpaCatat, dana, lain, titipMasuk, titipKeluar, masuk, beliStok, beliLangsung, fee: w.total.fee || 0, gaji, ops, opsLain: ops - gaji, tetap, tidakTetap: ops - tetap, prive, keluar }; }
+  return { dapur, lunasTanpaCatat, dana, lain, masuk, beliStok, beliLangsung, fee: w.total.fee || 0, gaji, ops, opsLain: ops - gaji, tetap, tidakTetap: ops - tetap, prive, keluar }; }
 // perubahan utang ke pemasok selama minggu w: isian manual akhir minggu + belanja yang ditandai belum lunas di Stok
 function dUtangMinggu(w) { const skAwal = saldoPer(tambahHari(w.awal, -1)), skAkhir = KAS.minggu[w.akhir] ? saldoPer(w.akhir, w.akhir) : null;
   return (skAwal && skAkhir ? skAkhir.utang - skAwal.utang : 0) + utangBelanja(w.akhir) - utangBelanja(tambahHari(w.awal, -1)); }
 // posisi aset pada tanggal t (akhir minggu)
-function asetPer(t) { const sk = saldoPer(t), P = piutangPer(t), st = stokPer(t), lebih = jmlLK(danaPer(t), o => o.sisa), dana = 0, piuT = jmlLK(titipPer(t), o => o.sisa);
+function asetPer(t) { const sk = saldoPer(t), P = piutangPer(t), st = stokPer(t), lebih = jmlLK(danaPer(t), o => o.sisa), dana = 0;
   const piuU = jmlLK(P.filter(p => p.usaha), p => p.sisa) - lebih, piuL = jmlLK(P.filter(p => !p.usaha), p => p.sisa), stok = st ? st.nilai : null;
-  const TA = sk && stok != null ? sk.tunai + sk.bankJml + piuU + piuL + piuT + stok : null, uB = utangBelanja(t), TL = sk ? sk.utang + uB + dana : null;
-  return { sk, uB, piuU, piuL, piuT, stok, dana, lebih, TA, TL, TE: TA != null && TL != null ? TA - TL : null }; }
+  const TA = sk && stok != null ? sk.tunai + sk.bankJml + piuU + piuL + stok : null, uB = utangBelanja(t), TL = sk ? sk.utang + uB + dana : null;
+  return { sk, uB, piuU, piuL, stok, dana, lebih, TA, TL, TE: TA != null && TL != null ? TA - TL : null }; }
 // daftar angka berkartu: [{judul}] atau [{l, v, ket, jml, warna, selalu}]; baris bernilai 0 disembunyikan kecuali jml/selalu
 const daftarRp = R0 => `<div class="kas-daftar">${R0.filter(r => r.judul || r.jml || r.selalu || (typeof r.v === 'number' && Math.round(r.v))).map(r => r.judul ? `<div class="kas-sub">${esc(r.judul)}</div>`
   : `<div class="kas-baris${r.jml ? ' jml' : ''}"><span>${esc(r.l)}${r.ket ? `<small>${esc(r.ket)}</small>` : ''}</span><b class="${r.warna || ''}">${typeof r.v === 'number' ? (Math.round(r.v) < 0 ? '− ' : '') + esc(rp(Math.abs(r.v))) : esc(r.v)}</b></div>`).join('')}</div>`;
@@ -1785,11 +1783,11 @@ function vKas(el, [no]) {
   const kas = tabelLK(['Minggu ' + w.minggu], [
     { t: 'judul', l: 'Uang masuk' },
     baris('Pembayaran dari dapur', A.dapur + A.dana, { ket: 'setoran dan transfer yang dicatat di Piutang' }), baris('Nota ditandai lunas tanpa catatan setoran', A.lunasTanpaCatat),
-    baris('Piutang lain-lain yang dibayar', A.lain), ...(A.titipMasuk ? [baris('Penggantian barang titipan dari dapur', A.titipMasuk)] : []),
+    baris('Piutang lain-lain yang dibayar', A.lain),
     { t: 'jumlah', l: 'Jumlah uang masuk', v: [A.masuk] },
     { t: 'judul', l: 'Uang keluar' },
     baris('Belanja stok gudang', -A.beliStok, { ket: 'belanja yang dicatat di menu Stok' }), baris('Belanja barang beli langsung jual', -A.beliLangsung, { ket: 'modal barang di nota yang tidak disimpan di gudang' }),
-    ...(A.titipKeluar ? [baris('Belanja barang titipan (diganti dapur)', -A.titipKeluar, { ket: 'tidak masuk laba' })] : []), baris('Fee mitra dapur', -A.fee), baris('Biaya tetap', -A.tetap, { ket: 'gaji, langganan, tagihan rutin' }), baris('Biaya tidak tetap', -A.tidakTetap, { ket: 'bensin, parkir, makan, ongkos antar, lainnya' }), baris('Pengambilan pribadi (prive)', -A.prive),
+    baris('Fee mitra dapur', -A.fee), baris('Biaya tetap', -A.tetap, { ket: 'gaji, langganan, tagihan rutin' }), baris('Biaya tidak tetap', -A.tidakTetap, { ket: 'bensin, parkir, makan, ongkos antar, lainnya' }), baris('Pengambilan pribadi (prive)', -A.prive),
     { t: 'jumlah', l: 'Jumlah uang keluar', v: [-A.keluar] },
     ...(dUtang ? [baris(dUtang > 0 ? 'Belanja yang belum dibayar (utang bertambah)' : 'Pembayaran utang ke pemasok', dUtang)] : []),
     { t: 'total', l: 'Kenaikan (penurunan) uang minggu ini', v: [bersih] },
@@ -1809,7 +1807,7 @@ function vKas(el, [no]) {
   const aset = tabelLK(kol, [
     { t: 'judul', l: 'Aset' }, baris('Uang tunai', S.sk ? S.sk.tunai : '-'), ...BANK_KAS.filter(b => S.sk && +(S.sk.bank || {})[b]).map(b => baris('Saldo ' + b, +(S.sk.bank || {})[b])),
     ...(S.sk ? [] : [baris('Saldo bank', '-', { ket: 'belum diisi' })]),
-    baris('Piutang dapur', S.piuU, S.lebih ? { ket: 'sudah dikurangi kelebihan transfer dapur ' + rp(S.lebih) } : {}), baris('Piutang lain-lain', S.piuL), ...(S.piuT ? [baris('Piutang titipan dapur', S.piuT, { ket: 'belanja titipan yang belum diganti dapur' })] : []), baris('Stok gudang', S.stok != null ? S.stok : '-'),
+    baris('Piutang dapur', S.piuU, S.lebih ? { ket: 'sudah dikurangi kelebihan transfer dapur ' + rp(S.lebih) } : {}), baris('Piutang lain-lain', S.piuL), baris('Stok gudang', S.stok != null ? S.stok : '-'),
     { t: 'jumlah', l: 'Jumlah aset', v: [S.TA != null ? S.TA : '-'] },
     { t: 'judul', l: 'Utang' }, baris('Utang ke pemasok', S.sk ? S.sk.utang + S.uB : '-', S.uB ? { ket: 'termasuk belanja belum lunas di Stok ' + rp(S.uB) } : {}),
     { t: 'jumlah', l: 'Jumlah utang', v: [S.TL != null ? S.TL : '-'] },
@@ -1820,8 +1818,8 @@ function vKas(el, [no]) {
   const f = vKas.f ||= { semua: false };
   const daftar = daftarRp;
   const masukR = [{ l: 'Pembayaran dari dapur', ket: 'setoran dan transfer yang dicatat', v: A.dapur + A.dana }, { l: 'Nota ditandai lunas', ket: 'tanpa catatan setoran', v: A.lunasTanpaCatat },
-    { l: 'Piutang lain-lain dibayar', v: A.lain }, ...(A.titipMasuk ? [{ l: 'Penggantian titipan dari dapur', v: A.titipMasuk }] : []), { l: 'Jumlah uang masuk', v: A.masuk, jml: 1, warna: 'hijau' }];
-  const keluarR = [{ l: 'Belanja stok gudang', v: A.beliStok }, { l: 'Belanja barang beli langsung jual', v: A.beliLangsung }, ...(A.titipKeluar ? [{ l: 'Belanja barang titipan', ket: 'diganti dapur, tidak masuk laba', v: A.titipKeluar }] : []), { l: 'Fee mitra dapur', v: A.fee }, { l: 'Biaya tetap', ket: 'gaji, langganan, tagihan rutin', v: A.tetap },
+    { l: 'Piutang lain-lain dibayar', v: A.lain }, { l: 'Jumlah uang masuk', v: A.masuk, jml: 1, warna: 'hijau' }];
+  const keluarR = [{ l: 'Belanja stok gudang', v: A.beliStok }, { l: 'Belanja barang beli langsung jual', v: A.beliLangsung }, { l: 'Fee mitra dapur', v: A.fee }, { l: 'Biaya tetap', ket: 'gaji, langganan, tagihan rutin', v: A.tetap },
     { l: 'Biaya tidak tetap', ket: 'bensin, parkir, makan, ongkos antar', v: A.tidakTetap }, { l: 'Pengambilan pribadi', v: A.prive }, ...(dUtang ? [{ l: dUtang > 0 ? 'Dikurangi belanja yang belum dibayar' : 'Pembayaran utang ke pemasok', v: -dUtang }] : []),
     { l: 'Jumlah uang keluar', v: A.keluar - dUtang, jml: 1, warna: 'kunyit' }];
   const lrR = [{ l: 'Penjualan ke dapur', v: R.omzet, selalu: 1 }, { l: 'Modal barang terjual', v: -R.modal }, { l: 'Fee mitra dapur', v: -R.fee }, { l: 'Pengeluaran di nota', v: -(R.pengeluaran || 0) },
@@ -1830,7 +1828,7 @@ function vKas(el, [no]) {
     { l: 'Biaya tidak tetap', ket: 'bensin, parkir, makan, ongkos antar, lainnya', v: -jmlS(katS['tidak tetap']), jml: 1, selalu: 1 }, ...urutS(katS['tidak tetap']).map(([k, j]) => ({ l: '· ' + k, v: -j })),
     { l: 'Laba bersih', v: R.labaBersih, jml: 1, warna: R.labaBersih >= 0 ? 'hijau' : 'merah' }];
   const asetR = [...(S.sk ? [{ l: 'Uang tunai', v: S.sk.tunai }, ...BANK_KAS.map(b => ({ l: 'Saldo ' + b, v: +(S.sk.bank || {})[b] || 0 })), { l: 'Jumlah saldo bank dan tunai', v: S.sk.tunai + S.sk.bankJml, jml: 1 }] : [{ l: 'Saldo bank dan tunai', v: 'belum diisi', selalu: 1 }]),
-    { l: 'Piutang dapur', ket: S.lebih ? 'sudah dikurangi kelebihan transfer ' + rp(S.lebih) : '', v: S.piuU }, { l: 'Piutang lain-lain', v: S.piuL }, ...(S.piuT ? [{ l: 'Piutang titipan dapur', ket: 'belanja titipan yang belum diganti', v: S.piuT }] : []), { l: 'Stok gudang', v: S.stok != null ? S.stok : '-', selalu: 1 }, { l: 'Jumlah aset', v: S.TA != null ? S.TA : '-', jml: 1 },
+    { l: 'Piutang dapur', ket: S.lebih ? 'sudah dikurangi kelebihan transfer ' + rp(S.lebih) : '', v: S.piuU }, { l: 'Piutang lain-lain', v: S.piuL }, { l: 'Stok gudang', v: S.stok != null ? S.stok : '-', selalu: 1 }, { l: 'Jumlah aset', v: S.TA != null ? S.TA : '-', jml: 1 },
     { l: 'Utang ke pemasok', ket: S.uB ? 'termasuk belanja belum lunas di Stok ' + rp(S.uB) : '', v: S.sk ? S.sk.utang + S.uB : '-', selalu: 1 }, { l: 'Kekayaan bersih', ket: 'aset dikurangi utang', v: S.TE != null ? S.TE : '-', jml: 1, warna: 'hijau' }];
   // pilihan minggu: kotak pilihan dikelompokkan per bulan
   const perBulan = {}; for (const x of W) (perBulan[x.awal.slice(0, 7)] ||= []).push(x);
@@ -2065,10 +2063,9 @@ function vPiutang(el, a = []) {
     <h2>Piutang <span class="miring">belum dibayar</span></h2>
     <details class="ket-lipat"><summary class="samar" style="cursor:pointer;font-size:13px">Tentang piutang</summary><p class="ket">Dari buku piutang Excel, invoice yang belum lunas, dan yang kamu catat di sini. Pembayaran boleh sebagian; sisanya tetap tercatat sampai lunas. Tagihan ke dapur dipisah dari piutang ke keluarga atau kenalan, karena yang kedua bukan hasil jualan.</p></details>
     ${(semuaPiutang.kembar || []).length ? `<p class="samar" style="font-size:12.5px;margin:-4px 0 12px">${semuaPiutang.kembar.length} baris di buku piutang Excel sama dengan invoice aplikasi (${esc(semuaPiutang.kembar.map(k => judulOutlet(k.excel.outlet) + ' ' + rpS(k.excel.nominal)).join(', '))}), jadi hanya dihitung sekali lewat invoicenya.</p>` : ''}
-    <div class="grid g4">
+    <div class="grid g3">
       <div class="kartu ubin"><span class="label">Total belum dibayar</span><div class="nilai">${esc(rpS(blm.reduce((a, p) => a + p.nominal, 0) - danaSisa))}</div><small>${blm.length} tagihan${danaSisa ? ' · dikurangi kelebihan transfer' : ''}</small></div>
       <div class="kartu ubin"><span class="label">Dapur</span><div class="nilai">${esc(rpS(usaha.reduce((a, p) => a + p.nominal, 0) - danaSisa))}</div><small>${danaSisa ? 'dikurangi kelebihan transfer ' + esc(rpS(danaSisa)) : 'piutang usaha'}</small></div>
-      ${(() => { const T = titipPer(hIni).filter(o => o.sisa >= 1); return T.length ? `<div class="kartu ubin"><span class="label">Titipan belum diganti</span><div class="nilai kunyit">${esc(rpS(T.reduce((a, o) => a + o.sisa, 0)))}</div><small>${esc(T.map(o => judulOutlet(o.outlet) + ' ' + rpS(o.sisa)).join(', '))} · tidak masuk laba</small></div>` : ''; })()}
       <div class="kartu ubin"><span class="label">Lain-lain</span><div class="nilai">${esc(rpS(lain.reduce((a, p) => a + p.nominal, 0)))}</div><small>pinjaman ke pihak terkait</small></div>
     </div>
   </section>
@@ -2176,18 +2173,6 @@ const milikInv = v => totalInv(v) - (hitungInv(v).titip || 0);
 const tandaTitipNota = v => !!(((typeof PIU !== 'undefined' && PIU && PIU.ubah) || {})['i:' + v.id] || {}).titipNota;
 const notaTitip = v => totalInv(v) > 0 && (tandaTitipNota(v) || milikInv(v) <= 0);
 const tagihInv = v => notaTitip(v) ? 0 : Math.max(0, milikInv(v));
-const barisTitipDapur = v => hitungInv(v).b.filter(x => notaTitip(v) || (qtyTitip(x) > 0 && !titipKeMitra(x)));
-const qTitipB = (v, x) => notaTitip(v) ? (+x.qty || 0) : qtyTitip(x);
-const nilaiTitip = v => notaTitip(v) ? totalInv(v) : barisTitipDapur(v).reduce((a, x) => a + qTitipB(v, x) * (+x.harga || 0), 0);
-// uang yang keluar untuk membeli titipan: modal per baris (kalau modalnya tidak masuk akal, lebih dari harga, pakai harga)
-const modalTitip = v => barisTitipDapur(v).reduce((a, x) => { const h = +x.harga || 0, m = +x.modal || 0; return a + qTitipB(v, x) * (m && m <= h ? m : h); }, 0);
-const danaTitipInv = (v, t) => (PIU.dana || []).filter(d => d.titip && d.inv === v.id && (!t || d.tgl <= t)).reduce((a, d) => a + (+d.jumlah || 0), 0);
-// titipan per dapur sampai tanggal t: nilai nota titipan, yang sudah diganti (bayaran titipan + nota yang ditandai lunas), sisa
-function titipPer(t) { const per = {};
-  for (const v of INVOICE) { if (!v.tanggal || v.tanggal > t) continue; const n = nilaiTitip(v); if (n < 1) continue; const o = per[v.outlet] ||= { outlet: v.outlet, nilai: 0, ganti: 0, nota: [] };
-    o.nilai += n; o.nota.push(v); if (v.lunas && v.tglLunas && v.tglLunas <= t) o.ganti += Math.max(0, n - danaTitipInv(v, t)); }
-  for (const d of PIU.dana || []) if (d.titip && d.tgl && d.tgl <= t) { const o = per[d.outlet] ||= { outlet: d.outlet, nilai: 0, ganti: 0, nota: [] }; o.ganti += +d.jumlah || 0; }
-  return Object.values(per).map(o => ({ ...o, sisa: Math.max(0, o.nilai - o.ganti) })); }
 const barisMilik = h => h.b.filter(b => qtyMilik(b) > 0).map(b => ({ barang: namaNota(b), qty: qtyMilik(b), satuan: b.satuan || '', harga: +b.harga || 0, jumlah: qtyMilik(b) * (+b.harga || 0) }));
 function susunDana(o) {
   const kiri = [];
@@ -2503,7 +2488,7 @@ function posisiLK(k) { const t = akhirLK(k), base = [...(D.neraca || [])].filter
   const v = x => base.isian[x] && base.isian[x].nilai != null ? +base.isian[x].nilai : 0, sama = base.bulan === k;
   const P = piutangPer(t), stok = sama && v('A6') && !(INDUK() && t >= INDUK().tgl) ? { nilai: v('A6'), rinci: (stokPer(t) || {}).rinci || [], dariIsian: true } : (stokPer(t) || { nilai: v('A6'), rinci: [], dariIsian: true }), dana = danaPer(t);
   const sk = saldoPer(t, base.bulan + '-01');   // saldo yang diisi di Arus kas (mingguan) menggantikan isian berkas neraca
-  const L = { kas: sk ? sk.tunai : v('A1'), bank: sk ? sk.bankJml : v('A2'), ew: v('A3'), piuU: jmlLK(P.filter(p => p.usaha), p => p.sisa) - jmlLK(dana, o => o.sisa), piuL: jmlLK(P.filter(p => !p.usaha), p => p.sisa), piuT: jmlLK(titipPer(t), o => o.sisa), stok: stok.nilai, um: v('A7'), dm: v('A8') };
+  const L = { kas: sk ? sk.tunai : v('A1'), bank: sk ? sk.bankJml : v('A2'), ew: v('A3'), piuU: jmlLK(P.filter(p => p.usaha), p => p.sisa) - jmlLK(dana, o => o.sisa), piuL: jmlLK(P.filter(p => !p.usaha), p => p.sisa), stok: stok.nilai, um: v('A7'), dm: v('A8') };
   const T = { kend: v('B1'), akKend: -v('B2'), alat: v('B3'), akAlat: -v('B4'), renov: v('B5'), akRenov: -v('B6') };
   const LP = { supl: sk ? sk.utang : v('C1'), dana: 0, titip: v('C2'), gaji: v('C3'), pinj: v('C4'), lain: v('C5') }, LJ = { pinj: v('D1') };
   const bln = BULAN.filter(x => x.bulan >= base.bulan && x.bulan <= k);
@@ -2612,7 +2597,7 @@ function vNeraca(el, [bln]) {
     tabelLK(kolomN, saring([
       { t: 'judul', l: 'Aset' }, { t: 'sub', l: 'Aset lancar', v: ['', ''] },
       p('Kas di tangan', 2, x => x.L.kas, { wajib: 1 }), p('Saldo bank', 2, x => x.L.bank, { wajib: 1 }), p('Saldo dompet digital', 2, x => x.L.ew),
-      p('Piutang usaha (dapur)', 3, x => x.L.piuU, { wajib: 1 }), p('Piutang lain-lain', 3, x => x.L.piuL), p('Piutang titipan dapur', 3, x => x.L.piuT || 0, { ket: 'belanja titipan yang belum diganti dapur' }), p('Persediaan barang', 4, x => x.L.stok, { wajib: 1 }),
+      p('Piutang usaha (dapur)', 3, x => x.L.piuU, { wajib: 1 }), p('Piutang lain-lain', 3, x => x.L.piuL), p('Persediaan barang', 4, x => x.L.stok, { wajib: 1 }),
       p('Uang muka ke pemasok', '', x => x.L.um), p('Biaya dibayar di muka', '', x => x.L.dm),
       { t: 'jumlah', l: 'Jumlah aset lancar', v: dua(x => x.TAL) },
       ...(ada(dua(x => x.TAT)) ? [{ t: 'sub', l: 'Aset tidak lancar', v: ['', ''] }, p('Kendaraan', 5, x => x.T.kend), p('Akumulasi penyusutan kendaraan', 5, x => x.T.akKend, { t: 'pos2' }),
@@ -2676,7 +2661,7 @@ function vNeraca(el, [bln]) {
     { t: 'pos', l: '(Kenaikan) penurunan uang muka dan biaya dibayar di muka', v: kolom2((n, a) => -beda(n, a, x => x.L.um + x.L.dm)) },
     { t: 'pos', l: 'Kenaikan (penurunan) utang usaha ke pemasok', c: 6, v: kolom2((n, a) => beda(n, a, x => x.LP.supl)) },
     { t: 'pos', l: 'Kenaikan (penurunan) utang lainnya', c: 6, v: kolom2((n, a) => beda(n, a, x => x.LP.titip + x.LP.gaji + x.LP.lain)) },
-    { t: 'jumlah', l: 'Kas bersih dari aktivitas operasi', v: kolom2((n, a, r) => r.labaBersih - beda(n, a, x => x.L.piuU + x.L.piuL + (x.L.piuT || 0) + x.L.stok + x.L.um + x.L.dm) + beda(n, a, x => x.LP.supl + x.LP.dana + x.LP.titip + x.LP.gaji + x.LP.lain)) },
+    { t: 'jumlah', l: 'Kas bersih dari aktivitas operasi', v: kolom2((n, a, r) => r.labaBersih - beda(n, a, x => x.L.piuU + x.L.piuL + x.L.stok + x.L.um + x.L.dm) + beda(n, a, x => x.LP.supl + x.LP.dana + x.LP.titip + x.LP.gaji + x.LP.lain)) },
     { t: 'judul', l: 'Arus kas dari aktivitas investasi' },
     { t: 'pos', l: 'Pembelian aset tetap', c: 5, v: kolom2((n, a) => -beda(n, a, x => x.T.kend + x.T.alat + x.T.renov)) },
     { t: 'jumlah', l: 'Kas bersih dari aktivitas investasi', v: kolom2((n, a) => -beda(n, a, x => x.T.kend + x.T.alat + x.T.renov)) },
@@ -2690,7 +2675,7 @@ function vNeraca(el, [bln]) {
     { t: 'total', l: 'Kas dan setara kas akhir periode menurut arus kas', v: kolom2((n, a, r) => (a ? kasN(a) : 0) + arusBersih(n, a, r)) },
     { t: 'pos', l: 'Kas dan setara kas di neraca', c: 2, v: kolom2(n => kasN(n)) },
     { t: 'memo', l: 'Selisih kas yang belum tercatat', c: 11, v: kolom2((n, a, r) => kasN(n) - (a ? kasN(a) : 0) - arusBersih(n, a, r)) }]) : '<p class="lk-ket">Belum bisa disusun karena neraca periode ini belum ada.</p>';
-  function arusBersih(n, a, r) { return r.labaBersih - beda(n, a, x => x.L.piuU + x.L.piuL + (x.L.piuT || 0) + x.L.stok + x.L.um + x.L.dm) + beda(n, a, x => x.LP.supl + x.LP.dana + x.LP.titip + x.LP.gaji + x.LP.lain)
+  function arusBersih(n, a, r) { return r.labaBersih - beda(n, a, x => x.L.piuU + x.L.piuL + x.L.stok + x.L.um + x.L.dm) + beda(n, a, x => x.LP.supl + x.LP.dana + x.LP.titip + x.LP.gaji + x.LP.lain)
     - beda(n, a, x => x.T.kend + x.T.alat + x.T.renov) + beda(n, a, x => x.LP.pinj + x.LJ.pinj) + setorP(n, a) - r.nonOps; }
 
   // ----- 3. rasio
@@ -2731,7 +2716,7 @@ function vNeraca(el, [bln]) {
   const kiriP = T ? (tahunAda.includes(String(+tahun - 1)) ? 'tahun-' + (+tahun - 1) : null) : (BULAN[iB - 1] || {}).bulan, kananP = T ? (tahunAda.includes(String(+tahun + 1)) ? 'tahun-' + (+tahun + 1) : null) : (BULAN[iB + 1] || {}).bulan;
   const panah = (k, t, h) => `<a class="tombol kecil" ${k ? `href="#neraca/${k}"` : 'aria-disabled="true" style="opacity:.35;pointer-events:none"'} title="${t}">${h}</a>`;
   const naik = (a, c) => c == null || !Math.round(c) ? '' : (() => { const p = (a - c) / Math.abs(c) * 100; return ` · <span class="${p >= 0 ? 'hijau' : 'merah'}">${p >= 0 ? '▲' : '▼'} ${Math.abs(p).toLocaleString('id-ID', { maximumFractionDigits: 0 })}%</span>`; })();
-  const nerR = N ? [{ judul: 'Aset' }, { l: 'Uang tunai dan bank', v: N.L.kas + N.L.bank + N.L.ew, selalu: 1 }, { l: 'Piutang dapur', v: N.L.piuU }, { l: 'Piutang lain-lain', v: N.L.piuL }, { l: 'Piutang titipan dapur', v: N.L.piuT || 0 }, { l: 'Persediaan barang', v: N.L.stok },
+  const nerR = N ? [{ judul: 'Aset' }, { l: 'Uang tunai dan bank', v: N.L.kas + N.L.bank + N.L.ew, selalu: 1 }, { l: 'Piutang dapur', v: N.L.piuU }, { l: 'Piutang lain-lain', v: N.L.piuL }, { l: 'Persediaan barang', v: N.L.stok },
       { l: 'Uang muka dan dibayar di muka', v: N.L.um + N.L.dm }, { l: 'Aset tetap (nilai buku)', v: N.TAT }, { l: 'Jumlah aset', v: N.TA, jml: 1 },
       { judul: 'Utang' }, { l: 'Utang ke pemasok', v: N.LP.supl }, { l: 'Utang lainnya', v: N.LP.titip + N.LP.gaji + N.LP.pinj + N.LP.lain + N.TLJ }, { l: 'Jumlah utang', v: N.TL, jml: 1 },
       { judul: 'Ekuitas' }, { l: 'Modal disetor', v: N.E.modal + N.E.setor }, { l: 'Saldo laba sebelumnya', v: N.E.saldo }, { l: T ? 'Laba bersih ' + namaBln(b.bulan) : 'Laba bersih periode ini', v: N.E.laba }, { l: 'Pengambilan pribadi', v: N.E.prive },
@@ -2740,7 +2725,7 @@ function vNeraca(el, [bln]) {
     { l: 'Laba kotor', v: R.labaKotor, jml: 1 }, ...katNama.filter(k => R.beban[k]).map(k => ({ l: k, v: -R.beban[k] })), { l: 'Beban lain', v: -R.bebanLain }, { l: 'Laba bersih', v: R.labaBersih, jml: 1, warna: R.labaBersih >= 0 ? 'hijau' : 'merah' }];
   const ekR = N ? [{ l: 'Ekuitas awal', ket: NL ? 'akhir ' + judulL : 'belum ada neraca sebelumnya', v: NL ? NL.TE : '-', selalu: 1 }, { l: 'Setoran modal', v: setorP(N, NL) }, { l: 'Laba bersih', v: R.labaBersih }, { l: 'Pengambilan pribadi', v: -R.nonOps },
     { l: 'Penyesuaian berkas neraca dan opname', v: sesuaiE(N, NL, R) }, { l: 'Ekuitas akhir', v: N.TE, jml: 1 }] : null;
-  const opK = N ? R.labaBersih - beda(N, NL, x => x.L.piuU + x.L.piuL + (x.L.piuT || 0) + x.L.stok + x.L.um + x.L.dm) + beda(N, NL, x => x.LP.supl + x.LP.dana + x.LP.titip + x.LP.gaji + x.LP.lain) : 0, invK = N ? -beda(N, NL, x => x.T.kend + x.T.alat + x.T.renov) : 0, pdK = N ? beda(N, NL, x => x.LP.pinj + x.LJ.pinj) + setorP(N, NL) - R.nonOps : 0;
+  const opK = N ? R.labaBersih - beda(N, NL, x => x.L.piuU + x.L.piuL + x.L.stok + x.L.um + x.L.dm) + beda(N, NL, x => x.LP.supl + x.LP.dana + x.LP.titip + x.LP.gaji + x.LP.lain) : 0, invK = N ? -beda(N, NL, x => x.T.kend + x.T.alat + x.T.renov) : 0, pdK = N ? beda(N, NL, x => x.LP.pinj + x.LJ.pinj) + setorP(N, NL) - R.nonOps : 0;
   const akR = N ? [{ l: 'Laba bersih', v: R.labaBersih, selalu: 1 }, { l: 'Perubahan piutang', ket: 'naik = uang masih di dapur', v: -beda(N, NL, x => x.L.piuU + x.L.piuL) }, { l: 'Perubahan stok', v: -beda(N, NL, x => x.L.stok + x.L.um + x.L.dm) },
     { l: 'Perubahan utang dan dana dapur', v: beda(N, NL, x => x.LP.supl + x.LP.dana + x.LP.titip + x.LP.gaji + x.LP.lain) }, { l: 'Kas dari usaha', v: opK, jml: 1 }, { l: 'Kas untuk aset tetap', v: invK }, { l: 'Pinjaman, modal, dan prive', v: pdK },
     { l: 'Kenaikan (penurunan) kas', v: opK + invK + pdK, jml: 1 }, { l: 'Kas dan bank di neraca', v: kasN(N), selalu: 1 }] : null;
@@ -3688,7 +3673,7 @@ muat().catch(e => { akar.innerHTML = `<div class="masuk"><div class="kotak"><h1>
 if ('serviceWorker' in navigator) addEventListener('load', () => navigator.serviceWorker.register('sw.js').catch(() => {}));
 // 23 Okt 2026 (pemilik: "masih tetap sama" setelah perubahan dipasang): aplikasi yang sudah terbuka/terpasang memeriksa
 // versi di server saat dibuka lagi dan tiap 5 menit. Kalau berbeda, muncul tombol "Perbarui NTA" (muat ulang tanpa salinan lama).
-const VERSI_NTA = 'mbg-v93';
+const VERSI_NTA = 'mbg-v94';
 async function cekVersiNta() { try { const t = await (await fetch('sw.js?cek=' + Date.now(), { cache: 'no-store' })).text(), v = (t.match(/mbg-v\d+/) || [])[0];
   if (!v || v === VERSI_NTA || document.getElementById('versiBaru')) return;
   const d = document.createElement('div'); d.id = 'versiBaru';
